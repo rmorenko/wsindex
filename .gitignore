@@ -1,0 +1,64 @@
+# Byte-compiled / optimized / cached files
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+
+# Distribution / packaging / build
+build/
+dist/
+sdist/
+wheels/
+*.egg
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+# (uv.lock is committed; caches and scratch dirs are not)
+.uv/
+
+# Type checkers / linters / test caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.dmypy.json
+dmypy.json
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+
+# WSIndex artifacts (local index / datasets)
+.wsindex/
+
+# Models and heavy caches (embeddings / transformers)
+models/
+.cache/
+*.bin
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.safetensors
+
+# Editors / IDEs / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
