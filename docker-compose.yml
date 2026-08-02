@@ -42,6 +42,10 @@ services:
       - TENSORUS_POSTGRES_DB=${POSTGRES_DB:-tensorus_db}
       - TENSORUS_VALID_API_KEYS=${TENSORUS_API_KEYS}
       - TENSORUS_AUTH_JWT_ENABLED=False
+    volumes:
+      # TensorStorage persists datasets as .pt files here; postgres only
+      # holds tensor-descriptor metadata (upstream design)
+      - tensor_data:/app/tensor_data
     depends_on:
       db:
         condition: service_healthy
@@ -197,3 +201,4 @@ services:
 volumes:
   pgdata:
   pgadmin_data:
+  tensor_data:
