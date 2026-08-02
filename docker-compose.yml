@@ -46,6 +46,56 @@ services:
         COPY tensorus ./tensorus
         COPY app.py .
         COPY pages ./pages
+        # Upstream UI targets an older API: stale endpoint paths, old response
+        # shapes, and no API-key auth. Redefine the accessors and inject
+        # X-API-KEY into every request.
+        RUN cat >> pages/pages_shared_utils.py <<'PY'
+
+        # --- Compatibility patch for the current API (see Dockerfile) ---
+        _api_key = os.getenv("TENSORUS_API_KEY", "").split(",")[0].strip()
+        if _api_key:
+            _orig_request = requests.sessions.Session.request
+            def _keyed_request(self, method, url, **kwargs):
+                headers = kwargs.get("headers") or {}
+                headers.setdefault("X-API-KEY", _api_key)
+                kwargs["headers"] = headers
+                return _orig_request(self, method, url, **kwargs)
+            requests.sessions.Session.request = _keyed_request
+
+        def get_agent_status():
+            try:
+                r = requests.get(f"{API_BASE_URL}/agents", timeout=5)
+                r.raise_for_status()
+                return {a["id"]: a for a in r.json()}
+            except Exception as e:
+                logger.error(f"API error fetching agent status: {e}")
+                return None
+
+        def get_datasets():
+            try:
+                r = requests.get(f"{API_BASE_URL}/datasets", timeout=5)
+                r.raise_for_status()
+                return r.json().get("data", [])
+            except Exception as e:
+                logger.error(f"API error fetching datasets: {e}")
+                return []
+
+        def post_nql_query(query):
+            try:
+                r = requests.post(f"{API_BASE_URL}/query", json={"query": query}, timeout=15)
+                r.raise_for_status()
+                data = r.json()
+                data.setdefault("response_text", data.get("message"))
+                return data
+            except requests.exceptions.HTTPError as e:
+                try:
+                    detail = e.response.json().get("detail", str(e))
+                except Exception:
+                    detail = str(e)
+                return {"query": query, "response_text": detail, "error": str(e), "results": None}
+            except Exception as e:
+                return {"query": query, "response_text": "Error connecting to backend.", "error": str(e), "results": None}
+        PY
         EXPOSE 8501
         CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
     container_name: tensorus_ui
@@ -53,6 +103,7 @@ services:
       - "8501:8501"
     environment:
       - API_BASE_URL=http://app:7860
+      - TENSORUS_API_KEY=${TENSORUS_API_KEYS}
     depends_on:
       - app
     restart: unless-stopped
