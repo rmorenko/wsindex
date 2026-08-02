@@ -27,8 +27,72 @@ services:
                 _tensor_storage_instance = _shared if _shared is not None else TensorStorage()
             return _tensor_storage_instance
         PY
+        # FastAPI's default /docs and /redoc pull Swagger/ReDoc assets from
+        # cdn.jsdelivr.net, which is unreachable from some networks (blank
+        # page in the browser). Bundle the assets into the image and serve
+        # them locally instead.
+        RUN mkdir -p static && python - <<'PY'
+        import urllib.request
+        for url, dst in [
+            ("https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js", "static/swagger-ui-bundle.js"),
+            ("https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css", "static/swagger-ui.css"),
+            ("https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js", "static/redoc.standalone.js"),
+        ]:
+            urllib.request.urlretrieve(url, dst)
+        PY
+        RUN cat > docs_local.py <<'PY'
+        from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+        from fastapi.staticfiles import StaticFiles
+
+        from tensorus.api import app
+
+        app.mount("/static", StaticFiles(directory="static"), name="static")
+        app.router.routes = [
+            r for r in app.router.routes
+            if getattr(r, "path", None) not in ("/docs", "/redoc")
+        ]
+
+        @app.get("/docs", include_in_schema=False)
+        async def swagger_ui_html():
+            return get_swagger_ui_html(
+                openapi_url=app.openapi_url,
+                title=f"{app.title} - Swagger UI",
+                swagger_js_url="/static/swagger-ui-bundle.js",
+                swagger_css_url="/static/swagger-ui.css",
+            )
+
+        @app.get("/redoc", include_in_schema=False)
+        async def redoc_html():
+            return get_redoc_html(
+                openapi_url=app.openapi_url,
+                title=f"{app.title} - ReDoc",
+                redoc_js_url="/static/redoc.standalone.js",
+            )
+
+        # Tensorus sets "Content-Security-Policy: default-src 'self'", which
+        # blocks the inline bootstrap scripts of Swagger UI / ReDoc (blank
+        # page), and X-Frame-Options: SAMEORIGIN, which blocks the iframes on
+        # the UI's API Playground page. Relax both for the docs routes only.
+        _DOCS_PATHS = ("/docs", "/redoc", "/openapi.json", "/static/")
+
+        @app.middleware("http")
+        async def _relax_docs_csp(request, call_next):
+            response = await call_next(request)
+            if request.url.path.startswith(_DOCS_PATHS):
+                response.headers["content-security-policy"] = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline'; "
+                    "style-src 'self' 'unsafe-inline'; "
+                    "img-src 'self' data: https:; "
+                    "worker-src 'self' blob:; "
+                    "frame-ancestors *"
+                )
+                if "x-frame-options" in response.headers:
+                    del response.headers["x-frame-options"]
+            return response
+        PY
         EXPOSE 7860
-        CMD ["uvicorn", "tensorus.api:app", "--host", "0.0.0.0", "--port", "7860"]
+        CMD ["uvicorn", "docs_local:app", "--host", "0.0.0.0", "--port", "7860"]
     container_name: tensorus_app
     ports:
       - "8000:7860"
@@ -67,11 +131,23 @@ services:
         # Upstream UI targets an older API: stale endpoint paths, old response
         # shapes, and no API-key auth. Redefine the accessors and inject
         # X-API-KEY into every request.
-        # Streamlit runs page files as top-level scripts, so upstream's
-        # relative imports crash; rewrite them to absolute ones.
-        RUN sed -i 's/from \.api_client/from pages.api_client/' pages/*.py
+        # Streamlit lists every .py in pages/ as a sidebar page, so the
+        # utility modules there render as blank pages; move them to the app
+        # root. This also fixes upstream's relative imports, which crash
+        # because Streamlit runs page files as top-level scripts.
+        RUN mv pages/api_client.py pages/pages_shared_utils.py pages/ui_utils.py . \
+         && sed -i 's/from pages\.api_client/from api_client/; s/from \.api_client/from api_client/; s/from pages\.pages_shared_utils/from pages_shared_utils/' app.py pages/*.py
+        # Swagger/ReDoc links and iframes open in the user's browser, which
+        # cannot resolve the internal hostname in API_BASE_URL; use the
+        # host-published URL for those instead.
+        RUN sed -i '/^swagger_url = /i import os\nPUBLIC_API_URL = os.getenv("TENSORUS_PUBLIC_API_URL", API_BASE_URL)' pages/api_playground_v2.py \
+         && sed -i 's|{API_BASE_URL}/docs|{PUBLIC_API_URL}/docs|; s|{API_BASE_URL}/redoc|{PUBLIC_API_URL}/redoc|' pages/api_playground_v2.py
+        # Streamlit auto-closes the unclosed <div> from st.markdown, so the
+        # "iframe-container" wrapper renders as an empty 800px box above the
+        # real iframe. Drop the wrapper markdown calls.
+        RUN sed -i '/<div class="iframe-container">/d; /st.markdown(.<\/div>./d' pages/api_playground_v2.py
         # api_client.py uses logging and typing names without importing them
-        RUN sed -i '1i import logging\nfrom typing import Any, Dict, List, Optional' pages/api_client.py
+        RUN sed -i '1i import logging\nfrom typing import Any, Dict, List, Optional' api_client.py
         # Streamlit runs each page standalone (app.py is not executed first),
         # so the X-API-KEY patch must load from every entrypoint module.
         RUN cat > api_auth.py <<'PY'
@@ -87,8 +163,8 @@ services:
                 return _orig_request(self, method, url, **kwargs)
             requests.sessions.Session.request = _keyed_request
         PY
-        RUN sed -i '1i import api_auth' pages/api_client.py
-        RUN cat >> pages/pages_shared_utils.py <<'PY'
+        RUN sed -i '1i import api_auth' api_client.py
+        RUN cat >> pages_shared_utils.py <<'PY'
 
         # --- Compatibility patch for the current API (see Dockerfile) ---
         import api_auth
@@ -155,6 +231,8 @@ services:
       - API_BASE_URL=http://app:7860
       # pages/api_client.py reads the URL from tensorus settings, not API_BASE_URL
       - TENSORUS_API_BASE_URL=http://app:7860
+      # Browser-facing URL for Swagger/ReDoc links (host port of the app service)
+      - TENSORUS_PUBLIC_API_URL=http://localhost:8000
       - TENSORUS_API_KEY=${TENSORUS_API_KEYS}
     depends_on:
       - app
