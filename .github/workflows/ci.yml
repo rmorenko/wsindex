@@ -27,8 +27,8 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
 
-      # Без extras (torch/tree-sitter): ставим только базовые зависимости
-      # и dev-группу, чтобы CI был лёгким и зелёным.
+      # No extras (torch/tree-sitter): install only base dependencies
+      # and the dev group to keep CI light and green.
       - name: Install dependencies
         run: uv sync
 
