@@ -33,6 +33,44 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  ui:
+    build:
+      context: https://github.com/tensorus/tensorus.git
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        RUN pip install --no-cache-dir psutil
+        COPY tensorus ./tensorus
+        COPY app.py .
+        COPY pages ./pages
+        EXPOSE 8501
+        CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+    container_name: tensorus_ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://app:7860
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tensorus_pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    restart: unless-stopped
+
   db:
     image: postgres:15-alpine
     container_name: tensorus_db
@@ -53,3 +91,4 @@ services:
 
 volumes:
   pgdata:
+  pgadmin_data:
