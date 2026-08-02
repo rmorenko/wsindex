@@ -1,18 +1,33 @@
 services:
   app:
-    image: tensorus/core:latest  # Or build: . if building locally
+    build:
+      context: https://github.com/tensorus/tensorus.git
+      # Upstream Dockerfile fails under BuildKit (inline comments after ENV),
+      # so we define an equivalent image here.
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        # psutil is imported by tensorus but missing from upstream requirements.txt
+        RUN pip install --no-cache-dir psutil
+        COPY tensorus ./tensorus
+        EXPOSE 7860
+        CMD ["uvicorn", "tensorus.api:app", "--host", "0.0.0.0", "--port", "7860"]
     container_name: tensorus_app
     ports:
-      - "8000:8000"
+      - "8000:7860"
     environment:
-      - TENSORUS_AUTH_ENABLED=true
-      - TENSORUS_API_KEYS=${TENSORUS_API_KEYS}
+      - PYTHONUNBUFFERED=1
       - TENSORUS_STORAGE_BACKEND=postgres
-      - POSTGRES_USER=${POSTGRES_USER:-tensorus_admin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      - POSTGRES_DB=${POSTGRES_DB:-tensorus_db}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
+      - TENSORUS_POSTGRES_HOST=db
+      - TENSORUS_POSTGRES_PORT=5432
+      - TENSORUS_POSTGRES_USER=${POSTGRES_USER:-tensorus_admin}
+      - TENSORUS_POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      - TENSORUS_POSTGRES_DB=${POSTGRES_DB:-tensorus_db}
+      - TENSORUS_VALID_API_KEYS=${TENSORUS_API_KEYS}
+      - TENSORUS_AUTH_JWT_ENABLED=False
     depends_on:
       db:
         condition: service_healthy
