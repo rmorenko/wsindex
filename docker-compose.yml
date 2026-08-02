@@ -13,6 +13,20 @@ services:
         # psutil is imported by tensorus but missing from upstream requirements.txt
         RUN pip install --no-cache-dir psutil
         COPY tensorus ./tensorus
+        # Upstream bug: /query builds its own TensorStorage, so NQL never sees
+        # datasets created via the CRUD endpoints (which live on the instance
+        # in api.py, loaded as tensorus.api_app). Reuse that shared instance.
+        RUN cat >> tensorus/api/dependencies.py <<'PY'
+
+        def get_tensor_storage() -> TensorStorage:
+            global _tensor_storage_instance
+            if _tensor_storage_instance is None:
+                import sys
+                _app_mod = sys.modules.get("tensorus.api_app")
+                _shared = getattr(_app_mod, "tensor_storage_instance", None)
+                _tensor_storage_instance = _shared if _shared is not None else TensorStorage()
+            return _tensor_storage_instance
+        PY
         EXPOSE 7860
         CMD ["uvicorn", "tensorus.api:app", "--host", "0.0.0.0", "--port", "7860"]
     container_name: tensorus_app
@@ -54,9 +68,11 @@ services:
         RUN sed -i 's/from \.api_client/from pages.api_client/' pages/*.py
         # api_client.py uses logging and typing names without importing them
         RUN sed -i '1i import logging\nfrom typing import Any, Dict, List, Optional' pages/api_client.py
-        RUN cat >> pages/pages_shared_utils.py <<'PY'
-
-        # --- Compatibility patch for the current API (see Dockerfile) ---
+        # Streamlit runs each page standalone (app.py is not executed first),
+        # so the X-API-KEY patch must load from every entrypoint module.
+        RUN cat > api_auth.py <<'PY'
+        import os
+        import requests
         _api_key = os.getenv("TENSORUS_API_KEY", "").split(",")[0].strip()
         if _api_key:
             _orig_request = requests.sessions.Session.request
@@ -66,6 +82,12 @@ services:
                 kwargs["headers"] = headers
                 return _orig_request(self, method, url, **kwargs)
             requests.sessions.Session.request = _keyed_request
+        PY
+        RUN sed -i '1i import api_auth' pages/api_client.py
+        RUN cat >> pages/pages_shared_utils.py <<'PY'
+
+        # --- Compatibility patch for the current API (see Dockerfile) ---
+        import api_auth
 
         def get_agent_status():
             try:
