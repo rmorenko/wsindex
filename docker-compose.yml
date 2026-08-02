@@ -49,6 +49,11 @@ services:
         # Upstream UI targets an older API: stale endpoint paths, old response
         # shapes, and no API-key auth. Redefine the accessors and inject
         # X-API-KEY into every request.
+        # Streamlit runs page files as top-level scripts, so upstream's
+        # relative imports crash; rewrite them to absolute ones.
+        RUN sed -i 's/from \.api_client/from pages.api_client/' pages/*.py
+        # api_client.py uses logging and typing names without importing them
+        RUN sed -i '1i import logging\nfrom typing import Any, Dict, List, Optional' pages/api_client.py
         RUN cat >> pages/pages_shared_utils.py <<'PY'
 
         # --- Compatibility patch for the current API (see Dockerfile) ---
@@ -80,6 +85,25 @@ services:
                 logger.error(f"API error fetching datasets: {e}")
                 return []
 
+        def get_dataset_preview(dataset_name, limit=10):
+            try:
+                r = requests.get(f"{API_BASE_URL}/datasets/{dataset_name}/records",
+                                 params={"offset": 0, "limit": limit}, timeout=10)
+                r.raise_for_status()
+                records = r.json().get("data", [])
+                for rec in records:
+                    rec.setdefault("id", rec.get("record_id"))
+                try:
+                    c = requests.get(f"{API_BASE_URL}/datasets/{dataset_name}/count", timeout=5)
+                    c.raise_for_status()
+                    count = c.json().get("data", {}).get("count", len(records))
+                except Exception:
+                    count = len(records)
+                return {"dataset": dataset_name, "record_count": count, "preview": records}
+            except Exception as e:
+                logger.error(f"API error fetching dataset preview: {e}")
+                return None
+
         def post_nql_query(query):
             try:
                 r = requests.post(f"{API_BASE_URL}/query", json={"query": query}, timeout=15)
@@ -103,6 +127,8 @@ services:
       - "8501:8501"
     environment:
       - API_BASE_URL=http://app:7860
+      # pages/api_client.py reads the URL from tensorus settings, not API_BASE_URL
+      - TENSORUS_API_BASE_URL=http://app:7860
       - TENSORUS_API_KEY=${TENSORUS_API_KEYS}
     depends_on:
       - app
