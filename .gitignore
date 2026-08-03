@@ -40,6 +40,9 @@ nosetests.xml
 # WSIndex artifacts (local index / datasets)
 .wsindex/
 
+# Local working notes (learning plan / progress journal)
+PLAN_ru.md
+
 # Models and heavy caches (embeddings / transformers)
 models/
 .cache/
