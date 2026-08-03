@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from wsindex.model import Chunk
+from wsindex.model import Chunk, Kind
 
 
 def make_chunk(**overrides: Any) -> Chunk:
@@ -14,7 +14,7 @@ def make_chunk(**overrides: Any) -> Chunk:
         "repo": "mcp",
         "path": "server.py",
         "lang": "python",
-        "kind": "code",
+        "kind": Kind.CODE,
         "symbol": "f",
         "node_type": "function_definition",
         "start_line": 1,
@@ -22,6 +22,13 @@ def make_chunk(**overrides: Any) -> Chunk:
         "text": "def f(): pass",
     }
     return Chunk(**(defaults | overrides))
+
+
+def test_kind_serializes_as_plain_string() -> None:
+    # The tensor `metadata` payload must contain a plain string, not an enum
+    # member; StrEnum guarantees this equality holds.
+    md = make_chunk().to_metadata()
+    assert md["kind"] == "code"
 
 
 def test_chunk_id_is_deterministic() -> None:

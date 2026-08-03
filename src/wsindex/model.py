@@ -7,7 +7,20 @@ metadata next to the vector and return Hits.
 
 import hashlib
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from typing import Any
+
+
+class Kind(StrEnum):
+    """Artifact category; drives the chunker choice (AST vs text, ARCH §4).
+
+    StrEnum (not plain Enum) on purpose: members behave as regular strings,
+    so `Kind.CODE == "code"` holds and metadata serializes without `.value`.
+    """
+
+    CODE = "code"
+    CONFIG = "config"
+    DOC = "doc"
 
 
 @dataclass(frozen=True)
@@ -25,7 +38,7 @@ class Chunk:
     repo: str
     path: str
     lang: str
-    kind: str  # one of: "code" | "config" | "doc"
+    kind: Kind
     symbol: str | None
     node_type: str | None
     start_line: int
