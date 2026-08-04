@@ -25,7 +25,9 @@ classifiers = [
 # No runtime dependencies yet: this is the toolchain skeleton. The real engine
 # (typer, httpx, numpy, tree-sitter, sentence-transformers) is added as the
 # package described in ARCH_en.md is implemented.
-dependencies = []
+dependencies = [
+    "tomli-w>=1.2.0",
+]
 
 [project.scripts]
 wsindex = "wsindex:main"
