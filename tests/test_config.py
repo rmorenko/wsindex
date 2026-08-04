@@ -25,7 +25,6 @@ def test_default_config(tmp_path: Path) -> None:
 
 
 def test_add_repo_duplicate_raises() -> None:
-
     config = Config.default_config("demo")
     config.add_repo(repo_id="test1", path="path1/test1")
     with pytest.raises(ValueError):

@@ -1,5 +1,5 @@
 
-.PHONY: help install lint fmt typecheck test check run hooks clean up down logs
+.PHONY: help install lint fmt fmt-check typecheck test check run hooks install-hooks clean up down logs
 .DEFAULT_GOAL := help
 
 help:  ## Show this help message
@@ -15,19 +15,25 @@ lint:  ## Run linter (ruff check)
 fmt:  ## Format code (ruff format)
 	uv run ruff format .
 
+fmt-check:  ## Check formatting without changing files
+	uv run ruff format --check .
+
 typecheck:  ## Type check (mypy)
-	uv run mypy src
+	uv run mypy src tests
 
 test:  ## Run tests (pytest)
 	uv run pytest
 
-check: lint typecheck test  ## Full check: lint + types + tests
+check: lint fmt-check typecheck test  ## Full pre-commit check: lint + format + types + tests
 
 run:  ## Run CLI (uv run wsindex)
 	uv run wsindex
 
 hooks:  ## Run pre-commit on all files
 	uv run pre-commit run --all-files
+
+install-hooks:  ## Install the git pre-commit hook
+	uv run pre-commit install
 
 up:  ## Start Tensorus (docker compose up -d)
 	docker compose up -d
