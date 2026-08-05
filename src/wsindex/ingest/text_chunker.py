@@ -19,6 +19,7 @@ def chunk_plain(
     repo: str,
     path: str,
     lang: str,
+    kind: Kind,
     window: int = WINDOW_LINES,
     overlap: int = OVERLAP_LINES,
 ) -> list[Chunk]:
@@ -44,7 +45,7 @@ def chunk_plain(
             start_line=i + 1,
             end_line=min(i + window, len(lines)),
             text=window_text,
-            kind=Kind.DOC,
+            kind=kind,
             symbol=None,
             node_type=None,
         )
@@ -60,6 +61,7 @@ def chunk_markdown(
     repo: str,
     path: str,
     lang: str,
+    kind: Kind,
 ) -> list[Chunk]:
     """Split Markdown into sections: one chunk per header, plus the preamble.
 
@@ -101,8 +103,8 @@ def chunk_markdown(
     return chunks
 
 
-def chunk_text(text: str, *, repo: str, path: str, lang: str) -> list[Chunk]:
+def chunk_text(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
     """Dispatch by lang: Markdown gets section chunking, the rest sliding windows."""
     if lang == "markdown":
-        return chunk_markdown(text, repo=repo, path=path, lang=lang)
-    return chunk_plain(text, repo=repo, path=path, lang=lang)
+        return chunk_markdown(text, repo=repo, path=path, lang=lang, kind=kind)
+    return chunk_plain(text, repo=repo, path=path, lang=lang, kind=kind)
