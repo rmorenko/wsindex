@@ -19,7 +19,8 @@ install:  ## Install dependencies (uv sync)
 lint:  ## Run linter (ruff check)
 	uv run ruff check .
 
-fmt:  ## Format code, docs and configs (ruff, mdformat, taplo, yamlfix, json.tool, xmllint)
+fmt:  ## Format code, docs and configs (ruff w/ safe fixes, mdformat, taplo, yamlfix, json.tool, xmllint)
+	uv run ruff check --fix .
 	uv run ruff format .
 	uv run mdformat *.md
 	uv run taplo fmt $(TOML_FILES)
