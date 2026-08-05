@@ -18,7 +18,8 @@ def make_repo(root: Path) -> None:
                                so it catches pruning done in the wrong loop
         node_modules/c.yaml  - ignored dir
         __pycache__/m.py     - ignored dir
-        logo.png             - binary (NUL byte in prefix)
+        logo.png             - unknown extension AND binary
+        fake.txt             - indexable extension but binary content
         big.txt              - exceeds MAX_FILE_SIZE
         data.xyz             - unknown extension
     """
@@ -36,6 +37,7 @@ def make_repo(root: Path) -> None:
     (root / "__pycache__").mkdir()
     (root / "__pycache__" / "m.py").write_text("x = 1")
     (root / "logo.png").write_bytes(b"\x89PNG\x00\x01")
+    (root / "fake.txt").write_bytes(b"looks like text\x00but is not")
     (root / "big.txt").write_text("x" * (MAX_FILE_SIZE + 1))
     (root / "data.xyz").write_text("mystery")
 
@@ -65,7 +67,10 @@ def test_skips_ignored_dirs(repo: Path) -> None:
 
 def test_skips_binary_and_large_files(repo: Path) -> None:
     rel_paths = {f.rel_path for f in walk_repo(repo)}
-    assert "logo.png" not in rel_paths  # NUL byte in prefix -> binary
+    # logo.png is rejected by extension before the binary sniff even runs;
+    # fake.txt is the case that actually exercises is_binary.
+    assert "logo.png" not in rel_paths
+    assert "fake.txt" not in rel_paths  # NUL byte in prefix -> binary
     assert "big.txt" not in rel_paths  # MAX_FILE_SIZE + 1 bytes
 
 

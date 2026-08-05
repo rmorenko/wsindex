@@ -1,6 +1,13 @@
 
-.PHONY: help install lint fmt fmt-check typecheck test check run hooks install-hooks clean up down logs
+.PHONY: help install lint fmt fmt-check spell typecheck test cov check run hooks install-hooks clean up down logs
 .DEFAULT_GOAL := help
+
+# git ls-files (not a bare glob) so generated files like uv.lock and anything
+# under .venv never reach the formatters.
+YAML_FILES := $(shell git ls-files '*.yml' '*.yaml')
+TOML_FILES := $(shell git ls-files '*.toml')
+JSON_FILES := $(shell git ls-files '*.json')
+XML_FILES := $(shell git ls-files '*.xml' '*.xsd')
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -12,19 +19,35 @@ install:  ## Install dependencies (uv sync)
 lint:  ## Run linter (ruff check)
 	uv run ruff check .
 
-fmt:  ## Format code (ruff format)
+fmt:  ## Format code, docs and configs (ruff, mdformat, taplo, yamlfix, json.tool, xmllint)
 	uv run ruff format .
+	uv run mdformat *.md
+	uv run taplo fmt $(TOML_FILES)
+	uv run yamlfix $(YAML_FILES)
+	@for f in $(JSON_FILES); do uv run python -m json.tool --indent 2 "$$f" "$$f.tmp" && mv "$$f.tmp" "$$f"; done
+	@for f in $(XML_FILES); do xmllint --format "$$f" --output "$$f"; done
 
 fmt-check:  ## Check formatting without changing files
 	uv run ruff format --check .
+	uv run mdformat --check *.md
+	uv run taplo fmt --check $(TOML_FILES)
+	uv run yamlfix --check $(YAML_FILES)
+	@for f in $(JSON_FILES); do uv run python -m json.tool --indent 2 "$$f" | diff -u "$$f" - || exit 1; done
+	@for f in $(XML_FILES); do xmllint --format "$$f" | diff -u "$$f" - || exit 1; done
+
+spell:  ## Spell check (codespell)
+	uv run codespell
 
 typecheck:  ## Type check (mypy)
 	uv run mypy src tests
 
-test:  ## Run tests (pytest)
+test:  ## Run tests (pytest, no coverage)
 	uv run pytest
 
-check: lint fmt-check typecheck test  ## Full pre-commit check: lint + format + types + tests
+cov:  ## Run tests with coverage, fail under 90%
+	uv run pytest --cov --cov-report=term-missing
+
+check: fmt lint spell typecheck cov  ## Auto-format, then lint + spelling + types + tests w/ coverage
 
 run:  ## Run CLI (uv run wsindex)
 	uv run wsindex

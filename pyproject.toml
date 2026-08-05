@@ -12,34 +12,43 @@ license = "MIT"
 authors = [{ name = "WSIndex contributors" }]
 keywords = ["rag", "indexing", "search", "cli", "embeddings"]
 classifiers = [
-    "Development Status :: 1 - Planning",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development",
-    "Typing :: Typed",
+  "Development Status :: 1 - Planning",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+  "Typing :: Typed",
 ]
 # No runtime dependencies yet: this is the toolchain skeleton. The real engine
 # (typer, httpx, numpy, tree-sitter, sentence-transformers) is added as the
 # package described in ARCH_en.md is implemented.
-dependencies = [
-    "tomli-w>=1.2.0",
-]
+dependencies = ["tomli-w>=1.2.0"]
 
 [project.scripts]
 wsindex = "wsindex:main"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.6",
-    "mypy>=1.11",
-    "pytest>=8",
-    "pytest-cov>=5",
-    "pre-commit>=3.8",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "pytest>=8",
+  "pytest-cov>=5",
+  "pre-commit>=3.8",
+  "mdformat>=1.0.0",
+  "mdformat-gfm>=1.0.0",
+  "codespell>=2.4.3",
+  "taplo>=0.9.3",
+  "yamlfix>=1.19.1",
 ]
+
+[tool.uv]
+# pathspec 1.1.1 is broken: `agg.py` imports `re2_error` from `re2/base.py`,
+# where the name is only annotated, never assigned (it lives in `re2/_base.py`).
+# Keep it out of hatchling's isolated build env until a fixed release lands.
+build-constraint-dependencies = ["pathspec!=1.1.1"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wsindex"]
@@ -61,8 +70,23 @@ python_version = "3.11"
 strict = true
 warn_unused_ignores = true
 
+[tool.codespell]
+skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist"
+
+[tool.yamlfix]
+line_length = 100
+# Keep diffs minimal: no forced `---` document start, no flow/block rewriting,
+# blank separator lines allowed.
+explicit_start = false
+sequence_style = "keep_style"
+whitelines = 1
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["wsindex"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true

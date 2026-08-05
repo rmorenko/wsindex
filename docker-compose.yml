@@ -95,7 +95,7 @@ services:
         CMD ["uvicorn", "docs_local:app", "--host", "0.0.0.0", "--port", "7860"]
     container_name: tensorus_app
     ports:
-      - "8000:7860"
+      - 8000:7860
     environment:
       - PYTHONUNBUFFERED=1
       - TENSORUS_STORAGE_BACKEND=postgres
@@ -226,7 +226,7 @@ services:
         CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
     container_name: tensorus_ui
     ports:
-      - "8501:8501"
+      - 8501:8501
     environment:
       - API_BASE_URL=http://app:7860
       # pages/api_client.py reads the URL from tensorus settings, not API_BASE_URL
@@ -248,9 +248,9 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-tensorus_admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${POSTGRES_DB:-tensorus_db}
-    entrypoint: ["/bin/sh", "/custom-entrypoint.sh"]
+    entrypoint: [/bin/sh, /custom-entrypoint.sh]
     ports:
-      - "5050:80"
+      - 5050:80
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ./pgadmin/entrypoint.sh:/custom-entrypoint.sh:ro
@@ -268,9 +268,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - 5432:5432
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tensorus_admin} -d ${POSTGRES_DB:-tensorus_db}"]
+      test: [CMD-SHELL, 'pg_isready -U ${POSTGRES_USER:-tensorus_admin} -d ${POSTGRES_DB:-tensorus_db}']
       interval: 5s
       timeout: 5s
       retries: 5

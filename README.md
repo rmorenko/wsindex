@@ -47,17 +47,17 @@ uv run pytest
 
 ## Make targets
 
-| Target | Description |
-| --- | --- |
-| `make install` | Sync dependencies (`uv sync`) |
-| `make lint` | Lint with ruff |
-| `make fmt` | Format with ruff |
-| `make typecheck` | Type-check with mypy |
-| `make test` | Run pytest |
-| `make check` | Lint + type-check + test |
-| `make run` | Run the `wsindex` CLI |
-| `make hooks` | Run all pre-commit hooks |
-| `make clean` | Remove caches and build artifacts |
+| Target           | Description                       |
+| ---------------- | --------------------------------- |
+| `make install`   | Sync dependencies (`uv sync`)     |
+| `make lint`      | Lint with ruff                    |
+| `make fmt`       | Format with ruff                  |
+| `make typecheck` | Type-check with mypy              |
+| `make test`      | Run pytest                        |
+| `make check`     | Lint + type-check + test          |
+| `make run`       | Run the `wsindex` CLI             |
+| `make hooks`     | Run all pre-commit hooks          |
+| `make clean`     | Remove caches and build artifacts |
 
 ## Project layout
 

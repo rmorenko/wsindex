@@ -41,9 +41,9 @@ make hooks
 ## Pull requests
 
 1. Branch off `main`.
-2. Make your change with a matching test.
-3. Ensure `make check` passes locally.
-4. Open a PR; CI must be green before merge.
+1. Make your change with a matching test.
+1. Ensure `make check` passes locally.
+1. Open a PR; CI must be green before merge.
 
 See the design docs (`CONCEPT_en.md`, `BRD_en.md`, `ARCH_en.md`) for where the
 project is heading.

@@ -1,3 +1,12 @@
+"""Workspace configuration: the `wsindex.toml` file (defaults, load, save).
+
+The config is the single source of truth for a workspace: which vector-store
+backend to use, which embedding model, and which repositories to index. The
+TOML layout (sections `workspace`, `embeddings`, `tensorus`, `repos`) lives
+only in `to_dict`/`from_dict`, so the file format has one definition per
+direction.
+"""
+
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
@@ -8,18 +17,24 @@ import tomli_w
 
 
 class Backend(StrEnum):
+    """Vector store selector; StrEnum so the value round-trips through TOML as-is."""
+
     TENSORUS = "tensorus"
     LOCAL = "local"
 
 
 @dataclass(frozen=True)
 class RepoEntry:
+    """One indexed repository: a stable id (used as the dataset name) and its path."""
+
     id: str
     path: str
 
 
 @dataclass
 class Config:
+    """In-memory form of `wsindex.toml`. Mutable: `add_repo` edits it in place."""
+
     name: str
     backend: Backend
     model: str
@@ -30,6 +45,7 @@ class Config:
 
     @classmethod
     def default_config(cls, name: str) -> "Config":
+        """Config for a fresh workspace: Tensorus backend, MiniLM model, no repos."""
         return cls(
             name=name,
             backend=Backend.TENSORUS,
@@ -41,6 +57,7 @@ class Config:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """Nested dict in the `wsindex.toml` section layout — input for tomli_w."""
         return {
             "workspace": {"name": self.name, "backend": self.backend},
             "embeddings": {"model": self.model, "dim": self.dim},
@@ -49,12 +66,14 @@ class Config:
         }
 
     def add_repo(self, repo_id: str, path: str) -> None:
+        """Register a repository; ids must be unique because they name datasets."""
         if any(r.id == repo_id for r in self.repos):
             raise ValueError(f"repo id already exists: {repo_id}")
         self.repos.append(RepoEntry(id=repo_id, path=path))
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> "Config":
+        """Inverse of `to_dict`; raises KeyError if a required section is missing."""
         ws = config_dict["workspace"]
         emb = config_dict["embeddings"]
         ts = config_dict["tensorus"]
@@ -70,9 +89,11 @@ class Config:
 
 
 def save_config(config: Config, path: Path) -> None:
+    """Serialize the config to `path` as UTF-8 TOML."""
     path.write_text(tomli_w.dumps(config.to_dict()), encoding="utf-8")
 
 
 def load_config(path: Path) -> Config:
+    """Parse a `wsindex.toml` file into a Config."""
     config_dict = tomllib.loads(path.read_text())
     return Config.from_dict(config_dict)

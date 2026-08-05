@@ -19,6 +19,26 @@ repos:
 
   - repo: local
     hooks:
+      - id: taplo
+        name: taplo
+        entry: uv run taplo fmt --check
+        language: system
+        types: [toml]
+      - id: yamlfix
+        name: yamlfix
+        entry: uv run yamlfix --check
+        language: system
+        types: [yaml]
+      - id: mdformat
+        name: mdformat
+        entry: uv run mdformat --check
+        language: system
+        types: [markdown]
+      - id: codespell
+        name: codespell
+        entry: uv run codespell
+        language: system
+        pass_filenames: false
       - id: mypy
         name: mypy
         entry: uv run mypy src tests
@@ -27,7 +47,7 @@ repos:
         pass_filenames: false
       - id: pytest
         name: pytest
-        entry: uv run pytest
+        entry: uv run pytest --cov --cov-report=term-missing
         language: system
         types: [python]
         pass_filenames: false

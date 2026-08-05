@@ -2,7 +2,7 @@
 
 > Status: draft for the MVP (Phase E1). The document version is aligned with the BRD and the WSIndex Concept. All facts about Tensorus v1 and the architectural core are fixed as a single reference and must not diverge between documents.
 
----
+______________________________________________________________________
 
 ## 1. Overview and Goal
 
@@ -25,7 +25,7 @@ What is **out of MVP scope** (roadmap): tensor late-interaction/MaxSim, a develo
 
 The document describes the MVP architecture so that it can be built, explained to a student, and extended phase by phase without rewriting.
 
----
+______________________________________________________________________
 
 ## 2. Drivers and Quality Attributes
 
@@ -35,12 +35,12 @@ The project is educational, so the quality-attribute priorities are ordered diff
 
 **Understandability > Modifiability > Portability/Offline > Performance.**
 
-| Priority | Attribute | What it means in practice | How the architecture ensures it |
-|---|---|---|---|
-| 1 | Understandability | A student reads the code and sees the data flow without a debugger | A single **linear pipeline** `repos -> walk -> chunk -> embed -> store`; small modules; no hidden queues or asynchrony in the MVP |
-| 2 | Modifiability | Swapping the model, backend, or chunker without rewriting the core | `Embedder`, `Chunker`, `VectorStore` interfaces; the pipeline depends on abstractions, not implementations |
-| 3 | Portability / offline | The project runs and is tested without external services | `LocalStore` as a fallback to `TensorusStore`; local models; TOML config; no cloud calls |
-| 4 | Performance | Adequate operation on tens of thousands of chunks | Brute-force cosine in the fallback and HNSW in Tensorus are sufficient; optimizations are deferred to Phase E5 |
+| Priority | Attribute             | What it means in practice                                          | How the architecture ensures it                                                                                                   |
+| -------- | --------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| 1        | Understandability     | A student reads the code and sees the data flow without a debugger | A single **linear pipeline** `repos -> walk -> chunk -> embed -> store`; small modules; no hidden queues or asynchrony in the MVP |
+| 2        | Modifiability         | Swapping the model, backend, or chunker without rewriting the core | `Embedder`, `Chunker`, `VectorStore` interfaces; the pipeline depends on abstractions, not implementations                        |
+| 3        | Portability / offline | The project runs and is tested without external services           | `LocalStore` as a fallback to `TensorusStore`; local models; TOML config; no cloud calls                                          |
+| 4        | Performance           | Adequate operation on tens of thousands of chunks                  | Brute-force cosine in the fallback and HNSW in Tensorus are sufficient; optimizations are deferred to Phase E5                    |
 
 **Drivers (what shapes the architecture):**
 
@@ -52,7 +52,7 @@ The project is educational, so the quality-attribute priorities are ordered diff
 
 Explicit **tactics**: encapsulation behind interfaces (modifiability), eliminating external dependencies via a fallback (portability), determinism by `id` (predictability), and capping scale at "tens of thousands of chunks" (a deliberate refusal of premature optimization).
 
----
+______________________________________________________________________
 
 ## 3. System Context (C4 Level 1)
 
@@ -100,7 +100,7 @@ graph TB
 
 **Response normalization.** Both `TensorusStore` and `LocalStore` normalize their native response (`tensor_id` for Tensorus, `id` for Local) into the unified `Hit{score, metadata}` type (see §4 and §6.4) — that is why both arrows in the diagram are labeled `Hit`.
 
----
+______________________________________________________________________
 
 ## 4. Components (C4 Level 3)
 
@@ -169,7 +169,7 @@ graph TB
 
 The direction of dependencies is strictly top-down: `cli -> pipeline -> {ingest, embed, store}`, and all three depend on `model`. The `pipeline` works only with the `Embedder` and `VectorStore` interfaces; `config` injects the concrete implementations.
 
----
+______________________________________________________________________
 
 ## 5. Key Scenarios
 
@@ -269,7 +269,7 @@ samples/quickstart.py:12-30  main       0.79   resp = requests.post(base + "/sea
 
 The same query vector is used across all datasets, so scores are comparable (a single cosine metric on all datasets). Merging and final ranking happen on the client (`pipeline`) because each `search` call hits a single dataset (and Tensorus searches within a single dataset).
 
----
+______________________________________________________________________
 
 ## 6. Data Model
 
@@ -277,18 +277,18 @@ The same query vector is used across all datasets, so scores are comparable (a s
 
 `Chunk` — the unit of the index and the shared contract between layers. Implemented as a dataclass (or a pydantic model for validation).
 
-| Field | Type | Purpose | Example (from the tensorus corpus) |
-|---|---|---|---|
-| `id` | `str` | Hash of `content + path`; primary key, ensures determinism | `"a3f9c1e2…"` (sha256 of the text and path) |
-| `repo` | `str` | Repository identifier (`repo_id`) | `"mcp"` |
-| `path` | `str` | File path relative to the repo root | `"server.py"` |
-| `lang` | `str` | File language/format | `"python"`, `"rust"`, `"typescript"`, `"toml"` |
-| `kind` | `str` | Category: `code` \| `config` \| `doc` | `"code"` |
-| `symbol` | `str \| None` | Symbol name for code | `"search_similar"` |
-| `node_type` | `str \| None` | AST node type (tree-sitter) | `"function_definition"`, `"table"` (TOML) |
-| `start_line` | `int` | Start line (1-based) | `88` |
-| `end_line` | `int` | End line | `104` |
-| `text` | `str` | The chunk's source text (for embedding and snippet) | `"def search_similar(...): ..."` |
+| Field        | Type          | Purpose                                                    | Example (from the tensorus corpus)             |
+| ------------ | ------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `id`         | `str`         | Hash of `content + path`; primary key, ensures determinism | `"a3f9c1e2…"` (sha256 of the text and path)    |
+| `repo`       | `str`         | Repository identifier (`repo_id`)                          | `"mcp"`                                        |
+| `path`       | `str`         | File path relative to the repo root                        | `"server.py"`                                  |
+| `lang`       | `str`         | File language/format                                       | `"python"`, `"rust"`, `"typescript"`, `"toml"` |
+| `kind`       | `str`         | Category: `code` \| `config` \| `doc`                      | `"code"`                                       |
+| `symbol`     | `str \| None` | Symbol name for code                                       | `"search_similar"`                             |
+| `node_type`  | `str \| None` | AST node type (tree-sitter)                                | `"function_definition"`, `"table"` (TOML)      |
+| `start_line` | `int`         | Start line (1-based)                                       | `88`                                           |
+| `end_line`   | `int`         | End line                                                   | `104`                                          |
+| `text`       | `str`         | The chunk's source text (for embedding and snippet)        | `"def search_similar(...): ..."`               |
 
 For `doc` chunks, `symbol` and `node_type` may be `None` (or carry the section heading). The embedding is **not** stored in `Chunk` — it is computed on the fly and sent to the `VectorStore`; this keeps `Chunk` a pure description of the fragment.
 
@@ -302,12 +302,12 @@ All datasets are created with a single `cosine` metric so that scores are compar
 
 The exact correspondence during `upsert` into Tensorus:
 
-| Chunk part | Where it goes in Tensorus | Format |
-|---|---|---|
-| `embed(text)` — vector | the tensor's `data` | a flat row-major Float32 array of length `dim` |
-| model dimensionality | the tensor's `shape` | `[dim]`, e.g. `[384]` |
-| `id, repo, path, lang, kind, symbol, node_type, start_line, end_line, text` | the tensor's `metadata` field | a JSON object |
-| `repo` | the dataset name `{ds}` | `repo_id` |
+| Chunk part                                                                  | Where it goes in Tensorus     | Format                                         |
+| --------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------- |
+| `embed(text)` — vector                                                      | the tensor's `data`           | a flat row-major Float32 array of length `dim` |
+| model dimensionality                                                        | the tensor's `shape`          | `[dim]`, e.g. `[384]`                          |
+| `id, repo, path, lang, kind, symbol, node_type, start_line, end_line, text` | the tensor's `metadata` field | a JSON object                                  |
+| `repo`                                                                      | the dataset name `{ds}`       | `repo_id`                                      |
 
 Schematically, the body of `POST /datasets/{repo}/tensors` (the `data` array holds exactly `dim` Float32 values, the first two are shown here):
 
@@ -338,15 +338,15 @@ The Tensorus response is `{tensor_id, descriptor}`. On search we **assume** that
 
 `Hit` — the unified type that `VectorStore.search` returns regardless of the backend:
 
-| Field | Type | Purpose |
-|---|---|---|
-| `score` | `float` | Similarity score (cosine), comparable across datasets |
-| `metadata` | `dict` | The chunk's full `metadata` (all `Chunk` fields); the `pipeline` builds output from it |
+| Field       | Type          | Purpose                                                                                       |
+| ----------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `score`     | `float`       | Similarity score (cosine), comparable across datasets                                         |
+| `metadata`  | `dict`        | The chunk's full `metadata` (all `Chunk` fields); the `pipeline` builds output from it        |
 | `native_id` | `str \| None` | The backend's native identifier (`tensor_id` for Tensorus, `id` for Local); an internal field |
 
 `TensorusStore` and `LocalStore` normalize their native responses into `Hit`, so the `pipeline` does not know which store the result came from and reads chunk fields only from `metadata`. If Tensorus does not return `metadata` directly in the hit, `TensorusStore` additionally requests the tensor by `native_id` and augments the `Hit` (see §11).
 
----
+______________________________________________________________________
 
 ## 7. Integration with Tensorus v1 and the Offline Alternative
 
@@ -358,11 +358,11 @@ The Tensorus response is `{tensor_id, descriptor}`. On search we **assume** that
 
 ### 7.2 Endpoints used by WSIndex
 
-| Method + path | Request body | Response | Role in WSIndex |
-|---|---|---|---|
-| `POST /datasets` | `{name, metric:"cosine"}` | ok (idempotent) | Create the repository's dataset. The metric is fixed per dataset: `cosine` \| `l2` \| `dot` |
-| `POST /datasets/{ds}/tensors` | `{data:[…], shape:[dim], metadata:{…}}` | `{tensor_id, descriptor}` | Write the chunk's embedding + its metadata |
-| `POST /datasets/{ds}/search/similar` | `{vector:[…], k}` | a list of hits `(tensor_id, score, …)` | k-NN search via HNSW |
+| Method + path                        | Request body                            | Response                               | Role in WSIndex                                                                             |
+| ------------------------------------ | --------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `POST /datasets`                     | `{name, metric:"cosine"}`               | ok (idempotent)                        | Create the repository's dataset. The metric is fixed per dataset: `cosine` \| `l2` \| `dot` |
+| `POST /datasets/{ds}/tensors`        | `{data:[…], shape:[dim], metadata:{…}}` | `{tensor_id, descriptor}`              | Write the chunk's embedding + its metadata                                                  |
+| `POST /datasets/{ds}/search/similar` | `{vector:[…], k}`                       | a list of hits `(tensor_id, score, …)` | k-NN search via HNSW                                                                        |
 
 Additional Tensorus endpoints that are **not** used in the MVP but matter for growth:
 
@@ -382,7 +382,7 @@ The key integration fact: **property-search filters by the tensor's mathematical
 Hence two architectural decisions, canonically described in **ADR-5** (§8):
 
 1. **isolation by repository — via "dataset per repository"**: selecting the relevant datasets for `search/similar` replaces a server-side filter by `repo`;
-2. **filtering by the other fields (`lang`, `kind`) — with a client-side post-filter** by `metadata` in the `pipeline` after the hits are received.
+1. **filtering by the other fields (`lang`, `kind`) — with a client-side post-filter** by `metadata` in the `pipeline` after the hits are received.
 
 This is a deliberate trade-off: the server provides fast k-NN, and we do fine-grained filtering on the client. At the scale of "tens of thousands of chunks" this is sufficient.
 
@@ -394,9 +394,9 @@ This is a deliberate trade-off: the server provides fast k-NN, and we do fine-gr
 - `upsert(dataset, items)` — appends vectors (a `float32` matrix) and `metadata` (JSON) to local files; the key is the chunk's `id`.
 - `search(dataset, vector, k)` — brute-force cosine over a **single** dataset: we normalize the vectors, compute dot products, take top-k, and return `List[Hit]` (`{score, metadata}`). The cosine metric is the same as in Tensorus, so switching the backend does not change score semantics. Iterating over several datasets and merging results happens in the `pipeline`, exactly as for Tensorus.
 
-Its purpose is to make the project **work without a running Rust server**: important for learning (out-of-the-box startup), for tests (pytest without external services), and for offline portability. The backend choice is a config parameter (`backend = "tensorus"` \| `"local"`). Both backends are interchangeable behind the `VectorStore` interface, and the `pipeline` does not know about the concrete implementation.
+Its purpose is to make the project **work without a running Rust server**: important for learning (out-of-the-box startup), for tests (pytest without external services), and for offline portability. The backend choice is a config parameter (`backend = "tensorus"` | `"local"`). Both backends are interchangeable behind the `VectorStore` interface, and the `pipeline` does not know about the concrete implementation.
 
----
+______________________________________________________________________
 
 ## 8. Key Architectural Decisions (ADRs)
 
@@ -437,23 +437,23 @@ Its purpose is to make the project **work without a running Rust server**: impor
 - **Decision.** The workspace config in **TOML** (repositories, backend, model, dim, Tensorus URL, chunking parameters). A CLI on **Typer** (Click under the hood): `init`, `add-repo`, `index`, `search`, `status`.
 - **Consequences.** (+) TOML is familiar to the Python ecosystem and to the corpus itself (`pyproject.toml`, Rust configs); (+) Typer provides typed arguments and auto-help almost for free. (−) TOML is less flexible for deeply nested structures — sufficient for the MVP.
 
----
+______________________________________________________________________
 
 ## 9. Tech Stack and Directory Structure
 
 **Technology stack:**
 
-| Layer | Technologies |
-|---|---|
-| Language/runtime | Python 3.11+ |
-| CLI | Typer (Click under the hood) |
-| Chunking | tree-sitter + grammars: python, rust, typescript, toml, yaml, json, dockerfile, markdown |
-| Embeddings | sentence-transformers (+ torch); pluggable model |
-| HTTP client | httpx (Tensorus client) |
-| Data models | dataclasses / pydantic |
-| Tests | pytest |
-| Installation | pip |
-| Config | TOML (workspace) |
+| Layer            | Technologies                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Language/runtime | Python 3.11+                                                                             |
+| CLI              | Typer (Click under the hood)                                                             |
+| Chunking         | tree-sitter + grammars: python, rust, typescript, toml, yaml, json, dockerfile, markdown |
+| Embeddings       | sentence-transformers (+ torch); pluggable model                                         |
+| HTTP client      | httpx (Tensorus client)                                                                  |
+| Data models      | dataclasses / pydantic                                                                   |
+| Tests            | pytest                                                                                   |
+| Installation     | pip                                                                                      |
+| Config           | TOML (workspace)                                                                         |
 
 **Structure of the `wsindex/` package:**
 
@@ -516,43 +516,47 @@ id = "v1"
 path = "~/src/tensorus/v1"
 ```
 
----
+______________________________________________________________________
 
 ## 10. Evolution: How Phases E2–E5 Change the Components
 
 The MVP architecture is laid out so that each phase adds capabilities through existing extension points rather than rewriting the core.
 
 **Phase E2 — structural metadata and incrementality.**
+
 - Affects `ingest/ast_chunker.py`: additional features are extracted from the AST — `node_type` (already present), `pub`/`async` modifiers, decorators, visibility. They are placed in `metadata`.
 - `pipeline.search()` gains client-side filters by these fields (e.g., "only `async` functions", "only `pub` in the Rust repo `v1`").
 - `walker` + a new pass over `git diff`: incremental re-indexing of only the changed files. Deterministic `id`s are already in place for this (see §5.1).
 - The store does not change.
 
 **Phase E3 — tensor re-rank (late interaction / MaxSim).**
+
 - A new `Reranker` component appears (e.g., `rerank/`), which recomputes relevance via late-interaction on top of the top-k from `VectorStore.search`. Two paths: a custom MaxSim on the chunk's multi-vector representation **or** using Tensorus's `/search/contraction`.
 - `model.Chunk` gains a multi-vector representation if needed; `store` gains an extended upsert for several vectors per chunk.
 - `pipeline.search()` gains an optional `rerank(hits)` step. ADR-3 explicitly leaves room for this.
 
 **Phase E4 — development space (graph).**
+
 - New sources: docs/ADRs/issues/PRs/commits. `walker` is extended/new source readers.
 - A `GraphStore` appears (a symbolic graph of cross-repo links) alongside `VectorStore`. The target growth scenario: "where the tensorus API is called and what breaks when the signature changes" — links `mcp`/`samples` → `tensorus`.
 - The `pipeline` learns to combine vector search and graph traversal.
 
 **Phase E5 — performance and scale.**
+
 - Profiling reveals hot paths (walk, chunk, embed batching). Moving the critical sections to Rust (e.g., as an extension or service).
 - `TensorusStore` may move to batch endpoints/a connection pool; `LocalStore` — to an ANN index instead of brute-force.
 - The `VectorStore`/`Embedder`/`Chunker` interfaces remain stable — the implementations change.
 
 In summary:
 
-| Phase | Main changes | Affected components |
-|---|---|---|
-| E2 | Structural filters, incrementality | `ast_chunker`, `walker`, `pipeline.search` |
-| E3 | Tensor re-rank (MaxSim / contraction) | new `Reranker`, `model`, `store`, `pipeline` |
-| E4 | Development-space graph | new sources, `GraphStore`, `pipeline` |
-| E5 | Performance, Rust | `store`/`embed` implementations, hot paths |
+| Phase | Main changes                          | Affected components                          |
+| ----- | ------------------------------------- | -------------------------------------------- |
+| E2    | Structural filters, incrementality    | `ast_chunker`, `walker`, `pipeline.search`   |
+| E3    | Tensor re-rank (MaxSim / contraction) | new `Reranker`, `model`, `store`, `pipeline` |
+| E4    | Development-space graph               | new sources, `GraphStore`, `pipeline`        |
+| E5    | Performance, Rust                     | `store`/`embed` implementations, hot paths   |
 
----
+______________________________________________________________________
 
 ## 11. Risks and Assumptions
 
@@ -568,17 +572,17 @@ In summary:
 
 **Risks and mitigation:**
 
-| Risk | Consequence | Mitigation |
-|---|---|---|
-| Incompatible tree-sitter grammars or an unsupported language | Chunking fails/degrades | Fallback to text splitting (`text_chunker`) for unknown `lang`; pin grammar versions |
-| Change of the Tensorus v1 REST contract | `TensorusStore` breaks | Encapsulation behind `VectorStore`; integration tests; `LocalStore` as insurance |
-| The v1 contract has no deletion/upsert-by-id | A full re-index may spawn duplicate tensors | Deterministic `id`s; recreate the dataset once a DELETE endpoint appears; open integration question (§5.1, §7.2) |
-| `search/similar` does not return `metadata` in the hit | The output line cannot be built from a single response | An extra `GET` of the tensor by `tensor_id`; the `Hit` type isolates this from the `pipeline` (§6.3, §6.4) |
-| property-search does not filter by `metadata` | Cannot filter by `lang`/`kind` server-side | Dataset-per-repository (ADR-5) + client-side post-filter |
-| Model/dimensionality drift between indexing and search | Incomparable/broken vectors | Store `model` and `dim` in the config; check on `search`; require re-indexing on mismatch |
-| Single-vector relevance ceiling | Some relevant chunks do not surface | Deliberate MVP trade-off; re-rank in Phase E3 (ADR-3) |
-| Index size due to `text` in `metadata` | Growth of storage volume | Option not to store `text` but re-read from the file; the trade-off is documented in §6.3 |
-| Heavy dependencies (torch) complicate the "educational startup" | The barrier to entry rises | `LocalStore` without Tensorus; a compact default model; a documented `pip` installation path |
-| Large/binary files in the repo | Slowdown and junk | `walker` filters (size, binariness, ignoring `target`/`node_modules`/`__pycache__`/`.git`) |
+| Risk                                                            | Consequence                                            | Mitigation                                                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Incompatible tree-sitter grammars or an unsupported language    | Chunking fails/degrades                                | Fallback to text splitting (`text_chunker`) for unknown `lang`; pin grammar versions                             |
+| Change of the Tensorus v1 REST contract                         | `TensorusStore` breaks                                 | Encapsulation behind `VectorStore`; integration tests; `LocalStore` as insurance                                 |
+| The v1 contract has no deletion/upsert-by-id                    | A full re-index may spawn duplicate tensors            | Deterministic `id`s; recreate the dataset once a DELETE endpoint appears; open integration question (§5.1, §7.2) |
+| `search/similar` does not return `metadata` in the hit          | The output line cannot be built from a single response | An extra `GET` of the tensor by `tensor_id`; the `Hit` type isolates this from the `pipeline` (§6.3, §6.4)       |
+| property-search does not filter by `metadata`                   | Cannot filter by `lang`/`kind` server-side             | Dataset-per-repository (ADR-5) + client-side post-filter                                                         |
+| Model/dimensionality drift between indexing and search          | Incomparable/broken vectors                            | Store `model` and `dim` in the config; check on `search`; require re-indexing on mismatch                        |
+| Single-vector relevance ceiling                                 | Some relevant chunks do not surface                    | Deliberate MVP trade-off; re-rank in Phase E3 (ADR-3)                                                            |
+| Index size due to `text` in `metadata`                          | Growth of storage volume                               | Option not to store `text` but re-read from the file; the trade-off is documented in §6.3                        |
+| Heavy dependencies (torch) complicate the "educational startup" | The barrier to entry rises                             | `LocalStore` without Tensorus; a compact default model; a documented `pip` installation path                     |
+| Large/binary files in the repo                                  | Slowdown and junk                                      | `walker` filters (size, binariness, ignoring `target`/`node_modules`/`__pycache__`/`.git`)                       |
 
 Bottom line: the MVP architecture is a minimal but complete vertical slice "repositories → search", built on a linear pipeline and three key interfaces (`Chunker`, `Embedder`, `VectorStore`) with a unified result type `Hit`. It meets the educational priorities (understandability > modifiability > portability > performance) and leaves pre-marked growth points for phases E2–E5 without requiring a rewrite of the core.
