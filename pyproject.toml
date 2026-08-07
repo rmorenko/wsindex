@@ -25,7 +25,7 @@ classifiers = [
 # No runtime dependencies yet: this is the toolchain skeleton. The real engine
 # (typer, httpx, numpy, tree-sitter, sentence-transformers) is added as the
 # package described in ARCH_en.md is implemented.
-dependencies = ["tomli-w>=1.2.0"]
+dependencies = ["numpy>=2.4.6", "tomli-w>=1.2.0"]
 
 [project.scripts]
 wsindex = "wsindex:main"
@@ -66,7 +66,10 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12, not 3.11: numpy >=2.4 stubs use PEP 695 `type` aliases, and mypy
+# feature-gates that syntax by python_version even in stub files. Runtime
+# 3.11 compatibility is still covered by the pytest jobs in the CI matrix.
+python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 
