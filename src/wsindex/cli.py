@@ -1,0 +1,125 @@
+"""Command-line interface and the composition root.
+
+Every invocation is a fresh process: the only state shared between commands
+is the filesystem — `wsindex.toml` in the CWD and the `.wsindex/` index dir.
+Each command loads the config, does one thing, saves if it mutated anything,
+and speaks human: expected failures go to stderr and exit with code 1,
+a traceback in the output is always a bug.
+"""
+
+from pathlib import Path
+from typing import Annotated, assert_never
+
+import typer
+
+from wsindex.config import Backend, Config, load_config, save_config
+from wsindex.embed.embedder import FakeEmbedder
+from wsindex.pipeline import Pipeline
+from wsindex.store.local import LocalStore
+
+WSINDEX_TOML = "wsindex.toml"
+INDEX_DIR = ".wsindex"
+
+app = typer.Typer(no_args_is_help=True)
+
+
+def _load_config() -> Config:
+    """Load wsindex.toml from the CWD or abort the command with exit code 1."""
+    path = Path(WSINDEX_TOML)
+    if not path.exists():
+        typer.echo("error: no wsindex.toml here — run `wsindex init <name>` first", err=True)
+        raise typer.Exit(code=1)
+    return load_config(path)
+
+
+def _build_pipeline(config: Config) -> Pipeline:
+    """Composition root: the only place that turns config strings into objects."""
+    match config.backend:
+        case Backend.LOCAL:
+            store = LocalStore(Path(INDEX_DIR))
+        case Backend.TENSORUS:
+            typer.echo(
+                "error: the tensorus backend arrives in plan stage 6 — use backend=local",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        case _:  # pragma: no cover - mypy proves this branch unreachable
+            assert_never(config.backend)
+    return Pipeline(config=config, store=store, embedder=FakeEmbedder(dim=config.dim))
+
+
+@app.command()
+def init(
+    name: str,
+    backend: Annotated[Backend, typer.Option(help="Vector store backend")] = Backend.LOCAL,
+) -> None:
+    """Create wsindex.toml in the current directory.
+
+    Refuses to overwrite an existing config. Defaults to the local backend
+    so a fresh workspace works offline; tensorus becomes usable in stage 6.
+    """
+    path = Path(WSINDEX_TOML)
+    if path.exists():
+        typer.echo("error: wsindex.toml already exists here", err=True)
+        raise typer.Exit(code=1)
+    config = Config.default_config(name)
+    config.backend = backend
+    save_config(config=config, path=path)
+    typer.echo(f"created {WSINDEX_TOML}: workspace '{name}', backend '{backend.value}'")
+
+
+@app.command()
+def add_repo(repo_id: str, path: str) -> None:
+    """Register a repository; its id becomes the dataset name."""
+    config = _load_config()
+    try:
+        config.add_repo(repo_id, path)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    save_config(config=config, path=Path(WSINDEX_TOML))
+    typer.echo(f"added repo '{repo_id}' -> {path}")
+
+
+@app.command()
+def index() -> None:
+    """Walk, chunk and embed every configured repo into the store."""
+    pipeline = _build_pipeline(_load_config())
+    report = pipeline.index()
+    typer.echo(f"files: {report.files}  chunks: {report.chunks}  written: {report.written}")
+    if report.missing_repos:
+        typer.echo("warning: missing repos: " + ", ".join(report.missing_repos), err=True)
+
+
+@app.command()
+def search(
+    query: str,
+    top: Annotated[int, typer.Option("--top", "-k", help="How many hits")] = 10,
+) -> None:
+    """Search all indexed repos, best hits first."""
+    pipeline = _build_pipeline(_load_config())
+    hits = pipeline.search(query, k=top)
+    if not hits:
+        typer.echo("no results")
+        return
+    for hit in hits:
+        meta = hit.metadata
+        first_line = str(meta["text"]).splitlines()[0]
+        typer.echo(
+            f"{meta['repo']}/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
+            f"  {hit.score:.3f}  {first_line}"
+        )
+
+
+@app.command()
+def status() -> None:
+    """Show the workspace: name, backend, registered repos."""
+    config = _load_config()
+    typer.echo(f"workspace: {config.name}")
+    typer.echo(f"backend: {config.backend.value}")
+    if not config.repos:
+        typer.echo("repos: none — add one with `wsindex add-repo <id> <path>`")
+        return
+    typer.echo("repos:")
+    for repo in config.repos:
+        typer.echo(f"  {repo.id} -> {repo.path}")
