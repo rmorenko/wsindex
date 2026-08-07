@@ -11,7 +11,7 @@ import pytest
 
 from wsindex.config import Backend, Config
 from wsindex.embed.embedder import FakeEmbedder
-from wsindex.pipeline import index
+from wsindex.pipeline import Pipeline
 from wsindex.store.local import LocalStore
 
 PY_TEXT = "def f():\n    return 1"
@@ -54,29 +54,32 @@ def embedder() -> FakeEmbedder:
     return FakeEmbedder()
 
 
-def test_report_counts(config: Config, store: LocalStore, embedder: FakeEmbedder) -> None:
-    report = index(config, store, embedder)
+@pytest.fixture
+def pipeline(config: Config, store: LocalStore, embedder: FakeEmbedder) -> Pipeline:
+    return Pipeline(config=config, store=store, embedder=embedder)
+
+
+def test_report_counts(pipeline: Pipeline) -> None:
+    report = pipeline.index()
     assert report.files == 2
     assert report.chunks == EXPECTED_CHUNKS
     assert report.written == EXPECTED_CHUNKS  # first run: everything is new
     assert report.missing_repos == ()
 
 
-def test_search_finds_exact_chunk(
-    config: Config, store: LocalStore, embedder: FakeEmbedder
+def test_store_search_finds_exact_chunk(
+    pipeline: Pipeline, store: LocalStore, embedder: FakeEmbedder
 ) -> None:
-    index(config, store, embedder)
+    pipeline.index()
     query = embedder.embed([PY_TEXT])[0]
     hits = store.search("repo1", query, k=3)
     assert hits[0].metadata["path"] == "src/main.py"  # rel_path, POSIX, no tmp leak
     assert hits[0].score == pytest.approx(1.0)
 
 
-def test_second_run_writes_nothing(
-    config: Config, store: LocalStore, embedder: FakeEmbedder
-) -> None:
-    index(config, store, embedder)
-    report = index(config, store, embedder)
+def test_second_run_writes_nothing(pipeline: Pipeline) -> None:
+    pipeline.index()
+    report = pipeline.index()
     # Files are walked and chunked again, but dedup by chunk id writes nothing.
     assert report.files == 2
     assert report.chunks == EXPECTED_CHUNKS
@@ -84,23 +87,70 @@ def test_second_run_writes_nothing(
 
 
 def test_two_repos_get_isolated_datasets(
-    tmp_path: Path, config: Config, store: LocalStore, embedder: FakeEmbedder
+    tmp_path: Path, pipeline: Pipeline, store: LocalStore, embedder: FakeEmbedder
 ) -> None:
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    config.add_repo("repo2", str(repo2))
-    index(config, store, embedder)
+    pipeline.config.add_repo("repo2", str(repo2))
+    pipeline.index()
     for dataset in ("repo1", "repo2"):
         hits = store.search(dataset, embedder.embed([PY_TEXT])[0], k=10)
         assert hits
         assert {h.metadata["repo"] for h in hits} == {dataset}
 
 
-def test_missing_repo_is_reported_not_fatal(
-    tmp_path: Path, config: Config, store: LocalStore, embedder: FakeEmbedder
-) -> None:
-    config.add_repo("ghost", str(tmp_path / "does-not-exist"))
-    report = index(config, store, embedder)
+def test_missing_repo_is_reported_not_fatal(tmp_path: Path, pipeline: Pipeline) -> None:
+    pipeline.config.add_repo("ghost", str(tmp_path / "does-not-exist"))
+    report = pipeline.index()
     assert report.missing_repos == ("ghost",)
     assert report.written == EXPECTED_CHUNKS  # repo1 still indexed
+
+
+def test_search_exact_text_wins(pipeline: Pipeline) -> None:
+    pipeline.index()
+    hits = pipeline.search(PY_TEXT, k=3)
+    assert hits[0].metadata["path"] == "src/main.py"
+    assert hits[0].score == pytest.approx(1.0)
+    scores = [h.score for h in hits]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_search_merges_across_repos(tmp_path: Path, pipeline: Pipeline) -> None:
+    repo2 = tmp_path / "repo2"
+    repo2.mkdir()
+    (repo2 / "app.py").write_text("print('two')\n")
+    pipeline.config.add_repo("repo2", str(repo2))
+    pipeline.index()
+    hits = pipeline.search("print('two')", k=3)
+    assert hits[0].metadata["repo"] == "repo2"
+    assert hits[0].score == pytest.approx(1.0)
+
+
+def test_search_tie_keeps_config_repo_order(tmp_path: Path, pipeline: Pipeline) -> None:
+    # The same file in both repos: two hits with identical scores; the
+    # stable merge must keep the config repo order.
+    repo2 = tmp_path / "repo2"
+    repo2.mkdir()
+    make_repo(repo2)
+    pipeline.config.add_repo("repo2", str(repo2))
+    pipeline.index()
+    hits = pipeline.search(PY_TEXT, k=2)
+    assert [h.score for h in hits] == [pytest.approx(1.0)] * 2
+    assert [h.metadata["repo"] for h in hits] == ["repo1", "repo2"]
+
+
+def test_search_cuts_to_k_after_merge(pipeline: Pipeline) -> None:
+    pipeline.index()
+    assert len(pipeline.search(PY_TEXT, k=1)) == 1
+
+
+def test_search_skips_unindexed_repo(tmp_path: Path, pipeline: Pipeline) -> None:
+    pipeline.index()  # repo1 indexed
+    repo2 = tmp_path / "repo2"
+    repo2.mkdir()
+    (repo2 / "app.py").write_text("print('two')\n")
+    pipeline.config.add_repo("repo2", str(repo2))  # in the config, never indexed
+    hits = pipeline.search(PY_TEXT, k=5)
+    assert hits  # no crash, repo1 still answers
+    assert {h.metadata["repo"] for h in hits} == {"repo1"}
