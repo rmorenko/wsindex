@@ -30,6 +30,9 @@ dependencies = ["numpy>=2.4,<3", "tomli-w>=1.2.0", "typer>=0.27.1"]
 [project.scripts]
 wsindex = "wsindex.cli:app"
 
+[project.optional-dependencies]
+ml = ["sentence-transformers>=5.7.0"]
+
 [dependency-groups]
 dev = [
   "ruff>=0.6",
