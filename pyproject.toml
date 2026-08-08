@@ -4,7 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wsindex"
-version = "0.1.0"
+# The version lives in src/wsindex/__init__.py (__version__); hatchling
+# extracts it at build time — single source of truth.
+dynamic = ["version"]
 description = "WSIndex — a learning CLI that indexes a developer workspace for semantic code and doc search."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,26 +27,26 @@ classifiers = [
 # No runtime dependencies yet: this is the toolchain skeleton. The real engine
 # (typer, httpx, numpy, tree-sitter, sentence-transformers) is added as the
 # package described in ARCH_en.md is implemented.
-dependencies = ["numpy>=2.4,<3", "tomli-w>=1.2.0", "typer>=0.27.1"]
+dependencies = ["numpy>=2.4,<3", "tomli-w>=1.2,<2", "typer>=0.27,<1"]
 
 [project.scripts]
 wsindex = "wsindex.cli:app"
 
 [project.optional-dependencies]
-ml = ["sentence-transformers>=5.7.0"]
+ml = ["sentence-transformers>=5.7,<6"]
 
 [dependency-groups]
 dev = [
-  "ruff>=0.6",
-  "mypy>=1.11",
-  "pytest>=8",
-  "pytest-cov>=5",
-  "pre-commit>=3.8",
-  "mdformat>=1.0.0",
-  "mdformat-gfm>=1.0.0",
-  "codespell>=2.4.3",
-  "taplo>=0.9.3",
-  "yamlfix>=1.19.1",
+  "ruff>=0.16,<1",
+  "mypy>=2.3,<3",
+  "pytest>=9.1,<10",
+  "pytest-cov>=7.1,<8",
+  "pre-commit>=4.6,<5",
+  "mdformat>=1.0,<2",
+  "mdformat-gfm>=1.0,<2",
+  "codespell>=2.4,<3",
+  "taplo>=0.9,<1",
+  "yamlfix>=1.19,<2",
 ]
 
 [tool.uv]
@@ -52,6 +54,9 @@ dev = [
 # where the name is only annotated, never assigned (it lives in `re2/_base.py`).
 # Keep it out of hatchling's isolated build env until a fixed release lands.
 build-constraint-dependencies = ["pathspec!=1.1.1"]
+
+[tool.hatch.version]
+path = "src/wsindex/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wsindex"]

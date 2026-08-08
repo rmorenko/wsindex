@@ -2043,7 +2043,6 @@ wheels = [
 
 [[package]]
 name = "wsindex"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -2074,24 +2073,24 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=2.4,<3" },
-    { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=5.7.0" },
-    { name = "tomli-w", specifier = ">=1.2.0" },
-    { name = "typer", specifier = ">=0.27.1" },
+    { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=5.7,<6" },
+    { name = "tomli-w", specifier = ">=1.2,<2" },
+    { name = "typer", specifier = ">=0.27,<1" },
 ]
 provides-extras = ["ml"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "codespell", specifier = ">=2.4.3" },
-    { name = "mdformat", specifier = ">=1.0.0" },
-    { name = "mdformat-gfm", specifier = ">=1.0.0" },
-    { name = "mypy", specifier = ">=1.11" },
-    { name = "pre-commit", specifier = ">=3.8" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "pytest-cov", specifier = ">=5" },
-    { name = "ruff", specifier = ">=0.6" },
-    { name = "taplo", specifier = ">=0.9.3" },
-    { name = "yamlfix", specifier = ">=1.19.1" },
+    { name = "codespell", specifier = ">=2.4,<3" },
+    { name = "mdformat", specifier = ">=1.0,<2" },
+    { name = "mdformat-gfm", specifier = ">=1.0,<2" },
+    { name = "mypy", specifier = ">=2.3,<3" },
+    { name = "pre-commit", specifier = ">=4.6,<5" },
+    { name = "pytest", specifier = ">=9.1,<10" },
+    { name = "pytest-cov", specifier = ">=7.1,<8" },
+    { name = "ruff", specifier = ">=0.16,<1" },
+    { name = "taplo", specifier = ">=0.9,<1" },
+    { name = "yamlfix", specifier = ">=1.19,<2" },
 ]
 
 [[package]]
