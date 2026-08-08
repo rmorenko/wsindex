@@ -92,7 +92,7 @@ def chunk_markdown(
                 repo=repo,
                 path=path,
                 lang=lang,
-                kind=Kind.DOC,
+                kind=kind,
                 start_line=start_line,
                 end_line=end_line,
                 symbol=symbol,
