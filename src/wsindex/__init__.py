@@ -1,7 +1,6 @@
 """WSIndex — a learning CLI that semantically indexes a developer workspace.
 
-The toolchain-era greet() skeleton is gone; the real entry point lives in
-`wsindex.cli`. See ARCH_en.md for the design.
+The entry point lives in `wsindex.cli`. See ARCH_en.md for the design.
 """
 
 from __future__ import annotations

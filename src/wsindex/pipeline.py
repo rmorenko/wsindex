@@ -1,8 +1,8 @@
 """Indexing and search pipeline: repos from the config in, Hits out.
 
 The pipeline sees only the VectorStore and Embedder contracts; concrete
-backends are constructed once at the edge (CLI, plan step 11) and injected
-through the Pipeline constructor.
+backends are constructed once at the edge (the CLI composition root) and
+injected through the Pipeline constructor.
 """
 
 from dataclasses import dataclass
@@ -35,7 +35,7 @@ class Pipeline:
 
     Frozen on purpose: a Pipeline is a bundle of dependencies, not state —
     nothing may accumulate between calls. The composition root (the place
-    that turns Config.backend into a concrete store) lives with the CLI.
+    that turns config values into concrete backends) lives with the CLI.
     """
 
     config: Config

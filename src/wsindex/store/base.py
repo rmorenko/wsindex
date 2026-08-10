@@ -40,6 +40,6 @@ class VectorStore(ABC):
         """Return the k nearest chunks of one dataset, best score first.
 
         Single dataset on purpose: merging and re-ranking across datasets is
-        pipeline policy (plan step 10) and must live in exactly one place,
-        not be reimplemented by every backend.
+        pipeline policy (see Pipeline.search) and must live in exactly one
+        place, not be reimplemented by every backend.
         """

@@ -56,7 +56,8 @@ def init(
     """Create wsindex.toml in the current directory.
 
     Refuses to overwrite an existing config. Defaults to the local backend
-    so a fresh workspace works offline; tensorus becomes usable in stage 6.
+    so a fresh workspace works offline; tensorus becomes usable once
+    TensorusStore lands.
     """
     path = Path(WSINDEX_TOML)
     if path.exists():
