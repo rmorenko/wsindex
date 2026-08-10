@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from wsindex.cli import WSINDEX_TOML, app
+from wsindex.embed.embedder import FakeEmbedder
 
 runner = CliRunner()
 
@@ -59,7 +60,7 @@ def test_add_repo_duplicate_id_fails(workspace: Path) -> None:
 
 
 def test_index_then_search_end_to_end(workspace: Path) -> None:
-    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
 
     result = runner.invoke(app, ["index"])
@@ -78,7 +79,7 @@ def test_index_then_search_end_to_end(workspace: Path) -> None:
 
 
 def test_search_without_index_says_no_results(workspace: Path) -> None:
-    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["search", "anything"])
     assert result.exit_code == 0
@@ -93,12 +94,48 @@ def test_status_with_no_repos_hints_add_repo(workspace: Path) -> None:
 
 
 def test_index_warns_about_missing_repo(workspace: Path) -> None:
-    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
     runner.invoke(app, ["add-repo", "ghost", str(workspace / "does-not-exist")])
     result = runner.invoke(app, ["index"])
     assert result.exit_code == 0  # missing repo is a warning, not a failure
 
 
 def test_tensorus_backend_is_refused_for_now(workspace: Path) -> None:
+    # Never reaches the embedder: the backend match in _build_pipeline
+    # exits first, so no --provider fake is needed here.
     runner.invoke(app, ["init", "ws", "--backend", "tensorus"])
     assert runner.invoke(app, ["index"]).exit_code == 1
+
+
+def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    created: dict[str, str] = {}
+
+    class StubST(FakeEmbedder):
+        # Same constructor signature as the real class; dim must match
+        # config.dim (384) or the composition-root guard rejects it.
+        def __init__(self, model_name: str) -> None:
+            super().__init__(dim=384)
+            created["model"] = model_name
+
+    # Patch where the name is looked up: cli.py imported its own reference.
+    monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", StubST)
+    runner.invoke(app, ["init", "ws"])  # default provider is sentence-transformers
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    result = runner.invoke(app, ["index"])
+    assert result.exit_code == 0
+    assert created["model"] == "sentence-transformers/all-MiniLM-L6-v2"
+
+
+def test_embedder_dim_mismatch_is_rejected(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class WrongDimST(FakeEmbedder):
+        def __init__(self, model_name: str) -> None:
+            super().__init__(dim=8)
+
+    monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", WrongDimST)
+    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    result = runner.invoke(app, ["index"])
+    assert result.exit_code == 1
+    assert "dim" in result.output

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.config import Backend, Config
+from wsindex.config import Backend, Config, Provider
 from wsindex.embed.embedder import FakeEmbedder
 from wsindex.pipeline import Pipeline
 from wsindex.store.local import LocalStore
@@ -34,6 +34,7 @@ def config(tmp_path: Path) -> Config:
     cfg = Config(
         name="ws",
         backend=Backend.LOCAL,
+        provider=Provider.SENTENCE_TRANSFORMERS,
         model="fake",
         dim=8,
         base_url="",

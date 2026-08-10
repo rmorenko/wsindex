@@ -23,6 +23,11 @@ class Backend(StrEnum):
     LOCAL = "local"
 
 
+class Provider(StrEnum):
+    FAKE = "fake"
+    SENTENCE_TRANSFORMERS = "sentence-transformers"
+
+
 @dataclass(frozen=True)
 class RepoEntry:
     """One indexed repository: a stable id (used as the dataset name) and its path."""
@@ -37,6 +42,7 @@ class Config:
 
     name: str
     backend: Backend
+    provider: Provider
     model: str
     dim: int
     base_url: str
@@ -49,6 +55,7 @@ class Config:
         return cls(
             name=name,
             backend=Backend.TENSORUS,
+            provider=Provider.SENTENCE_TRANSFORMERS,
             model="sentence-transformers/all-MiniLM-L6-v2",
             dim=384,
             base_url="http://localhost:8080",
@@ -60,7 +67,7 @@ class Config:
         """Nested dict in the `wsindex.toml` section layout — input for tomli_w."""
         return {
             "workspace": {"name": self.name, "backend": self.backend},
-            "embeddings": {"model": self.model, "dim": self.dim},
+            "embeddings": {"model": self.model, "dim": self.dim, "provider": self.provider},
             "tensorus": {"base_url": self.base_url, "metric": self.metric},
             "repos": [{"id": r.id, "path": r.path} for r in self.repos],
         }
@@ -80,6 +87,7 @@ class Config:
         return cls(
             name=ws["name"],
             backend=Backend(ws["backend"]),
+            provider=Provider(emb["provider"]),
             model=emb["model"],
             dim=emb["dim"],
             base_url=ts["base_url"],

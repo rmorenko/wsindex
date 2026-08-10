@@ -37,8 +37,9 @@ coverage.xml
 htmlcov/
 nosetests.xml
 
-# WSIndex artifacts (local index / datasets)
+# WSIndex artifacts (local index / datasets, self-indexing workspace config)
 .wsindex/
+wsindex.toml
 
 # Local working notes (learning plan / progress journal)
 PLAN_ru.md
