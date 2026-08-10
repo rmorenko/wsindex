@@ -1,8 +1,19 @@
-"""Tests for FakeEmbedder: determinism, batch contract, input validation."""
+"""Tests for embedders: the FakeEmbedder contract, SentenceTransformerEmbedder
+error branches on stubbed modules, and a slow real-model smoke test."""
+
+import sys
 
 import pytest
 
-from wsindex.embed.embedder import FakeEmbedder
+from wsindex.embed.embedder import FakeEmbedder, SentenceTransformerEmbedder
+
+
+class FakeST:
+    def __init__(self, model_name: str) -> None:
+        self.model_name = model_name
+
+    def get_embedding_dimension(self) -> None:
+        return None
 
 
 def test_same_text_same_vector_across_instances() -> None:
@@ -47,3 +58,34 @@ def test_bare_string_rejected() -> None:
     # exactly why the guard must exist at runtime.
     with pytest.raises(TypeError):
         FakeEmbedder().embed("hello")
+
+
+def test_missing_ml_extra_raises_with_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "sentence_transformers", None)
+    with pytest.raises(RuntimeError, match="uv sync --extra ml"):
+        SentenceTransformerEmbedder(model_name="irrelevant")
+
+
+def test_model_without_dim_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    import types
+
+    fake = types.ModuleType("sentence_transformers")
+    fake.SentenceTransformer = FakeST  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
+    with pytest.raises(RuntimeError, match="does not report an embedding dimension"):
+        SentenceTransformerEmbedder(model_name="sentence-transformer")
+
+
+def cos(a: list[float], b: list[float]) -> float:
+    return sum(x * y for x, y in zip(a, b, strict=True))
+
+
+@pytest.mark.slow
+def test_real_model_smoke() -> None:
+    pytest.importorskip("sentence_transformers")
+    emb = SentenceTransformerEmbedder(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = emb.embed(["hello"])
+    assert emb.dim == len(embeddings[0])
+    assert sum(x * x for x in embeddings[0]) == pytest.approx(1.0)
+    cat, kitten, spreadsheet = emb.embed(["cat", "kitten", "spreadsheet"])
+    assert cos(cat, kitten) > cos(cat, spreadsheet)
