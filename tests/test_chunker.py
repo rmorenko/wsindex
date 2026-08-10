@@ -1,9 +1,8 @@
 """Tests for the kind dispatcher: behavior-level, no mocks.
 
-The three kinds currently share the text_chunker fallback, so the tests pin
-the observable contract (section chunks for markdown docs, plain windows for
-code/config) rather than which function was called — they must keep passing
-unchanged when the code/config branches move to the AST chunker.
+The tests pin the observable contract per route — section chunks for
+markdown docs, AST chunks for python code, plain windows for config and
+for every fallback — rather than which function was called.
 """
 
 from textwrap import dedent
@@ -29,10 +28,19 @@ def test_doc_markdown_produces_sections() -> None:
 
 def test_code_falls_back_to_plain_windows() -> None:
     code = "def f():\n    return 1\n"
-    chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
+    chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="java", kind=Kind.CODE)
     assert len(chunks) == 1
     assert chunks[0].node_type is None
     assert chunks[0].symbol is None
+    assert chunks[0].text == "def f():\n    return 1"
+
+
+def test_python_code_gets_ast_chunks() -> None:
+    code = "def f():\n    return 1\n"
+    chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
+    assert len(chunks) == 1
+    assert chunks[0].node_type == "function_definition"
+    assert chunks[0].symbol == "f"
     assert chunks[0].text == "def f():\n    return 1"
 
 
