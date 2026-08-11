@@ -1,6 +1,7 @@
-"""Text chunking for doc files: Markdown by headers, everything else by window.
+"""Text chunking: Markdown by headers, everything else by sliding window.
 
-Second stage of the indexing pipeline (ARCH §4). Chunk text is always a
+Serves DOC files and is the fallback for every language without an AST
+chunker (ARCH §4). Chunk text is always a
 verbatim slice of the file — `text` corresponds exactly to lines
 `start_line..end_line` — so a search hit can point back at the real location.
 """

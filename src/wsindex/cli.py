@@ -41,7 +41,7 @@ def _build_pipeline(config: Config) -> Pipeline:
             store = LocalStore(Path(INDEX_DIR))
         case Backend.TENSORUS:
             typer.echo(
-                "error: the tensorus backend arrives in plan stage 6 — use backend=local",
+                "error: the tensorus backend is not implemented yet — use backend=local",
                 err=True,
             )
             raise typer.Exit(code=1)

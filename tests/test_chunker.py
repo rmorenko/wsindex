@@ -7,6 +7,8 @@ for every fallback — rather than which function was called.
 
 from textwrap import dedent
 
+import pytest
+
 from wsindex.ingest.chunker import chunk_file
 from wsindex.model import Kind
 
@@ -42,6 +44,19 @@ def test_python_code_gets_ast_chunks() -> None:
     assert chunks[0].node_type == "function_definition"
     assert chunks[0].symbol == "f"
     assert chunks[0].text == "def f():\n    return 1"
+
+
+def test_python_without_tree_sitter_falls_back_to_plain_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Patch the dispatcher's own copy of the flag: `from ... import` binds
+    # the name in the chunker namespace, so that is where lookups happen.
+    monkeypatch.setattr("wsindex.ingest.chunker.HAS_TREE_SITTER", False)
+    code = "def f():\n    return 1\n"
+    chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
+    assert len(chunks) == 1
+    assert chunks[0].node_type is None
+    assert chunks[0].symbol is None
 
 
 def test_config_falls_back_to_plain_windows() -> None:

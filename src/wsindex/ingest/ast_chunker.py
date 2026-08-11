@@ -19,7 +19,7 @@ try:
 
     HAS_TREE_SITTER = True
     _PARSER = Parser(Language(tree_sitter_python.language()))
-except ImportError:
+except ImportError:  # pragma: no cover - only reachable on a base install (CI matrix)
     HAS_TREE_SITTER = False
 
 

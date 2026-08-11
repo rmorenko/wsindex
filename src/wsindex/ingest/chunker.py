@@ -8,7 +8,7 @@ from wsindex.model import Chunk, Kind
 def chunk_file(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
     """Route a file to a chunker by its kind — the pipeline's single entry point.
 
-    DOC and CONFIG use the text chunker (config AST is step 14); CODE goes
+    DOC and CONFIG use the text chunker (no config AST yet); CODE goes
     through a second, per-language dispatch in `chunk_code`.
     """
     match kind:
