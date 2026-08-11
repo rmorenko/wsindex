@@ -9,6 +9,7 @@ from textwrap import dedent
 
 import pytest
 
+from wsindex.ingest.ast_chunker import CONFIG_PARSERS
 from wsindex.ingest.chunker import chunk_file
 from wsindex.model import Kind
 
@@ -59,12 +60,33 @@ def test_python_without_tree_sitter_falls_back_to_plain_windows(
     assert chunks[0].symbol is None
 
 
-def test_config_falls_back_to_plain_windows() -> None:
+@pytest.mark.skipif("toml" not in CONFIG_PARSERS, reason="needs the ast extra")
+def test_toml_config_gets_table_chunks() -> None:
     cfg = "[table]\nkey = 1\n"
     chunks = chunk_file(cfg, repo=REPO, path="pyproject.toml", lang="toml", kind=Kind.CONFIG)
     assert len(chunks) == 1
-    assert chunks[0].node_type is None
+    assert chunks[0].node_type == "table"
+    assert chunks[0].symbol == "table"
     assert chunks[0].text == "[table]\nkey = 1"
+
+
+def test_config_without_grammar_falls_back_to_plain_windows() -> None:
+    cfg = "key = 1\nother = 2\n"
+    chunks = chunk_file(cfg, repo=REPO, path="settings.ini", lang="ini", kind=Kind.CONFIG)
+    assert len(chunks) == 1
+    assert chunks[0].node_type is None
+    assert chunks[0].symbol is None
+
+
+@pytest.mark.skipif("toml" not in CONFIG_PARSERS, reason="needs the ast extra")
+def test_removed_grammar_falls_back_to_plain_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    # CONFIG_PARSERS is one shared dict object: the dispatcher imported a
+    # reference to it, so deleting the entry is visible through both names
+    # (unlike rebinding a flag, which needs patching per namespace).
+    monkeypatch.delitem(CONFIG_PARSERS, "toml")
+    cfg = "[table]\nkey = 1\n"
+    chunks = chunk_file(cfg, repo=REPO, path="pyproject.toml", lang="toml", kind=Kind.CONFIG)
+    assert chunks[0].node_type is None
 
 
 def test_metadata_flows_through() -> None:

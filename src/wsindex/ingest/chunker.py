@@ -1,6 +1,11 @@
 from typing import assert_never
 
-from wsindex.ingest.ast_chunker import HAS_TREE_SITTER, chunk_python
+from wsindex.ingest.ast_chunker import (
+    CONFIG_PARSERS,
+    HAS_TREE_SITTER,
+    chunk_config,
+    chunk_python,
+)
 from wsindex.ingest.text_chunker import chunk_text
 from wsindex.model import Chunk, Kind
 
@@ -8,14 +13,16 @@ from wsindex.model import Chunk, Kind
 def chunk_file(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
     """Route a file to a chunker by its kind — the pipeline's single entry point.
 
-    DOC and CONFIG use the text chunker (no config AST yet); CODE goes
-    through a second, per-language dispatch in `chunk_code`.
+    DOC uses the text chunker; CODE and CONFIG get AST chunks when a
+    grammar for the language is available and plain windows otherwise.
     """
     match kind:
         case Kind.DOC:
             return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
         case Kind.CODE:
             return chunk_code(text, repo=repo, path=path, lang=lang, kind=kind)
+        case Kind.CONFIG if lang in CONFIG_PARSERS:
+            return chunk_config(text, repo=repo, path=path, lang=lang, kind=kind)
         case Kind.CONFIG:
             return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
         case _:  # pragma: no cover - mypy proves this branch unreachable
