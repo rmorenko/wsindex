@@ -1,4 +1,4 @@
-"""AST chunking: Python code plus TOML/YAML/JSON/Dockerfile configs.
+"""AST chunking: Python and Rust code plus TOML/YAML/JSON/Dockerfile configs.
 
 The mechanism is shared and language-agnostic: definition nodes become
 spans, then a line-coverage pass turns everything else into gap chunks, so
@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from wsindex.model import Chunk, Kind
 
 _PY_DEFS = ("function_definition", "class_definition")
+_RUST_DEFS = ("function_item", "struct_item", "enum_item", "trait_item")
 
 _TS_DEFS = (
     "function_declaration",
@@ -54,11 +55,7 @@ CONFIG_PARSERS: dict[str, Parser] = {}
 
 if HAS_TREE_SITTER:
     CODE_PARSERS = _load_parsers(
-        (
-            ("python", "tree_sitter_python", "language"),
-            ("rust", "tree_sitter_rust", "language"),
-            ("typescript", "tree_sitter_typescript", "language_typescript"),
-        )
+        (("python", "tree_sitter_python", "language"), ("rust", "tree_sitter_rust", "language"))
     )
 
     CONFIG_PARSERS = _load_parsers(
@@ -162,7 +159,11 @@ def _assemble(
 
 
 def _unwrap(node: Node, *, wrapper: str, inner: tuple[str, ...]) -> Node:
-    """Return the def/class inside a decorated_definition, the node itself otherwise."""
+    """Return the definition inside a wrapper node, the node itself otherwise.
+
+    Wrappers differ per grammar: python hides defs in decorated_definition,
+    typescript — in export_statement.
+    """
     if node.type == wrapper:
         for child in node.named_children:
             if child.type in inner:
@@ -216,8 +217,67 @@ def _python_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Sp
     return spans
 
 
+def _extend_back(siblings: list[Node], index: int, start_line: int) -> int:
+    """Attach contiguous preceding attribute/doc-comment siblings."""
+    for prev in reversed(siblings[:index]):
+        if prev.type not in ("attribute_item", "line_comment"):
+            break
+        prev_start, prev_end = _line_span(prev)
+        if prev_end < start_line - 1:
+            break  # a blank line breaks the chain
+        start_line = prev_start
+    return start_line
+
+
+def _rust_def_span(siblings: list[Node], index: int, covered: list[bool], *, symbol: str) -> _Span:
+    """Span of one rust definition, extended back over its attribute/doc prelude."""
+    node = siblings[index]
+    start, end = _line_span(node)
+    start = _extend_back(siblings=siblings, index=index, start_line=start)
+    _cover(covered, start, end)
+    return _Span(start_line=start, end_line=end, symbol=symbol, node_type=node.type)
+
+
+def _rust_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+    """Free functions, types and impl methods; #[attributes] and /// docs
+    stick to the definition below them; method symbols use the native
+    "Type::method" separator. An impl block is handled like a python class:
+    methods first, leftover lines (header, closing brace) carry the type
+    name — trait impls are named by the implementing type, the trait itself
+    is ignored on purpose.
+    """
+    spans: list[_Span] = []
+    children = root.named_children
+    for i, child in enumerate(children):
+        if child.type in _RUST_DEFS:
+            name = _name(child)
+            if name is not None:
+                spans.append(_rust_def_span(children, i, covered, symbol=name))
+        elif child.type == "impl_item":
+            type_node = child.child_by_field_name("type")
+            body = child.child_by_field_name("body")
+            if type_node is None or type_node.text is None or body is None:
+                continue
+            type_name = type_node.text.decode()
+            impl_start, impl_end = _line_span(child)
+            members = body.named_children
+            for j, member in enumerate(members):
+                if member.type != "function_item":
+                    continue
+                method_name = _name(member)
+                if method_name is not None:
+                    spans.append(
+                        _rust_def_span(members, j, covered, symbol=f"{type_name}::{method_name}")
+                    )
+            spans += _gap_spans(
+                lines, covered, impl_start, impl_end, symbol=type_name, node_type="impl_item"
+            )
+    return spans
+
+
 _CODE_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]] = {
-    "python": _python_spans
+    "python": _python_spans,
+    "rust": _rust_spans,
 }
 
 

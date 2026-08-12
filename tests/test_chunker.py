@@ -38,6 +38,7 @@ def test_code_falls_back_to_plain_windows() -> None:
     assert chunks[0].text == "def f():\n    return 1"
 
 
+@pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
 def test_python_code_gets_ast_chunks() -> None:
     code = "def f():\n    return 1\n"
     chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
@@ -45,6 +46,14 @@ def test_python_code_gets_ast_chunks() -> None:
     assert chunks[0].node_type == "function_definition"
     assert chunks[0].symbol == "f"
     assert chunks[0].text == "def f():\n    return 1"
+
+
+@pytest.mark.skipif("rust" not in CODE_PARSERS, reason="needs the ast extra")
+def test_rust_code_gets_ast_chunks() -> None:
+    code = "impl S {\n    fn m(&self) -> u8 {\n        1\n    }\n}\n"
+    chunks = chunk_file(code, repo=REPO, path="src/s.rs", lang="rust", kind=Kind.CODE)
+    by_symbol = {c.symbol: c for c in chunks}
+    assert by_symbol["S::m"].node_type == "function_item"
 
 
 @pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
