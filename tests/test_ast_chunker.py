@@ -1,13 +1,13 @@
 """Tests for the Python AST chunker: spans, symbols and the coverage invariant.
 
-Parser-dependent tests are skipped on a base install (no `ast` extra); the
-HAS_TREE_SITTER guard test runs everywhere because it never touches the
-parser.
+Parser-dependent tests are skipped on a base install (no `ast` extra),
+including the missing-grammar guard test: it deletes the "python" registry
+entry, which must exist to be deleted.
 """
 
 import pytest
 
-from wsindex.ingest.ast_chunker import HAS_TREE_SITTER, chunk_python
+from wsindex.ingest.ast_chunker import CODE_PARSERS, HAS_TREE_SITTER, chunk_code_ast
 from wsindex.model import Chunk, Kind
 
 requires_tree_sitter = pytest.mark.skipif(
@@ -47,7 +47,7 @@ TAIL = 1
 
 
 def _chunk(text: str) -> list[Chunk]:
-    return chunk_python(text, repo="r", path="sample.py", lang="python", kind=Kind.CODE)
+    return chunk_code_ast(text, repo="r", path="sample.py", lang="python", kind=Kind.CODE)
 
 
 @requires_tree_sitter
@@ -128,8 +128,8 @@ def test_broken_file_does_not_crash() -> None:
     assert isinstance(chunks, list)  # error-tolerant parse, no exception
 
 
-def test_missing_tree_sitter_is_rejected_with_hint(monkeypatch: pytest.MonkeyPatch) -> None:
-    # No skipif: the guard must work precisely when the extra is absent.
-    monkeypatch.setattr("wsindex.ingest.ast_chunker.HAS_TREE_SITTER", False)
+@pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
+def test_missing_grammar_is_rejected_with_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(CODE_PARSERS, "python")
     with pytest.raises(RuntimeError, match="--extra ast"):
         _chunk("def f():\n    return 1\n")

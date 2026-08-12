@@ -4,10 +4,10 @@ The mechanism is shared and language-agnostic: definition nodes become
 spans, then a line-coverage pass turns everything else into gap chunks, so
 each non-blank line lands in exactly one chunk. Per-language policy (which
 nodes matter and where the symbol comes from) lives in small extractors.
-Grammars are optional: HAS_TREE_SITTER gates Python, CONFIG_PARSERS holds
-whichever config grammars imported successfully; callers fall back to the
-text chunker for everything else. Files with syntax errors are chunked
-from whatever the error-tolerant parser recognized.
+Grammars are optional: CODE_PARSERS and CONFIG_PARSERS hold whichever
+grammars imported successfully, and the dispatcher falls back to the text
+chunker for everything else. Files with syntax errors are chunked from
+whatever the error-tolerant parser recognized.
 """
 
 from __future__ import annotations
@@ -18,30 +18,57 @@ from dataclasses import dataclass
 
 from wsindex.model import Chunk, Kind
 
+_PY_DEFS = ("function_definition", "class_definition")
+
+_TS_DEFS = (
+    "function_declaration",
+    "class_declaration",
+    "interface_declaration",
+    "type_alias_declaration",
+    "enum_declaration",
+    "lexical_declaration",
+)
+
 try:
-    import tree_sitter_python
     from tree_sitter import Language, Node, Parser
 
     HAS_TREE_SITTER = True
-    _PARSER = Parser(Language(tree_sitter_python.language()))
 except ImportError:  # pragma: no cover - only reachable on a base install (CI matrix)
     HAS_TREE_SITTER = False
 
-# Registry built from whichever grammars imported: degradation is
-# per-grammar, the dispatcher just asks `lang in CONFIG_PARSERS`.
-CONFIG_PARSERS: dict[str, Parser] = {}
-if HAS_TREE_SITTER:
-    for _lang, _module in (
-        ("toml", "tree_sitter_toml"),
-        ("yaml", "tree_sitter_yaml"),
-        ("json", "tree_sitter_json"),
-        ("dockerfile", "tree_sitter_dockerfile"),
-    ):
+
+def _load_parsers(table: tuple[tuple[str, str, str], ...]) -> dict[str, Parser]:
+    parsers: dict[str, Parser] = {}
+    for lang, module_name, getter in table:
         try:
-            _grammar = importlib.import_module(_module)
-        except ImportError:  # pragma: no cover - partial grammar install
+            module = importlib.import_module(module_name)
+        except ImportError:  # pragma: no cover
             continue
-        CONFIG_PARSERS[_lang] = Parser(Language(_grammar.language()))
+        parsers[lang] = Parser(Language(getattr(module, getter)()))
+    return parsers
+
+
+CODE_PARSERS: dict[str, Parser] = {}
+
+CONFIG_PARSERS: dict[str, Parser] = {}
+
+if HAS_TREE_SITTER:
+    CODE_PARSERS = _load_parsers(
+        (
+            ("python", "tree_sitter_python", "language"),
+            ("rust", "tree_sitter_rust", "language"),
+            ("typescript", "tree_sitter_typescript", "language_typescript"),
+        )
+    )
+
+    CONFIG_PARSERS = _load_parsers(
+        (
+            ("toml", "tree_sitter_toml", "language"),
+            ("yaml", "tree_sitter_yaml", "language"),
+            ("json", "tree_sitter_json", "language"),
+            ("dockerfile", "tree_sitter_dockerfile", "language"),
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -134,14 +161,11 @@ def _assemble(
     ]
 
 
-# --- Python ---------------------------------------------------------------
-
-
-def _unwrap(node: Node) -> Node:
+def _unwrap(node: Node, *, wrapper: str, inner: tuple[str, ...]) -> Node:
     """Return the def/class inside a decorated_definition, the node itself otherwise."""
-    if node.type == "decorated_definition":
+    if node.type == wrapper:
         for child in node.named_children:
-            if child.type in ("function_definition", "class_definition"):
+            if child.type in inner:
                 return child
     return node
 
@@ -161,23 +185,14 @@ def _def_span(outer: Node, covered: list[bool], symbol: str) -> _Span:
     return _Span(start_line=start, end_line=end, symbol=symbol, node_type="function_definition")
 
 
-def chunk_python(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
-    """Chunk a Python source file by its AST.
-
-    Functions and methods become chunks with a qualified `symbol`
-    ("Cls.method") and `node_type`; class lines not taken by methods
-    (header, docstring, attributes) carry the class name; the module-level
-    remainder (docstring, imports, constants) becomes plain gap chunks.
-    Oversized functions stay whole on purpose — accepted MVP debt.
+def _python_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+    """Functions and methods with a qualified symbol ("Cls.method"); class
+    lines not taken by methods (header, docstring, attributes) carry the
+    class name. Oversized functions stay whole on purpose — accepted MVP debt.
     """
-    if not HAS_TREE_SITTER:
-        raise RuntimeError("tree-sitter is not installed — run `uv sync --extra ast`")
-    lines = text.splitlines()
-    covered = [False] * (len(lines) + 1)
-    root = _PARSER.parse(text.encode()).root_node
     spans: list[_Span] = []
     for child in root.named_children:
-        inner = _unwrap(child)
+        inner = _unwrap(node=child, wrapper="decorated_definition", inner=_PY_DEFS)
         if inner.type == "function_definition":
             name = _name(inner)
             if name is not None:
@@ -189,7 +204,7 @@ def chunk_python(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> l
                 continue  # error-recovery leftovers fall through to gap chunks
             cls_start, cls_end = _line_span(child)
             for stmt in body.named_children:
-                method = _unwrap(stmt)
+                method = _unwrap(stmt, wrapper="decorated_definition", inner=_PY_DEFS)
                 if method.type != "function_definition":
                     continue
                 method_name = _name(method)
@@ -198,8 +213,12 @@ def chunk_python(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> l
             spans += _gap_spans(
                 lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_definition"
             )
-    spans += _gap_spans(lines, covered, 1, len(lines), symbol=None, node_type=None)
-    return _assemble(spans, lines, repo=repo, path=path, lang=lang, kind=kind)
+    return spans
+
+
+_CODE_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]] = {
+    "python": _python_spans
+}
 
 
 # --- Configs --------------------------------------------------------------
@@ -324,19 +343,53 @@ _CONFIG_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[_Span
 }
 
 
-def chunk_config(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
-    """Chunk a config file by its top-level structure.
-
-    One chunk per TOML table, top-level YAML/JSON key or Dockerfile stage,
-    symbol = table name / key / stage alias. Everything else — comments,
-    leading pairs, a top-level JSON array — becomes plain gap chunks.
-    """
-    parser = CONFIG_PARSERS.get(lang)
+def _ast_chunks(
+    parsers: dict[str, Parser],
+    extractors: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]],
+    text: str,
+    *,
+    repo: str,
+    path: str,
+    lang: str,
+    kind: Kind,
+) -> list[Chunk]:
+    """Shared skeleton: parse, run the per-language extractor, fill the gaps."""
+    parser = parsers.get(lang)
     if parser is None:
-        raise RuntimeError(f"no config grammar for {lang!r} — run `uv sync --extra ast`")
+        raise RuntimeError(f"no grammar for {lang!r} — run `uv sync --extra ast`")
     lines = text.splitlines()
     covered = [False] * (len(lines) + 1)
     root = parser.parse(text.encode()).root_node
-    spans = _CONFIG_EXTRACTORS[lang](root, lines, covered)
+    spans = extractors[lang](root, lines, covered)
     spans += _gap_spans(lines, covered, 1, len(lines), symbol=None, node_type=None)
     return _assemble(spans, lines, repo=repo, path=path, lang=lang, kind=kind)
+
+
+def chunk_config(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
+    """Chunk a config file: one chunk per TOML table, top-level YAML/JSON
+    key or Dockerfile stage; comments and leftovers become gap chunks.
+    """
+    return _ast_chunks(
+        parsers=CONFIG_PARSERS,
+        extractors=_CONFIG_EXTRACTORS,
+        text=text,
+        repo=repo,
+        path=path,
+        lang=lang,
+        kind=kind,
+    )
+
+
+def chunk_code_ast(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
+    """Chunk a source file: one chunk per function, method or type
+    definition; the module-level remainder becomes gap chunks.
+    """
+    return _ast_chunks(
+        parsers=CODE_PARSERS,
+        extractors=_CODE_EXTRACTORS,
+        text=text,
+        repo=repo,
+        path=path,
+        lang=lang,
+        kind=kind,
+    )

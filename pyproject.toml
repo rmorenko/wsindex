@@ -39,7 +39,9 @@ ast = [
   "tree-sitter-dockerfile>=0.2,<1",
   "tree-sitter-json>=0.24,<1",
   "tree-sitter-python>=0.25,<1",
+  "tree-sitter-rust>=0.24,<1",
   "tree-sitter-toml>=0.7,<1",
+  "tree-sitter-typescript>=0.23,<1",
   "tree-sitter-yaml>=0.7,<1",
 ]
 

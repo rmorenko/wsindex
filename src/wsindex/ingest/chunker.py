@@ -1,10 +1,10 @@
 from typing import assert_never
 
 from wsindex.ingest.ast_chunker import (
+    CODE_PARSERS,
     CONFIG_PARSERS,
-    HAS_TREE_SITTER,
+    chunk_code_ast,
     chunk_config,
-    chunk_python,
 )
 from wsindex.ingest.text_chunker import chunk_text
 from wsindex.model import Chunk, Kind
@@ -19,24 +19,13 @@ def chunk_file(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> lis
     match kind:
         case Kind.DOC:
             return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
+        case Kind.CODE if lang in CODE_PARSERS:
+            return chunk_code_ast(text, repo=repo, path=path, lang=lang, kind=kind)
         case Kind.CODE:
-            return chunk_code(text, repo=repo, path=path, lang=lang, kind=kind)
+            return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
         case Kind.CONFIG if lang in CONFIG_PARSERS:
             return chunk_config(text, repo=repo, path=path, lang=lang, kind=kind)
         case Kind.CONFIG:
             return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(kind)
-
-
-def chunk_code(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
-    """Per-language dispatch for CODE files.
-
-    Python gets AST chunks when the `ast` extra is installed; any other
-    language — and Python on a base install — degrades to plain windows.
-    """
-    match lang:
-        case "python" if HAS_TREE_SITTER:
-            return chunk_python(text, repo=repo, path=path, lang=lang, kind=kind)
-        case _:
-            return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)

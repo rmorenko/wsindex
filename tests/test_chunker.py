@@ -1,15 +1,15 @@
 """Tests for the kind dispatcher: behavior-level, no mocks.
 
 The tests pin the observable contract per route — section chunks for
-markdown docs, AST chunks for python code, plain windows for config and
-for every fallback — rather than which function was called.
+markdown docs, AST chunks for code and configs with a grammar, plain
+windows for every fallback — rather than which function was called.
 """
 
 from textwrap import dedent
 
 import pytest
 
-from wsindex.ingest.ast_chunker import CONFIG_PARSERS
+from wsindex.ingest.ast_chunker import CODE_PARSERS, CONFIG_PARSERS
 from wsindex.ingest.chunker import chunk_file
 from wsindex.model import Kind
 
@@ -47,12 +47,11 @@ def test_python_code_gets_ast_chunks() -> None:
     assert chunks[0].text == "def f():\n    return 1"
 
 
+@pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
 def test_python_without_tree_sitter_falls_back_to_plain_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Patch the dispatcher's own copy of the flag: `from ... import` binds
-    # the name in the chunker namespace, so that is where lookups happen.
-    monkeypatch.setattr("wsindex.ingest.chunker.HAS_TREE_SITTER", False)
+    monkeypatch.delitem(CODE_PARSERS, "python")
     code = "def f():\n    return 1\n"
     chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
     assert len(chunks) == 1
