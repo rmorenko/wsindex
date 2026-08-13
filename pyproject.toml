@@ -24,10 +24,12 @@ classifiers = [
   "Topic :: Software Development",
   "Typing :: Typed",
 ]
-# No runtime dependencies yet: this is the toolchain skeleton. The real engine
-# (typer, httpx, numpy, tree-sitter, sentence-transformers) is added as the
-# package described in ARCH_en.md is implemented.
-dependencies = ["numpy>=2.4,<3", "tomli-w>=1.2,<2", "typer>=0.27,<1"]
+dependencies = [
+  "httpx>=0.28,<1",
+  "numpy>=2.4,<3",
+  "tomli-w>=1.2,<2",
+  "typer>=0.27,<1",
+]
 
 [project.scripts]
 wsindex = "wsindex.cli:app"

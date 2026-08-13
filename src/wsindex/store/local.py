@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
+from wsindex.embed.embedder import Embedder
 from wsindex.model import Chunk, Hit
 from wsindex.store.base import VectorStore
 
@@ -30,18 +31,20 @@ class LocalStore(VectorStore):
     """Offline brute-force cosine backend; disk layout in the module docstring."""
 
     root: Path
+    embedder: Embedder
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, embedder: Embedder) -> None:
         self.root = root
+        self.embedder = embedder
 
     def _dataset_dir(self, dataset: str) -> Path:
         return self.root / dataset
 
-    def create(self, dataset: str, *, dim: int, metric: str) -> None:
+    def create(self, dataset: str, *, metric: str) -> None:
         """Ensure the dataset directory and its three files exist.
 
-        Idempotent for identical (dim, metric); ValueError when the dataset
-        exists with different parameters or the metric is not "cosine".
+        Idempotent for the same embedder dim and metric; ValueError when the
+        dataset exists with different ones or the metric is not "cosine".
         """
         dataset_dir = self._dataset_dir(dataset)
         if metric != "cosine":
@@ -49,7 +52,7 @@ class LocalStore(VectorStore):
         dataset_dir.mkdir(parents=True, exist_ok=True)
         if (dataset_dir / META_JSON).exists():
             exists_meta = json.loads((dataset_dir / META_JSON).read_text())
-            if exists_meta["dim"] == dim and exists_meta["metric"] == metric:
+            if exists_meta["dim"] == self.embedder.dim and exists_meta["metric"] == metric:
                 return
             else:
                 raise ValueError(
@@ -58,51 +61,47 @@ class LocalStore(VectorStore):
                     f"and metric {exists_meta['metric']}  "
                 )
         meta = {
-            "dim": dim,
+            "dim": self.embedder.dim,
             "metric": metric,
         }
         (dataset_dir / META_JSON).write_text(json.dumps(meta), encoding="utf-8")
-        vectors = np.empty((0, dim), dtype=np.float32)
+        vectors = np.empty((0, self.embedder.dim), dtype=np.float32)
         np.save(dataset_dir / VECTORS_NPY, vectors)
         (dataset_dir / CHUNKS_JSON).write_text(json.dumps([]), encoding="utf-8")
 
-    def upsert(
-        self, dataset: str, chunks: Sequence[Chunk], vectors: Sequence[Sequence[float]]
-    ) -> int:
-        """Append chunks that are not stored yet; return how many were written.
+    def upsert(self, dataset: str, chunks: Sequence[Chunk]) -> int:
+        """Embed and append chunks that are not stored yet; return how many were written.
 
-        Dedup key is the deterministic chunk id (also within one batch).
-        ValueError on a chunks/vectors length mismatch; a dataset that was
-        never created surfaces as FileNotFoundError.
+        Dedup key is the deterministic chunk id (also within one batch),
+        and dedup runs BEFORE embedding, so a re-index embeds nothing.
+        A dataset that was never created surfaces as FileNotFoundError.
         """
-        if len(chunks) != len(vectors):
-            raise ValueError("vectors shape mismatch")
         dataset_dir = self._dataset_dir(dataset)
         vector_path = dataset_dir / VECTORS_NPY
         m = np.load(vector_path)
         records = json.loads((dataset_dir / CHUNKS_JSON).read_text())
-        new_records = []
-        new_vectors = []
+        new_chunks = []
         known = {rec["id"] for rec in records}
-        for chunk, vec in zip(chunks, vectors, strict=True):
+        for chunk in chunks:
             if chunk.id in known:
                 continue
             known.add(chunk.id)
-            new_records.append(chunk.to_metadata())
-            new_vectors.append(vec)
-        if len(new_vectors) == 0:
+            new_chunks.append(chunk)
+        if not new_chunks:
             return 0
-        arr = np.vstack([m, np.asarray(new_vectors, dtype=np.float32)])
-        records = records + new_records
+        vectors = self.embedder.embed([chunk.text for chunk in new_chunks])
+        arr = np.vstack([m, np.asarray(vectors, dtype=np.float32)])
+        records += [chunk.to_metadata() for chunk in new_chunks]
         np.save(dataset_dir / VECTORS_NPY, np.array(arr, dtype=np.float32))
         (dataset_dir / CHUNKS_JSON).write_text(json.dumps(records), encoding="utf-8")
-        return len(new_vectors)
+        return len(vectors)
 
-    def search(self, dataset: str, vector: Sequence[float], k: int) -> list[Hit]:
+    def search(self, dataset: str, query: str, k: int) -> list[Hit]:
         """Brute-force cosine top-k over one dataset, best score first.
 
-        ValueError for an unknown dataset or a query of the wrong dim; an
-        empty dataset yields [].
+        ValueError for an unknown dataset or an index built with a different
+        embedder dim (model changed without re-indexing); an empty dataset
+        yields [].
         """
         dataset_dir = self._dataset_dir(dataset)
         if not dataset_dir.exists():
@@ -112,6 +111,7 @@ class LocalStore(VectorStore):
         m = np.load(vector_path)
         if len(m) == 0:
             return []
+        vector = self.embedder.embed([query])[0]
         q = np.asarray(vector, dtype=np.float32)
         if q.shape[0] != exists_meta["dim"]:
             raise ValueError("vector shape mismatch")

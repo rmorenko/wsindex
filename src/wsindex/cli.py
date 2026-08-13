@@ -36,9 +36,24 @@ def _load_config() -> Config:
 def _build_pipeline(config: Config) -> Pipeline:
     """Composition root: the only place that turns config strings into objects."""
     store: VectorStore
+    embedder: Embedder
     match config.backend:
         case Backend.LOCAL:
-            store = LocalStore(Path(INDEX_DIR))
+            match config.provider:
+                case Provider.SENTENCE_TRANSFORMERS:
+                    embedder = SentenceTransformerEmbedder(model_name=config.model)
+                    if embedder.dim != config.dim:
+                        typer.echo(
+                            f"error: embedder dim mismatch — config expects {config.dim}, "
+                            f"model '{config.model}' produces {embedder.dim}",
+                            err=True,
+                        )
+                        raise typer.Exit(code=1)
+                case Provider.FAKE:
+                    embedder = FakeEmbedder(dim=config.dim)
+                case _:  # pragma: no cover - mypy proves this branch unreachable
+                    assert_never(config.provider)
+            store = LocalStore(root=Path(INDEX_DIR), embedder=embedder)
         case Backend.TENSORUS:
             typer.echo(
                 "error: the tensorus backend is not implemented yet — use backend=local",
@@ -47,22 +62,7 @@ def _build_pipeline(config: Config) -> Pipeline:
             raise typer.Exit(code=1)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
-    embedder: Embedder
-    match config.provider:
-        case Provider.SENTENCE_TRANSFORMERS:
-            embedder = SentenceTransformerEmbedder(model_name=config.model)
-            if embedder.dim != config.dim:
-                typer.echo(
-                    f"error: embedder dim mismatch — config expects {config.dim}, "
-                    f"model '{config.model}' produces {embedder.dim}",
-                    err=True,
-                )
-                raise typer.Exit(code=1)
-        case Provider.FAKE:
-            embedder = FakeEmbedder(dim=config.dim)
-        case _:  # pragma: no cover - mypy proves this branch unreachable
-            assert_never(config.provider)
-    return Pipeline(config=config, store=store, embedder=embedder)
+    return Pipeline(config=config, store=store)
 
 
 @app.command()

@@ -46,8 +46,8 @@ def config(tmp_path: Path) -> Config:
 
 
 @pytest.fixture
-def store(tmp_path: Path) -> LocalStore:
-    return LocalStore(tmp_path / ".wsindex")
+def store(tmp_path: Path, embedder: FakeEmbedder) -> LocalStore:
+    return LocalStore(tmp_path / ".wsindex", embedder=embedder)
 
 
 @pytest.fixture
@@ -56,8 +56,8 @@ def embedder() -> FakeEmbedder:
 
 
 @pytest.fixture
-def pipeline(config: Config, store: LocalStore, embedder: FakeEmbedder) -> Pipeline:
-    return Pipeline(config=config, store=store, embedder=embedder)
+def pipeline(config: Config, store: LocalStore) -> Pipeline:
+    return Pipeline(config=config, store=store)
 
 
 def test_report_counts(pipeline: Pipeline) -> None:
@@ -68,12 +68,9 @@ def test_report_counts(pipeline: Pipeline) -> None:
     assert report.missing_repos == ()
 
 
-def test_store_search_finds_exact_chunk(
-    pipeline: Pipeline, store: LocalStore, embedder: FakeEmbedder
-) -> None:
+def test_store_search_finds_exact_chunk(pipeline: Pipeline, store: LocalStore) -> None:
     pipeline.index()
-    query = embedder.embed([PY_TEXT])[0]
-    hits = store.search("repo1", query, k=3)
+    hits = store.search(dataset="repo1", query=PY_TEXT, k=3)
     assert hits[0].metadata["path"] == "src/main.py"  # rel_path, POSIX, no tmp leak
     assert hits[0].score == pytest.approx(1.0)
 
@@ -88,7 +85,7 @@ def test_second_run_writes_nothing(pipeline: Pipeline) -> None:
 
 
 def test_two_repos_get_isolated_datasets(
-    tmp_path: Path, pipeline: Pipeline, store: LocalStore, embedder: FakeEmbedder
+    tmp_path: Path, pipeline: Pipeline, store: LocalStore
 ) -> None:
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
@@ -96,7 +93,7 @@ def test_two_repos_get_isolated_datasets(
     pipeline.config.add_repo("repo2", str(repo2))
     pipeline.index()
     for dataset in ("repo1", "repo2"):
-        hits = store.search(dataset, embedder.embed([PY_TEXT])[0], k=10)
+        hits = store.search(dataset=dataset, query=PY_TEXT, k=10)
         assert hits
         assert {h.metadata["repo"] for h in hits} == {dataset}
 

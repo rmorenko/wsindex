@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from wsindex.cli import WSINDEX_TOML, app
+from wsindex.config import Provider, load_config
 from wsindex.embed.embedder import FakeEmbedder
 
 runner = CliRunner()
@@ -33,6 +34,13 @@ def test_init_creates_config(workspace: Path) -> None:
     assert result.exit_code == 0
     assert (workspace / WSINDEX_TOML).exists()
     assert "created" in result.output
+
+
+def test_init_provider_option_reaches_the_file(workspace: Path) -> None:
+    # Regression: this line once got lost in a refactor, and every workspace
+    # silently initialized with the real model — green tests, 100x slower.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    assert load_config(workspace / WSINDEX_TOML).provider == Provider.FAKE
 
 
 def test_init_refuses_to_overwrite(workspace: Path) -> None:
