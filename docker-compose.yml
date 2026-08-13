@@ -12,7 +12,16 @@ services:
         RUN pip install --no-cache-dir -r requirements.txt
         # psutil is imported by tensorus but missing from upstream requirements.txt
         RUN pip install --no-cache-dir psutil
+        # Server-side embedding (wsindex plan step 16, option B): upstream
+        # ships the vector API without any embedding provider installed.
+        RUN pip install --no-cache-dir sentence-transformers
         COPY tensorus ./tensorus
+        # Upstream bug: api/__init__.py execs api.py under the name
+        # "tensorus.api_app" but never registers it in sys.modules, so the
+        # dependencies.py patch below finds nothing there and every agent
+        # ends up with its own TensorStorage. Register it, as the import
+        # protocol requires (module goes into sys.modules before exec).
+        RUN sed -i 's/^_api = importlib.util.module_from_spec(_spec)$/import sys\n_api = importlib.util.module_from_spec(_spec)\nsys.modules["tensorus.api_app"] = _api/' tensorus/api/__init__.py
         # Upstream bug: /query builds its own TensorStorage, so NQL never sees
         # datasets created via the CRUD endpoints (which live on the instance
         # in api.py, loaded as tensorus.api_app). Reuse that shared instance.
