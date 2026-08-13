@@ -6,7 +6,7 @@ the no-grammar guard test runs everywhere.
 
 import pytest
 
-from wsindex.ingest.ast_chunker import CONFIG_PARSERS, chunk_config
+from wsindex.ingest.ast import CONFIG_PARSERS, chunk_config
 from wsindex.model import Chunk, Kind
 
 TOML = """\

@@ -1,6 +1,6 @@
 from typing import assert_never
 
-from wsindex.ingest.ast_chunker import (
+from wsindex.ingest.ast import (
     CODE_PARSERS,
     CONFIG_PARSERS,
     chunk_code_ast,

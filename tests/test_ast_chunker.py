@@ -11,15 +11,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from wsindex.ingest.ast_chunker import (
+from wsindex.ingest.ast import (
     _CODE_EXTRACTORS,
     _CONFIG_EXTRACTORS,
     CODE_PARSERS,
     CONFIG_PARSERS,
     HAS_TREE_SITTER,
-    _extend_back,
     chunk_code_ast,
 )
+from wsindex.ingest.ast.rust import _extend_back
 from wsindex.model import Chunk, Kind
 
 if TYPE_CHECKING:
