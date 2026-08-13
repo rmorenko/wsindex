@@ -217,9 +217,100 @@ def test_rust_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
+TS = """\
+// header comment
+import { x } from "./x";
+
+const MAX = 100;
+
+export function topLevel(a: number): number {
+  return a + MAX;
+}
+
+export class Greeter {
+  private name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  greet(): string {
+    return `hello ${this.name}`;
+  }
+}
+
+interface Options {
+  verbose: boolean;
+}
+
+export type Alias = string | number;
+
+export const arrow = (n: number): number => n * 2;
+"""
+
+
+def test_ts_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.start_line, c.end_line, c.symbol, c.node_type) for c in _chunk(TS, lang="typescript")]
+    assert got == [
+        (1, 4, None, None),  # comment + import + plain const
+        (6, 8, "topLevel", "function_declaration"),  # export inside
+        (10, 11, "Greeter", "class_declaration"),  # header + field
+        (13, 15, "Greeter.constructor", "method_definition"),
+        (17, 19, "Greeter.greet", "method_definition"),
+        (20, 20, "Greeter", "class_declaration"),  # closing }
+        (22, 24, "Options", "interface_declaration"),
+        (26, 26, "Alias", "type_alias_declaration"),
+        (28, 28, "arrow", "lexical_declaration"),
+    ]
+
+
+def test_ts_only_function_valued_consts_become_chunks() -> None:
+    code = "const MAX = 100;\nexport const arrow = (n: number): number => n * 2;\n"
+    got = [(c.symbol, c.node_type) for c in _chunk(code, lang="typescript")]
+    assert got == [(None, None), ("arrow", "lexical_declaration")]
+
+
+JAVA = """\
+package com.example;
+
+import java.util.List;
+
+/** Javadoc of Greeter. */
+@Deprecated
+public class Greeter {
+    private String name;
+
+    public Greeter(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String greet() {
+        return "hello " + name;
+    }
+}
+
+interface Options {
+    boolean verbose();
+}
+"""
+
+
+def test_java_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.start_line, c.end_line, c.symbol, c.node_type) for c in _chunk(JAVA, lang="java")]
+    assert got == [
+        (1, 5, None, None),  # package + import + javadoc (sibling comment)
+        (6, 8, "Greeter", "class_declaration"),  # @Deprecated + header + field
+        (10, 12, "Greeter.Greeter", "constructor_declaration"),
+        (14, 17, "Greeter.greet", "method_declaration"),  # @Override inside
+        (18, 18, "Greeter", "class_declaration"),  # closing }
+        (20, 22, "Options", "interface_declaration"),
+    ]
+
+
 # --- properties shared by every code language -------------------------------
 
-CODE_SAMPLES = [("python", SAMPLE), ("rust", RUST)]
+CODE_SAMPLES = [("python", SAMPLE), ("rust", RUST), ("typescript", TS), ("java", JAVA)]
 
 
 @pytest.mark.parametrize(("lang", "sample"), CODE_SAMPLES)

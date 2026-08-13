@@ -30,12 +30,12 @@ def test_doc_markdown_produces_sections() -> None:
 
 
 def test_code_falls_back_to_plain_windows() -> None:
-    code = "def f():\n    return 1\n"
-    chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="java", kind=Kind.CODE)
+    # "go" on purpose: a language no grammar is registered for.
+    code = "func f() int {\n\treturn 1\n}\n"
+    chunks = chunk_file(code, repo=REPO, path="src/m.go", lang="go", kind=Kind.CODE)
     assert len(chunks) == 1
     assert chunks[0].node_type is None
     assert chunks[0].symbol is None
-    assert chunks[0].text == "def f():\n    return 1"
 
 
 @pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
@@ -54,6 +54,24 @@ def test_rust_code_gets_ast_chunks() -> None:
     chunks = chunk_file(code, repo=REPO, path="src/s.rs", lang="rust", kind=Kind.CODE)
     by_symbol = {c.symbol: c for c in chunks}
     assert by_symbol["S::m"].node_type == "function_item"
+
+
+@pytest.mark.skipif("java" not in CODE_PARSERS, reason="needs the ast extra")
+def test_java_code_gets_ast_chunks() -> None:
+    code = "class App {\n    void run() {\n    }\n}\n"
+    chunks = chunk_file(code, repo=REPO, path="src/App.java", lang="java", kind=Kind.CODE)
+    by_symbol = {c.symbol: c for c in chunks}
+    assert by_symbol["App.run"].node_type == "method_declaration"
+
+
+@pytest.mark.skipif("typescript" not in CODE_PARSERS, reason="needs the ast extra")
+def test_typescript_code_gets_ast_chunks() -> None:
+    code = "export function f(): number {\n  return 1;\n}\n"
+    chunks = chunk_file(code, repo=REPO, path="src/f.ts", lang="typescript", kind=Kind.CODE)
+    assert len(chunks) == 1
+    assert chunks[0].symbol == "f"
+    assert chunks[0].node_type == "function_declaration"
+    assert chunks[0].text.startswith("export function f")
 
 
 @pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")

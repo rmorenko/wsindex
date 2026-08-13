@@ -22,6 +22,7 @@ _SUFFIX_MAP: dict[str, tuple[str, Kind]] = {
     ".py": ("python", Kind.CODE),
     ".rs": ("rust", Kind.CODE),
     ".ts": ("typescript", Kind.CODE),
+    ".java": ("java", Kind.CODE),
     ".toml": ("toml", Kind.CONFIG),
     ".yaml": ("yaml", Kind.CONFIG),
     ".yml": ("yaml", Kind.CONFIG),

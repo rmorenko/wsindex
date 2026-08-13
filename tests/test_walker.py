@@ -12,7 +12,7 @@ def make_repo(root: Path) -> None:
     """Build a synthetic repo tree covering every walker rule.
 
     Indexable (must be walked):
-        src/main.py, app.ts, Dockerfile, pyproject.toml, README.md
+        src/main.py, app.ts, App.java, Dockerfile, pyproject.toml, README.md
     Traps (must be skipped):
         .git/x/cfg.json      - ignored dir; `.git` itself has no files,
                                so it catches pruning done in the wrong loop
@@ -26,6 +26,7 @@ def make_repo(root: Path) -> None:
     (root / "src").mkdir()
     (root / "src" / "main.py").write_text("def f(): pass")
     (root / "app.ts").write_text("let x = 1")
+    (root / "App.java").write_text("class App {}")
     (root / "Dockerfile").write_text("FROM python:3.11")
     (root / "pyproject.toml").write_text('[project]\nname = "x"')
     (root / "README.md").write_text("# Demo")
@@ -54,6 +55,7 @@ def test_walks_expected_files(repo: Path) -> None:
     assert rel_paths == {
         "src/main.py",
         "app.ts",
+        "App.java",
         "Dockerfile",
         "pyproject.toml",
         "README.md",
@@ -83,6 +85,7 @@ def test_skips_unknown_extensions(repo: Path) -> None:
     ("rel_path", "lang", "kind"),
     [
         ("src/main.py", "python", Kind.CODE),
+        ("App.java", "java", Kind.CODE),
         ("pyproject.toml", "toml", Kind.CONFIG),
         ("README.md", "markdown", Kind.DOC),
         ("Dockerfile", "dockerfile", Kind.CONFIG),

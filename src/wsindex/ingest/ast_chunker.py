@@ -1,4 +1,4 @@
-"""AST chunking: Python and Rust code plus TOML/YAML/JSON/Dockerfile configs.
+"""AST chunking: Python/Rust/TypeScript/Java code plus TOML/YAML/JSON/Dockerfile configs.
 
 The mechanism is shared and language-agnostic: definition nodes become
 spans, then a line-coverage pass turns everything else into gap chunks, so
@@ -20,6 +20,7 @@ from wsindex.model import Chunk, Kind
 
 _PY_DEFS = ("function_definition", "class_definition")
 _RUST_DEFS = ("function_item", "struct_item", "enum_item", "trait_item")
+_JAVA_DEFS = ("interface_declaration", "enum_declaration", "record_declaration")
 
 _TS_DEFS = (
     "function_declaration",
@@ -55,7 +56,12 @@ CONFIG_PARSERS: dict[str, Parser] = {}
 
 if HAS_TREE_SITTER:
     CODE_PARSERS = _load_parsers(
-        (("python", "tree_sitter_python", "language"), ("rust", "tree_sitter_rust", "language"))
+        (
+            ("python", "tree_sitter_python", "language"),
+            ("rust", "tree_sitter_rust", "language"),
+            ("typescript", "tree_sitter_typescript", "language_typescript"),
+            ("java", "tree_sitter_java", "language"),
+        )
     )
 
     CONFIG_PARSERS = _load_parsers(
@@ -179,11 +185,11 @@ def _name(node: Node) -> str | None:
     return child.text.decode()
 
 
-def _def_span(outer: Node, covered: list[bool], symbol: str) -> _Span:
-    """Span of one function or method; `outer` includes the decorators."""
+def _def_span(outer: Node, covered: list[bool], *, symbol: str, node_type: str) -> _Span:
+    """Span of one definition; `outer` includes decorators or the export keyword."""
     start, end = _line_span(outer)
     _cover(covered, start, end)
-    return _Span(start_line=start, end_line=end, symbol=symbol, node_type="function_definition")
+    return _Span(start_line=start, end_line=end, symbol=symbol, node_type=node_type)
 
 
 def _python_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
@@ -197,7 +203,9 @@ def _python_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Sp
         if inner.type == "function_definition":
             name = _name(inner)
             if name is not None:
-                spans.append(_def_span(child, covered, symbol=name))
+                spans.append(
+                    _def_span(child, covered, symbol=name, node_type="function_definition")
+                )
         elif inner.type == "class_definition":
             cls_name = _name(inner)
             body = inner.child_by_field_name("body")
@@ -210,7 +218,14 @@ def _python_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Sp
                     continue
                 method_name = _name(method)
                 if method_name is not None:
-                    spans.append(_def_span(stmt, covered, symbol=f"{cls_name}.{method_name}"))
+                    spans.append(
+                        _def_span(
+                            stmt,
+                            covered,
+                            symbol=f"{cls_name}.{method_name}",
+                            node_type="function_definition",
+                        )
+                    )
             spans += _gap_spans(
                 lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_definition"
             )
@@ -275,9 +290,108 @@ def _rust_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span
     return spans
 
 
+def _ts_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+    """Exported and plain declarations; the export keyword stays inside the
+    chunk. Classes follow the python pattern: methods become "Cls.method"
+    chunks, leftover class lines carry the class name. A lexical_declaration
+    is a chunk only when it binds an arrow function or function expression.
+    Deliberate gaps: anonymous default exports and JSDoc comments (no
+    look-behind for TS yet).
+    """
+    spans: list[_Span] = []
+    for child in root.named_children:
+        node = _unwrap(node=child, wrapper="export_statement", inner=_TS_DEFS)
+        if node.type in (
+            "function_declaration",
+            "interface_declaration",
+            "type_alias_declaration",
+            "enum_declaration",
+        ):
+            name = _name(node)
+            if name is not None:
+                spans.append(_def_span(child, covered, symbol=name, node_type=node.type))
+        elif node.type == "class_declaration":
+            cls_name = _name(node)
+            body = node.child_by_field_name("body")
+            if cls_name is None or body is None:
+                continue  # error-recovery leftovers fall through to gap chunks
+            cls_start, cls_end = _line_span(child)
+            for member in body.named_children:
+                if member.type != "method_definition":
+                    continue
+                method_name = _name(member)
+                if method_name is not None:
+                    spans.append(
+                        _def_span(
+                            member,
+                            covered,
+                            symbol=f"{cls_name}.{method_name}",
+                            node_type="method_definition",
+                        )
+                    )
+            spans += _gap_spans(
+                lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_declaration"
+            )
+        elif node.type == "lexical_declaration":
+            declarator = next(
+                (c for c in node.named_children if c.type == "variable_declarator"), None
+            )
+            if declarator is None:
+                continue
+            value = declarator.child_by_field_name("value")
+            if value is None or value.type not in ("arrow_function", "function_expression"):
+                continue  # a plain constant is a legitimate gap
+            name = _name(declarator)
+            if name is not None:
+                spans.append(
+                    _def_span(child, covered, symbol=name, node_type="lexical_declaration")
+                )
+    return spans
+
+
+def _java_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+    """Classes descend into methods and constructors ("Cls.method");
+    interfaces, enums and records stay whole. Annotations live inside the
+    declaration nodes (the modifiers child), so spans include them for
+    free; javadoc comments are siblings and stay in gap chunks — accepted
+    debt, like JSDoc for typescript.
+    """
+    spans: list[_Span] = []
+    for child in root.named_children:
+        if child.type in _JAVA_DEFS:
+            name = _name(child)
+            if name is not None:
+                spans.append(_def_span(child, covered, symbol=name, node_type=child.type))
+        elif child.type == "class_declaration":
+            cls_name = _name(child)
+            body = child.child_by_field_name("body")
+            if cls_name is None or body is None:
+                continue  # error-recovery leftovers fall through to gap chunks
+            cls_start, cls_end = _line_span(child)
+            for member in body.named_children:
+                if member.type not in ("method_declaration", "constructor_declaration"):
+                    continue
+                member_name = _name(member)
+                if member_name is not None:
+                    spans.append(
+                        _def_span(
+                            member,
+                            covered,
+                            symbol=f"{cls_name}.{member_name}",
+                            node_type=member.type,
+                        )
+                    )
+            spans += _gap_spans(
+                lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_declaration"
+            )
+    return spans
+
+
 _CODE_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]] = {
     "python": _python_spans,
     "rust": _rust_spans,
+    "typescript": _ts_spans,
+    "java": _java_spans,
 }
 
 
