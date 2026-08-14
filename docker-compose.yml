@@ -137,6 +137,9 @@ services:
         COPY tensorus ./tensorus
         COPY app.py .
         COPY pages ./pages
+        # Upstream bug: 4_Data_Explorer.py uses np.number without importing
+        # numpy (same genre as the missing logging/typing in api_client.py).
+        RUN sed -i '1i import numpy as np' pages/4_Data_Explorer.py
         # Upstream UI targets an older API: stale endpoint paths, old response
         # shapes, and no API-key auth. Redefine the accessors and inject
         # X-API-KEY into every request.

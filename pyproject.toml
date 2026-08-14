@@ -107,8 +107,11 @@ whitelines = 1
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: needs network and a real model download"]
-addopts = "-m 'not slow'"
+markers = [
+  "slow: needs network and a real model download",
+  "live: needs a running tensorus server (docker compose up)",
+]
+addopts = "-m 'not slow and not live'"
 
 [tool.coverage.run]
 source = ["wsindex"]

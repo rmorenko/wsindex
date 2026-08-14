@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from wsindex.cli import WSINDEX_TOML, app
 from wsindex.config import Provider, load_config
 from wsindex.embed.embedder import FakeEmbedder
+from wsindex.store.local import LocalStore
 
 runner = CliRunner()
 
@@ -108,11 +109,38 @@ def test_index_warns_about_missing_repo(workspace: Path) -> None:
     assert result.exit_code == 0  # missing repo is a warning, not a failure
 
 
-def test_tensorus_backend_is_refused_for_now(workspace: Path) -> None:
-    # Never reaches the embedder: the backend match in _build_pipeline
-    # exits first, so no --provider fake is needed here.
+def test_tensorus_without_api_key_exits_with_hint(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("TENSORUS_API_KEY", raising=False)
     runner.invoke(app, ["init", "ws", "--backend", "tensorus"])
-    assert runner.invoke(app, ["index"]).exit_code == 1
+    result = runner.invoke(app, ["index"])
+    assert result.exit_code == 1
+    assert "TENSORUS_API_KEY" in result.output
+
+
+def test_tensorus_backend_builds_store_from_config_and_env(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    built: dict[str, str] = {}
+
+    class StubStore(LocalStore):
+        # A LocalStore in disguise: satisfies the contract so `index` runs
+        # end to end; we only capture what the composition root passed in.
+        def __init__(self, base_url: str, api_key: str, model_name: str) -> None:
+            super().__init__(root=workspace / ".wsindex", embedder=FakeEmbedder(dim=8))
+            built.update(base_url=base_url, api_key=api_key, model_name=model_name)
+
+    monkeypatch.setenv("TENSORUS_API_KEY", "s3cret")
+    monkeypatch.setattr("wsindex.cli.TensorusStore", StubStore)
+    runner.invoke(app, ["init", "ws", "--backend", "tensorus"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    assert runner.invoke(app, ["index"]).exit_code == 0
+    assert built == {
+        "base_url": "http://localhost:8000",
+        "api_key": "s3cret",
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    }
 
 
 def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:

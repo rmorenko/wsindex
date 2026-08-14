@@ -7,6 +7,7 @@ and speaks human: expected failures go to stderr and exit with code 1,
 a traceback in the output is always a bug.
 """
 
+import os
 from pathlib import Path
 from typing import Annotated, assert_never
 
@@ -17,6 +18,7 @@ from wsindex.embed.embedder import Embedder, FakeEmbedder, SentenceTransformerEm
 from wsindex.pipeline import Pipeline
 from wsindex.store.base import VectorStore
 from wsindex.store.local import LocalStore
+from wsindex.store.tensorus import TensorusStore
 
 WSINDEX_TOML = "wsindex.toml"
 INDEX_DIR = ".wsindex"
@@ -55,11 +57,17 @@ def _build_pipeline(config: Config) -> Pipeline:
                     assert_never(config.provider)
             store = LocalStore(root=Path(INDEX_DIR), embedder=embedder)
         case Backend.TENSORUS:
-            typer.echo(
-                "error: the tensorus backend is not implemented yet — use backend=local",
-                err=True,
+            api_key = os.environ.get("TENSORUS_API_KEY")
+            if not api_key:
+                typer.echo(
+                    "error: TENSORUS_API_KEY is not set — export it before using "
+                    "the tensorus backend",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+            store = TensorusStore(
+                base_url=config.base_url, api_key=api_key, model_name=config.model
             )
-            raise typer.Exit(code=1)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
     return Pipeline(config=config, store=store)
@@ -76,8 +84,8 @@ def init(
     """Create wsindex.toml in the current directory.
 
     Refuses to overwrite an existing config. Defaults to the local backend
-    so a fresh workspace works offline; tensorus becomes usable once
-    TensorusStore lands.
+    so a fresh workspace works offline; the tensorus backend needs a
+    running server (docker compose up) and TENSORUS_API_KEY in the env.
     """
     path = Path(WSINDEX_TOML)
     if path.exists():

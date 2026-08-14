@@ -23,7 +23,7 @@ def test_default_config(tmp_path: Path) -> None:
     assert config.backend == Backend.TENSORUS
     assert config.dim == 384
     assert config.model == "sentence-transformers/all-MiniLM-L6-v2"
-    assert config.base_url == "http://localhost:8080"
+    assert config.base_url == "http://localhost:8000"
     assert config.metric == "cosine"
     assert config.provider == Provider.SENTENCE_TRANSFORMERS
     assert config.repos == []

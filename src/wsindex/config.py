@@ -58,7 +58,7 @@ class Config:
             provider=Provider.SENTENCE_TRANSFORMERS,
             model="sentence-transformers/all-MiniLM-L6-v2",
             dim=384,
-            base_url="http://localhost:8080",
+            base_url="http://localhost:8000",
             metric="cosine",
             repos=[],
         )
