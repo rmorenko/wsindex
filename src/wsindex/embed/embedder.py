@@ -1,8 +1,9 @@
 """Embedder contract: text batches in, vector batches out.
 
-The pipeline depends only on the Embedder ABC; FakeEmbedder serves tests and
-the offline slice, SentenceTransformerEmbedder wraps a real model behind the
-optional `ml` extra.
+Stores that embed locally depend only on the Embedder ABC (the pipeline
+itself works in plain text); FakeEmbedder serves tests and the offline
+slice, SentenceTransformerEmbedder wraps a real model behind the optional
+`ml` extra.
 """
 
 import hashlib
