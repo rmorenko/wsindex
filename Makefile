@@ -53,6 +53,9 @@ check: fmt lint spell typecheck cov  ## Auto-format, then lint + spelling + type
 run:  ## Run CLI (uv run wsindex)
 	uv run wsindex
 
+acceptance:  ## Full MVP acceptance on a real corpus, writes acceptance_report.md
+	uv run python scripts/acceptance.py
+
 hooks:  ## Run pre-commit on all files
 	uv run pre-commit run --all-files
 

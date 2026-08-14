@@ -87,9 +87,9 @@ uv run pytest -m live      # integration against a running tensorus server
 
 - Javadoc and JSDoc comments land in plain gap chunks instead of sticking
   to the definition below them (Rust `///` docs do attach).
-- The tensorus backend embeds one chunk per HTTP request: indexing a large
-  corpus over the network is slow, and each search takes seconds (the
-  server embeds the query per request).
+- The tensorus backend embeds one chunk per HTTP request: indexing is
+  ~30x slower than local (measured: 3458 chunks in 252s vs 7.5s), and
+  each search takes seconds (the server embeds the query per request).
 - The upstream tensorus `/index/build` endpoint is broken, so server-side
   search runs brute-force.
 - `.tsx` files are not indexed; anonymous TypeScript default exports fall
