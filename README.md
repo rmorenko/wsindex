@@ -1,6 +1,7 @@
 # WSIndex
 
 [![CI](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml/badge.svg)](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Frmorenko%2Fwsindex%2Fbadges%2Fcoverage.json)](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml)
 
 **WSIndex** is a CLI that semantically indexes a developer workspace — multiple
 repositories at once — and answers natural-language questions with exact

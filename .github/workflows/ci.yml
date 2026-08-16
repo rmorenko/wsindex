@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,3 +48,60 @@ jobs:
 
       - name: Tests + coverage (pytest-cov, fail under 90%)
         run: uv run pytest --cov --cov-report=term-missing
+
+  # The README badge reads a shields.io endpoint JSON from the orphan
+  # `badges` branch; only pushes to main (or a manual run) refresh it.
+  coverage-badge:
+    name: coverage badge
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --extra ast
+
+      - name: Measure coverage
+        run: uv run pytest --cov --cov-report=json -q
+
+      - name: Compose the shields.io endpoint file
+        run: |
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pct = json.load(open("coverage.json"))["totals"]["percent_covered"]
+          color = "brightgreen" if pct >= 90 else "yellow" if pct >= 70 else "red"
+          badge = {
+              "schemaVersion": 1,
+              "label": "coverage",
+              "message": f"{pct:.0f}%",
+              "color": color,
+          }
+          Path("coverage-badge.json").write_text(json.dumps(badge))
+          PY
+
+      - name: Publish to the badges branch
+        run: |
+          mkdir badge-branch
+          mv coverage-badge.json badge-branch/coverage.json
+          cd badge-branch
+          git init -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -m "chore: update the coverage badge"
+          git push --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
