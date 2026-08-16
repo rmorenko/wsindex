@@ -29,7 +29,7 @@ class Provider(StrEnum):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RepoEntry:
+class Repository:
     """One indexed repository: a stable id (used as the dataset name) and its path."""
 
     id: str
@@ -47,7 +47,7 @@ class Config:
     dim: int
     base_url: str
     metric: str
-    repos: list[RepoEntry]
+    repos: list[Repository]
 
     @classmethod
     def default_config(cls, name: str) -> "Config":
@@ -76,7 +76,7 @@ class Config:
         """Register a repository; ids must be unique because they name datasets."""
         if any(r.id == repo_id for r in self.repos):
             raise ValueError(f"repo id already exists: {repo_id}")
-        self.repos.append(RepoEntry(id=repo_id, path=path))
+        self.repos.append(Repository(id=repo_id, path=path))
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> "Config":
@@ -92,7 +92,7 @@ class Config:
             dim=emb["dim"],
             base_url=ts["base_url"],
             metric=ts["metric"],
-            repos=[RepoEntry(**r) for r in config_dict.get("repos", [])],
+            repos=[Repository(**r) for r in config_dict.get("repos", [])],
         )
 
 

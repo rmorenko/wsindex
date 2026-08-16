@@ -21,7 +21,7 @@ class VectorStore(ABC):
     """
 
     @abstractmethod
-    def create(self, dataset: str, *, metric: str) -> None:
+    def create_dataset(self, dataset_name: str, *, metric: str) -> None:
         """Ensure the dataset exists; a no-op if it is already there.
 
         Idempotent on purpose: the pipeline calls it on every `index` run
@@ -29,7 +29,7 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
-    def upsert(self, dataset: str, *, chunks: Sequence[Chunk]) -> int:
+    def add_chunks(self, dataset_name: str, *, chunks: Sequence[Chunk]) -> int:
         """Embed and store chunks; return how many were actually written.
 
         Chunks whose deterministic id is already stored are skipped, so a
@@ -38,7 +38,7 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
-    def search(self, dataset: str, *, query: str, k: int) -> list[Hit]:
+    def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
         """Return the k nearest chunks of one dataset, best score first.
 
         Single dataset on purpose: merging and re-ranking across datasets is

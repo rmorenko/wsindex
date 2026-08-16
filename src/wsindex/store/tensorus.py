@@ -3,7 +3,7 @@
 The store never sees vectors — chunks and queries travel as text and the
 server embeds them with `model_name` (kept equal to the workspace model so
 local and remote backends share one vector space). Accepted MVP debt:
-upsert embeds one chunk per request (the embed endpoint takes a single
+add_chunks embeds one chunk per request (the embed endpoint takes a single
 metadata object), known-id fetching is not paginated, and the server's
 /index/build endpoint is broken upstream, so search runs brute-force.
 """
@@ -48,13 +48,13 @@ class TensorusStore(VectorStore):
                 "is it running? try `docker compose up -d`"
             ) from exc
 
-    def create(self, dataset: str, *, metric: str) -> None:
+    def create_dataset(self, dataset_name: str, *, metric: str) -> None:
         """Ensure the dataset exists; 409 means "already there" and is fine.
 
         `metric` is accepted for the contract but ignored: the server owns
         its similarity math.
         """
-        response = self._request("POST", "/datasets/create", json={"name": dataset})
+        response = self._request("POST", "/datasets/create", json={"name": dataset_name})
         if response.status_code not in (200, 201, 409):
             raise RuntimeError(f"dataset create failed: {response.status_code} {response.text}")
 
@@ -77,9 +77,9 @@ class TensorusStore(VectorStore):
             self._known[dataset] = ids
         return self._known[dataset]
 
-    def upsert(self, dataset: str, chunks: Sequence[Chunk]) -> int:
+    def add_chunks(self, dataset_name: str, *, chunks: Sequence[Chunk]) -> int:
         """Embed server-side and store chunks that are not stored yet."""
-        known = self._known_ids(dataset)
+        known = self._known_ids(dataset_name)
         written = 0
         for chunk in chunks:
             if chunk.id in known:
@@ -89,7 +89,7 @@ class TensorusStore(VectorStore):
                 "/api/v1/vector/embed",
                 json={
                     "texts": [chunk.text],
-                    "dataset_name": dataset,
+                    "dataset_name": dataset_name,
                     "model_name": self.model_name,
                     "provider": "sentence-transformers",
                     "metadata": chunk.to_metadata(),
@@ -101,17 +101,17 @@ class TensorusStore(VectorStore):
             written += 1
         return written
 
-    def search(self, dataset: str, query: str, k: int) -> list[Hit]:
+    def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
         """Server-side semantic top-k; the server embeds the query itself."""
         response = self._request(
             "POST",
             "/api/v1/vector/search",
-            json={"query": query, "dataset_name": dataset, "k": k},
+            json={"query": query, "dataset_name": dataset_name, "k": k},
         )
         if response.status_code == 404:
             # Contract: an unindexed dataset is a normal state (ValueError),
             # the pipeline skips it silently.
-            raise ValueError(f"dataset {dataset!r} is not indexed yet")
+            raise ValueError(f"dataset {dataset_name!r} is not indexed yet")
         if not response.is_success:
             raise RuntimeError(f"search failed: {response.status_code} {response.text}")
         return [

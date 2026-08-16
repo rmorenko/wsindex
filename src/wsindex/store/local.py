@@ -40,13 +40,13 @@ class LocalStore(VectorStore):
     def _dataset_dir(self, dataset: str) -> Path:
         return self.root / dataset
 
-    def create(self, dataset: str, *, metric: str) -> None:
+    def create_dataset(self, dataset_name: str, *, metric: str) -> None:
         """Ensure the dataset directory and its three files exist.
 
         Idempotent for the same embedder dim and metric; ValueError when the
         dataset exists with different ones or the metric is not "cosine".
         """
-        dataset_dir = self._dataset_dir(dataset)
+        dataset_dir = self._dataset_dir(dataset_name)
         if metric != "cosine":
             raise ValueError("metric must be 'cosine'")
         dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ class LocalStore(VectorStore):
                 return
             else:
                 raise ValueError(
-                    f"Dataset {dataset} already exists with "
+                    f"Dataset {dataset_name} already exists with "
                     f"dim {exists_meta['dim']} "
                     f"and metric {exists_meta['metric']}  "
                 )
@@ -69,14 +69,14 @@ class LocalStore(VectorStore):
         np.save(dataset_dir / VECTORS_NPY, vectors)
         (dataset_dir / CHUNKS_JSON).write_text(json.dumps([]), encoding="utf-8")
 
-    def upsert(self, dataset: str, chunks: Sequence[Chunk]) -> int:
+    def add_chunks(self, dataset_name: str, *, chunks: Sequence[Chunk]) -> int:
         """Embed and append chunks that are not stored yet; return how many were written.
 
         Dedup key is the deterministic chunk id (also within one batch),
         and dedup runs BEFORE embedding, so a re-index embeds nothing.
         A dataset that was never created surfaces as FileNotFoundError.
         """
-        dataset_dir = self._dataset_dir(dataset)
+        dataset_dir = self._dataset_dir(dataset_name)
         vector_path = dataset_dir / VECTORS_NPY
         m = np.load(vector_path)
         records = json.loads((dataset_dir / CHUNKS_JSON).read_text())
@@ -96,16 +96,16 @@ class LocalStore(VectorStore):
         (dataset_dir / CHUNKS_JSON).write_text(json.dumps(records), encoding="utf-8")
         return len(vectors)
 
-    def search(self, dataset: str, query: str, k: int) -> list[Hit]:
+    def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
         """Brute-force cosine top-k over one dataset, best score first.
 
         ValueError for an unknown dataset or an index built with a different
         embedder dim (model changed without re-indexing); an empty dataset
         yields [].
         """
-        dataset_dir = self._dataset_dir(dataset)
+        dataset_dir = self._dataset_dir(dataset_name)
         if not dataset_dir.exists():
-            raise ValueError(f"Dataset {dataset} does not exist")
+            raise ValueError(f"Dataset {dataset_name} does not exist")
         exists_meta = json.loads((dataset_dir / META_JSON).read_text())
         vector_path = dataset_dir / VECTORS_NPY
         m = np.load(vector_path)

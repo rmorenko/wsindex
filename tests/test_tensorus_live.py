@@ -32,7 +32,7 @@ def make_chunk(text: str) -> Chunk:
     )
 
 
-def test_create_upsert_search_round_trip() -> None:
+def test_create_add_search_round_trip() -> None:
     api_key = os.environ.get("TENSORUS_API_KEY")
     if not api_key:
         pytest.skip("TENSORUS_API_KEY is not set")
@@ -44,16 +44,16 @@ def test_create_upsert_search_round_trip() -> None:
         timeout=120.0,  # the first embed call may download the model
     )
     try:
-        store.create(dataset, metric="cosine")
-        store.create(dataset, metric="cosine")  # idempotency against the real server
+        store.create_dataset(dataset, metric="cosine")
+        store.create_dataset(dataset, metric="cosine")  # idempotency against the real server
         chunks = [
             make_chunk("def cosine(a, b): return dot(a, b)"),
             make_chunk("walk the repository tree and skip binaries"),
         ]
-        assert store.upsert(dataset, chunks) == 2
-        assert store.upsert(dataset, chunks) == 0  # dedup round trip
+        assert store.add_chunks(dataset, chunks=chunks) == 2
+        assert store.add_chunks(dataset, chunks=chunks) == 0  # dedup round trip
 
-        hits = store.search(dataset, "where is cosine similarity computed", k=2)
+        hits = store.search(dataset, query="where is cosine similarity computed", k=2)
         assert hits
         assert hits[0].metadata["text"] == "def cosine(a, b): return dot(a, b)"
         assert hits[0].score >= hits[-1].score

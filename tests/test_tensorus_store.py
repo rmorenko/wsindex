@@ -52,8 +52,8 @@ def test_api_key_header_travels_with_every_request() -> None:
         return httpx.Response(200, json={"success": True, "record_ids": ["r1"]})
 
     store = make_store(handler)
-    store.create("ds", metric="cosine")
-    store.upsert("ds", [make_chunk("hello")])
+    store.create_dataset("ds", metric="cosine")
+    store.add_chunks("ds", chunks=[make_chunk("hello")])
     assert len(seen) == 3  # create + records + embed
     assert all(key == "k3y" for key in seen)
 
@@ -62,7 +62,7 @@ def test_create_swallows_409_for_idempotency() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(409, json={"detail": "Dataset 'ds' already exists."})
 
-    make_store(handler).create("ds", metric="cosine")  # must not raise
+    make_store(handler).create_dataset("ds", metric="cosine")  # must not raise
 
 
 def test_create_other_errors_are_loud() -> None:
@@ -70,10 +70,10 @@ def test_create_other_errors_are_loud() -> None:
         return httpx.Response(500, json={"detail": "Internal server error"})
 
     with pytest.raises(RuntimeError, match="dataset create failed"):
-        make_store(handler).create("ds", metric="cosine")
+        make_store(handler).create_dataset("ds", metric="cosine")
 
 
-def test_upsert_skips_known_ids_and_reports_writes() -> None:
+def test_add_chunks_skips_known_ids_and_reports_writes() -> None:
     a, b = make_chunk("alpha"), make_chunk("beta")
     records_calls = 0
     embedded: list[dict[str, object]] = []
@@ -92,13 +92,13 @@ def test_upsert_skips_known_ids_and_reports_writes() -> None:
         raise AssertionError(f"unexpected path: {request.url.path}")
 
     store = make_store(handler)
-    assert store.upsert("ds", [a, b]) == 1  # a is already stored server-side
-    assert store.upsert("ds", [a, b]) == 0  # b is now in the local cache
+    assert store.add_chunks("ds", chunks=[a, b]) == 1  # a is already stored server-side
+    assert store.add_chunks("ds", chunks=[a, b]) == 0  # b is now in the local cache
     assert records_calls == 1  # known ids fetched once per dataset, then cached
     assert [payload["texts"] for payload in embedded] == [["beta"]]
 
 
-def test_upsert_sends_model_provider_and_per_chunk_metadata() -> None:
+def test_add_chunks_sends_model_provider_and_per_chunk_metadata() -> None:
     chunk = make_chunk("hello")
     payloads: list[dict[str, object]] = []
 
@@ -108,7 +108,7 @@ def test_upsert_sends_model_provider_and_per_chunk_metadata() -> None:
         payloads.append(json.loads(request.content))
         return httpx.Response(200, json={"success": True, "record_ids": ["r1"]})
 
-    make_store(handler).upsert("ds", [chunk])
+    make_store(handler).add_chunks("ds", chunks=[chunk])
     (payload,) = payloads
     assert payload["texts"] == [chunk.text]
     assert payload["dataset_name"] == "ds"
@@ -117,14 +117,14 @@ def test_upsert_sends_model_provider_and_per_chunk_metadata() -> None:
     assert payload["metadata"] == chunk.to_metadata()
 
 
-def test_upsert_embed_failure_is_loud() -> None:
+def test_add_chunks_embed_failure_is_loud() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/records"):
             return httpx.Response(200, json={"data": []})
         return httpx.Response(500, json={"detail": "Failed to embed text"})
 
     with pytest.raises(RuntimeError, match="embed failed"):
-        make_store(handler).upsert("ds", [make_chunk("x")])
+        make_store(handler).add_chunks("ds", chunks=[make_chunk("x")])
 
 
 # Shape copied verbatim from the live B1 probe of /api/v1/vector/search.
@@ -158,7 +158,7 @@ def test_search_normalizes_results_into_hits() -> None:
         assert json.loads(request.content) == {"query": "q", "dataset_name": "ds", "k": 2}
         return httpx.Response(200, json=SEARCH_RESPONSE)
 
-    hits = make_store(handler).search("ds", "q", 2)
+    hits = make_store(handler).search("ds", query="q", k=2)
     assert [(hit.score, hit.native_id) for hit in hits] == [(0.553, "r1"), (-0.006, "r2")]
     assert hits[0].metadata["path"] == "a.py"  # chunk metadata survives the round trip
 
@@ -168,7 +168,7 @@ def test_search_missing_dataset_is_a_value_error() -> None:
         return httpx.Response(404, json={"detail": "The requested resource was not found"})
 
     with pytest.raises(ValueError, match="not indexed"):
-        make_store(handler).search("nope", "q", 3)
+        make_store(handler).search("nope", query="q", k=3)
 
 
 def test_search_server_errors_are_loud() -> None:
@@ -176,7 +176,7 @@ def test_search_server_errors_are_loud() -> None:
         return httpx.Response(500, json={"detail": "Internal server error"})
 
     with pytest.raises(RuntimeError, match="search failed"):
-        make_store(handler).search("ds", "q", 3)
+        make_store(handler).search("ds", query="q", k=3)
 
 
 def test_unreachable_server_hints_at_docker() -> None:
@@ -184,7 +184,7 @@ def test_unreachable_server_hints_at_docker() -> None:
         raise httpx.ConnectError("connection refused")
 
     with pytest.raises(RuntimeError, match="docker compose up"):
-        make_store(handler).create("ds", metric="cosine")
+        make_store(handler).create_dataset("ds", metric="cosine")
 
 
 def test_close_closes_the_client() -> None:

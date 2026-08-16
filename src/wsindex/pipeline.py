@@ -57,7 +57,7 @@ class Pipeline:
             if not Path(repo.path).is_dir():
                 missing_repos.append(repo.id)
                 continue
-            self.store.create(dataset=repo.id, metric=self.config.metric)
+            self.store.create_dataset(dataset_name=repo.id, metric=self.config.metric)
             for file in walk_repo(root=Path(repo.path)):
                 files += 1
                 chunks = chunk_file(
@@ -68,7 +68,7 @@ class Pipeline:
                     kind=file.kind,
                 )
                 chunks_count += len(chunks)
-                written += self.store.upsert(dataset=repo.id, chunks=chunks)
+                written += self.store.add_chunks(dataset_name=repo.id, chunks=chunks)
         return IndexReport(
             files=files, chunks=chunks_count, written=written, missing_repos=tuple(missing_repos)
         )
@@ -87,7 +87,7 @@ class Pipeline:
         all_hits: list[Hit] = []
         for repo in self.config.repos:
             try:
-                hits = self.store.search(dataset=repo.id, query=query, k=k)
+                hits = self.store.search(dataset_name=repo.id, query=query, k=k)
             except ValueError:
                 continue
             all_hits.extend(hits)
