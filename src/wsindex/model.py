@@ -31,6 +31,20 @@ class Chunk:
     mutate after creation. The `id` field is derived from `text` and `path`,
     so it is excluded from __init__ and computed in __post_init__ instead —
     this makes it impossible to construct a Chunk with a wrong id.
+
+    Attributes:
+        id: Deterministic sha256 of (text, path); see `chunk_id`.
+        repo: Repo id from the config; doubles as the dataset name.
+        path: File path relative to the repo root, POSIX separators.
+        lang: Language/format name, e.g. "python", "toml", "markdown".
+        kind: Artifact category; drove the chunker choice.
+        symbol: Definition the chunk covers ("f", "Cls.method"); None for
+            gap chunks between definitions.
+        node_type: tree-sitter node type behind the chunk; None for
+            non-AST chunkers and gap chunks.
+        start_line: First line of the fragment, 1-based inclusive.
+        end_line: Last line of the fragment, 1-based inclusive.
+        text: Verbatim slice of the source, the embedding input.
     """
 
     # init=False: not a constructor argument, filled in __post_init__.
@@ -52,7 +66,12 @@ class Chunk:
         object.__setattr__(self, "id", self.chunk_id(self.text, path=self.path))
 
     def to_metadata(self) -> dict[str, Any]:
-        """All fields as a dict — the payload for the vector store `metadata`."""
+        """Serialize for the vector store.
+
+        Returns:
+            All fields (including `id`) as a flat dict — the payload every
+            store keeps next to the vector and returns inside Hit.metadata.
+        """
         return asdict(self)
 
     @staticmethod
@@ -66,6 +85,13 @@ class Chunk:
 
         Each part is hashed together with its length so that pairs like
         ("ab", "c") and ("a", "bc") do not collide after concatenation.
+
+        Args:
+            text: Verbatim chunk text.
+            path: Repo-relative path of the file the text came from.
+
+        Returns:
+            64-character sha256 hex digest, stable across runs and machines.
         """
         h = hashlib.sha256()
         h.update(text.encode("utf-8"))
@@ -82,10 +108,16 @@ class Hit:
     Both TensorusStore and LocalStore normalize their native responses into
     this type, so the pipeline reads chunk fields only from `metadata` and
     never depends on a concrete backend.
+
+    Attributes:
+        score: Similarity of the chunk to the query; higher is better,
+            comparable across datasets of one workspace.
+        metadata: The stored `Chunk.to_metadata()` dict of the found chunk.
+        native_id: Backend-native record id (tensor_id for Tensorus, chunk
+            id for LocalStore); service field, not used for ranking or
+            output.
     """
 
     score: float
     metadata: dict[str, Any]
-    # Native backend id (tensor_id for Tensorus, chunk id for LocalStore);
-    # service field, not used for ranking or output.
     native_id: str | None = None

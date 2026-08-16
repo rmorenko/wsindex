@@ -20,7 +20,13 @@ from wsindex.store.base import VectorStore
 class IndexReport:
     """Immutable summary of one index() run, totals across all repos.
 
-    `written` below `chunks` means dedup skipped already-stored chunks.
+    Attributes:
+        files: How many files were walked and chunked.
+        chunks: How many chunks the files produced.
+        written: How many chunks the store actually wrote; below `chunks`
+            means dedup skipped already-stored ones.
+        missing_repos: Ids of configured repos whose directory does not
+            exist; they were skipped, not failed on.
     """
 
     files: int
@@ -36,6 +42,12 @@ class Pipeline:
     Frozen on purpose: a Pipeline is a bundle of dependencies, not state —
     nothing may accumulate between calls. The composition root (the place
     that turns config values into concrete backends) lives with the CLI.
+
+    Attributes:
+        config: Workspace configuration; its repo list drives both
+            indexing and search.
+        store: Any VectorStore backend; the pipeline never looks behind
+            the contract.
     """
 
     config: Config
@@ -48,6 +60,9 @@ class Pipeline:
         stray non-UTF-8 file cannot abort the run; a repo whose directory
         does not exist goes to `missing_repos` and is skipped (an existing
         repo with zero indexable files is NOT missing).
+
+        Returns:
+            Totals across all repos; see IndexReport field docs.
         """
         files = 0
         chunks_count = 0
@@ -83,6 +98,13 @@ class Pipeline:
         deterministic. A repo that was never indexed (store raises
         ValueError) silently contributes zero hits: not yet indexed is a
         normal state, not an error.
+
+        Args:
+            query: Query text; embedding is the store's business.
+            k: Maximum number of hits in the merged result.
+
+        Returns:
+            At most k hits across all repos, best score first.
         """
         all_hits: list[Hit] = []
         for repo in self.config.repos:

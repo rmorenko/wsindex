@@ -27,11 +27,20 @@ class Embedder(ABC):
         """Dimensionality of produced vectors."""
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed a batch: one vector of length `dim` per text, same order.
+        """Embed a batch of texts.
 
-        A query is a batch of one: `embed([query])[0]`. Raises TypeError on
-        a bare string — `str` is itself a Sequence[str], and embedding five
-        one-letter "texts" is never what the caller meant.
+        A query is a batch of one: `embed([query])[0]`.
+
+        Args:
+            texts: Texts to embed; a bare string is rejected even though
+                `str` is itself a Sequence[str] — embedding five one-letter
+                "texts" is never what the caller meant.
+
+        Returns:
+            One vector of length `dim` per text, in input order.
+
+        Raises:
+            TypeError: `texts` is a bare string instead of a batch.
         """
         if isinstance(texts, str):
             raise TypeError("expected a batch of texts, got a single str")
@@ -52,6 +61,11 @@ class FakeEmbedder(Embedder):
     """
 
     def __init__(self, dim: int = 8) -> None:
+        """Pick the vector size; no other knobs exist.
+
+        Args:
+            dim: Dimensionality of the pseudo-vectors; tests keep it small.
+        """
         self._dim = dim
 
     @property
@@ -77,6 +91,16 @@ class SentenceTransformerEmbedder(Embedder):
     """
 
     def __init__(self, model_name: str) -> None:
+        """Load the model; `dim` is taken from the model itself.
+
+        Args:
+            model_name: sentence-transformers model id, e.g.
+                "sentence-transformers/all-MiniLM-L6-v2".
+
+        Raises:
+            RuntimeError: The `ml` extra is not installed, or the model
+                does not report an embedding dimension.
+        """
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:

@@ -34,6 +34,14 @@ class LocalStore(VectorStore):
     embedder: Embedder
 
     def __init__(self, root: Path, embedder: Embedder) -> None:
+        """Wire the store to its disk location and embedding strategy.
+
+        Args:
+            root: Directory that holds one subdirectory per dataset;
+                created lazily by `create_dataset`.
+            embedder: Embeds chunk texts and queries; its `dim` defines
+                the vector space of every dataset under this root.
+        """
         self.root = root
         self.embedder = embedder
 
@@ -43,8 +51,15 @@ class LocalStore(VectorStore):
     def create_dataset(self, dataset_name: str, *, metric: str) -> None:
         """Ensure the dataset directory and its three files exist.
 
-        Idempotent for the same embedder dim and metric; ValueError when the
-        dataset exists with different ones or the metric is not "cosine".
+        Idempotent for the same embedder dim and metric.
+
+        Args:
+            dataset_name: Dataset to create; becomes a directory under `root`.
+            metric: Similarity metric; this backend only supports "cosine".
+
+        Raises:
+            ValueError: The metric is not "cosine", or the dataset already
+                exists with a different dim or metric.
         """
         dataset_dir = self._dataset_dir(dataset_name)
         if metric != "cosine":
@@ -70,11 +85,20 @@ class LocalStore(VectorStore):
         (dataset_dir / CHUNKS_JSON).write_text(json.dumps([]), encoding="utf-8")
 
     def add_chunks(self, dataset_name: str, *, chunks: Sequence[Chunk]) -> int:
-        """Embed and append chunks that are not stored yet; return how many were written.
+        """Embed and append chunks that are not stored yet.
 
         Dedup key is the deterministic chunk id (also within one batch),
         and dedup runs BEFORE embedding, so a re-index embeds nothing.
-        A dataset that was never created surfaces as FileNotFoundError.
+
+        Args:
+            dataset_name: Dataset to write into.
+            chunks: Candidate chunks; already-stored ones are skipped by id.
+
+        Returns:
+            How many chunks were actually written.
+
+        Raises:
+            FileNotFoundError: The dataset was never created.
         """
         dataset_dir = self._dataset_dir(dataset_name)
         vector_path = dataset_dir / VECTORS_NPY
@@ -97,11 +121,20 @@ class LocalStore(VectorStore):
         return len(vectors)
 
     def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
-        """Brute-force cosine top-k over one dataset, best score first.
+        """Brute-force cosine top-k over one dataset.
 
-        ValueError for an unknown dataset or an index built with a different
-        embedder dim (model changed without re-indexing); an empty dataset
-        yields [].
+        Args:
+            dataset_name: Dataset to search in.
+            query: Query text; embedded locally with the injected embedder.
+            k: Maximum number of hits to return.
+
+        Returns:
+            At most k hits, best score first; empty for an empty dataset.
+
+        Raises:
+            ValueError: The dataset does not exist, or the on-disk index was
+                built with a different embedder dim (model changed without
+                re-indexing) — failing loudly beats returning garbage scores.
         """
         dataset_dir = self._dataset_dir(dataset_name)
         if not dataset_dir.exists():

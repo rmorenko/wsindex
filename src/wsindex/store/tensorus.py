@@ -29,6 +29,18 @@ class TensorusStore(VectorStore):
         timeout: float = 10.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        """Open an HTTP client against a Tensorus server.
+
+        Args:
+            base_url: Server root, e.g. "http://localhost:8000".
+            api_key: Sent as the `x-api-key` header on every request.
+            model_name: Embedding model the server uses for chunks and
+                queries; kept equal to the workspace model so local and
+                remote backends share one vector space.
+            timeout: Per-request timeout in seconds; the first embed call
+                may need a large one (the server downloads the model).
+            transport: httpx transport override — tests inject a mock one.
+        """
         self.model_name = model_name
         self.client = httpx.Client(
             base_url=base_url, headers={"x-api-key": api_key}, transport=transport, timeout=timeout
@@ -51,8 +63,14 @@ class TensorusStore(VectorStore):
     def create_dataset(self, dataset_name: str, *, metric: str) -> None:
         """Ensure the dataset exists; 409 means "already there" and is fine.
 
-        `metric` is accepted for the contract but ignored: the server owns
-        its similarity math.
+        Args:
+            dataset_name: Dataset to create on the server.
+            metric: Accepted for the contract but ignored — the server
+                owns its similarity math.
+
+        Raises:
+            RuntimeError: The server answered with anything other than
+                200/201/409, or is unreachable.
         """
         response = self._request("POST", "/datasets/create", json={"name": dataset_name})
         if response.status_code not in (200, 201, 409):
@@ -78,7 +96,20 @@ class TensorusStore(VectorStore):
         return self._known[dataset]
 
     def add_chunks(self, dataset_name: str, *, chunks: Sequence[Chunk]) -> int:
-        """Embed server-side and store chunks that are not stored yet."""
+        """Embed server-side and store chunks that are not stored yet.
+
+        Args:
+            dataset_name: Dataset to write into.
+            chunks: Candidate chunks; ones already on the server (by the
+                deterministic chunk id) are skipped without a request.
+
+        Returns:
+            How many chunks were actually written.
+
+        Raises:
+            RuntimeError: An embed request failed or the server is
+                unreachable.
+        """
         known = self._known_ids(dataset_name)
         written = 0
         for chunk in chunks:
@@ -102,7 +133,22 @@ class TensorusStore(VectorStore):
         return written
 
     def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
-        """Server-side semantic top-k; the server embeds the query itself."""
+        """Server-side semantic top-k; the server embeds the query itself.
+
+        Args:
+            dataset_name: Dataset to search in.
+            query: Query text, embedded by the server with `model_name`.
+            k: Maximum number of hits to return.
+
+        Returns:
+            At most k hits, best score first.
+
+        Raises:
+            ValueError: The dataset was never indexed (server 404) — a
+                normal state, the pipeline skips such datasets silently.
+            RuntimeError: Any other server error, or the server is
+                unreachable.
+        """
         response = self._request(
             "POST",
             "/api/v1/vector/search",
