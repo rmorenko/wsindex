@@ -94,6 +94,12 @@ python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 
+# CI installs without the ml extra (torch is huge); the import is already
+# guarded at runtime, so a missing sentence_transformers is fine to skip.
+[[tool.mypy.overrides]]
+module = "sentence_transformers.*"
+ignore_missing_imports = true
+
 [tool.codespell]
 skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist"
 

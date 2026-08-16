@@ -27,10 +27,11 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
 
-      # No extras (torch/tree-sitter): install only base dependencies
-      # and the dev group to keep CI light and green.
+      # The ast extra (tree-sitter) is small and gives mypy real Node types;
+      # the ml extra (torch) stays out to keep CI light — mypy ignores the
+      # missing sentence_transformers via an override in pyproject.toml.
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra ast
 
       - name: Lint (ruff)
         run: uv run ruff check .
