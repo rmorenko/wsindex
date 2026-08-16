@@ -24,7 +24,7 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
             name = _name(inner)
             if name is not None:
                 spans.append(
-                    _def_span(child, covered, symbol=name, node_type="function_definition")
+                    _def_span(child, covered=covered, symbol=name, node_type="function_definition")
                 )
         elif inner.type == "class_definition":
             cls_name = _name(inner)
@@ -41,12 +41,17 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
                     spans.append(
                         _def_span(
                             stmt,
-                            covered,
+                            covered=covered,
                             symbol=f"{cls_name}.{method_name}",
                             node_type="function_definition",
                         )
                     )
             spans += _gap_spans(
-                lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_definition"
+                lines,
+                covered=covered,
+                start=cls_start,
+                end=cls_end,
+                symbol=cls_name,
+                node_type="class_definition",
             )
     return spans

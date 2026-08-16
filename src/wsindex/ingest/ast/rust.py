@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 _RUST_DEFS = ("function_item", "struct_item", "enum_item", "trait_item")
 
 
-def _extend_back(siblings: list[Node], index: int, start_line: int) -> int:
+def _extend_back(siblings: list[Node], *, index: int, start_line: int) -> int:
     """Attach contiguous preceding attribute/doc-comment siblings."""
     for prev in reversed(siblings[:index]):
         if prev.type not in ("attribute_item", "line_comment"):
@@ -24,12 +24,12 @@ def _extend_back(siblings: list[Node], index: int, start_line: int) -> int:
     return start_line
 
 
-def _rust_def_span(siblings: list[Node], index: int, covered: list[bool], *, symbol: str) -> _Span:
+def _rust_def_span(siblings: list[Node], *, index: int, covered: list[bool], symbol: str) -> _Span:
     """Span of one rust definition, extended back over its attribute/doc prelude."""
     node = siblings[index]
     start, end = _line_span(node)
     start = _extend_back(siblings=siblings, index=index, start_line=start)
-    _cover(covered, start, end)
+    _cover(covered, start=start, end=end)
     return _Span(start_line=start, end_line=end, symbol=symbol, node_type=node.type)
 
 
@@ -47,7 +47,7 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
         if child.type in _RUST_DEFS:
             name = _name(child)
             if name is not None:
-                spans.append(_rust_def_span(children, i, covered, symbol=name))
+                spans.append(_rust_def_span(children, index=i, covered=covered, symbol=name))
         elif child.type == "impl_item":
             type_node = child.child_by_field_name("type")
             body = child.child_by_field_name("body")
@@ -62,9 +62,16 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
                 method_name = _name(member)
                 if method_name is not None:
                     spans.append(
-                        _rust_def_span(members, j, covered, symbol=f"{type_name}::{method_name}")
+                        _rust_def_span(
+                            members, index=j, covered=covered, symbol=f"{type_name}::{method_name}"
+                        )
                     )
             spans += _gap_spans(
-                lines, covered, impl_start, impl_end, symbol=type_name, node_type="impl_item"
+                lines,
+                covered=covered,
+                start=impl_start,
+                end=impl_end,
+                symbol=type_name,
+                node_type="impl_item",
             )
     return spans

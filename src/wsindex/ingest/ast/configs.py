@@ -21,7 +21,7 @@ def _config_span(
     start, end = _line_span(node)
     while end > start and not lines[end - 1].strip():
         end -= 1
-    _cover(covered, start, end)
+    _cover(covered, start=start, end=end)
     return _Span(start_line=start, end_line=end, symbol=symbol, node_type=node_type)
 
 
@@ -105,7 +105,7 @@ def dockerfile_spans(root: Node, lines: list[str], covered: list[bool]) -> list[
 
     def close() -> None:
         if start is not None:
-            _cover(covered, start, end)
+            _cover(covered, start=start, end=end)
             spans.append(_Span(start_line=start, end_line=end, symbol=symbol, node_type="stage"))
 
     for node in root.named_children:

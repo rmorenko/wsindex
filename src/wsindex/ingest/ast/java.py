@@ -24,7 +24,7 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
         if child.type in _JAVA_DEFS:
             name = _name(child)
             if name is not None:
-                spans.append(_def_span(child, covered, symbol=name, node_type=child.type))
+                spans.append(_def_span(child, covered=covered, symbol=name, node_type=child.type))
         elif child.type == "class_declaration":
             cls_name = _name(child)
             body = child.child_by_field_name("body")
@@ -39,12 +39,17 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
                     spans.append(
                         _def_span(
                             member,
-                            covered,
+                            covered=covered,
                             symbol=f"{cls_name}.{member_name}",
                             node_type=member.type,
                         )
                     )
             spans += _gap_spans(
-                lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_declaration"
+                lines,
+                covered=covered,
+                start=cls_start,
+                end=cls_end,
+                symbol=cls_name,
+                node_type="class_declaration",
             )
     return spans

@@ -14,7 +14,7 @@ def test_roundtrip(tmp_path: Path) -> None:
     # Non-default provider, so the roundtrip proves the field really travels
     # through the file instead of passing on a hardcoded default.
     config.provider = Provider.FAKE
-    save_config(config, tmp_path / "wsindex.toml")
+    save_config(config, path=tmp_path / "wsindex.toml")
     assert config == load_config(tmp_path / "wsindex.toml")
 
 
@@ -59,7 +59,7 @@ def test_saved_file_is_valid_toml(tmp_path: Path) -> None:
     config = Config.default_config("demo")
     config.add_repo(repo_id="test1", path="path1/test1")
     config.add_repo(repo_id="test2", path="path2/test2")
-    save_config(config, tmp_path / "wsindex.toml")
+    save_config(config, path=tmp_path / "wsindex.toml")
     data = tomllib.loads((tmp_path / "wsindex.toml").read_text())
     assert data["workspace"]["backend"] == "tensorus"
     assert data["repos"][0]["id"] == "test1"

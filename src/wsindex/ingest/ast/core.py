@@ -35,7 +35,7 @@ def _load_parsers(table: tuple[tuple[str, str, str], ...]) -> dict[str, Parser]:
     return parsers
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class _Span:
     """A future chunk: 1-based inclusive line range plus Chunk metadata."""
 
@@ -56,12 +56,12 @@ def _line_span(node: Node) -> tuple[int, int]:
     return start, end
 
 
-def _cover(covered: list[bool], start: int, end: int) -> None:
+def _cover(covered: list[bool], *, start: int, end: int) -> None:
     for i in range(start, end + 1):
         covered[i] = True
 
 
-def _uncovered_runs(covered: list[bool], start: int, end: int) -> list[tuple[int, int]]:
+def _uncovered_runs(covered: list[bool], *, start: int, end: int) -> list[tuple[int, int]]:
     """Contiguous runs of uncovered lines within [start, end], inclusive."""
     runs: list[tuple[int, int]] = []
     run_start: int | None = None
@@ -78,10 +78,10 @@ def _uncovered_runs(covered: list[bool], start: int, end: int) -> list[tuple[int
 
 def _gap_spans(
     lines: list[str],
+    *,
     covered: list[bool],
     start: int,
     end: int,
-    *,
     symbol: str | None,
     node_type: str | None,
 ) -> list[_Span]:
@@ -91,14 +91,14 @@ def _gap_spans(
     range cannot emit them twice. Blank-only runs yield nothing.
     """
     spans: list[_Span] = []
-    for run_start, run_end in _uncovered_runs(covered, start, end):
+    for run_start, run_end in _uncovered_runs(covered, start=start, end=end):
         while run_start <= run_end and not lines[run_start - 1].strip():
             run_start += 1
         while run_end >= run_start and not lines[run_end - 1].strip():
             run_end -= 1
         if run_start > run_end:
             continue
-        _cover(covered, run_start, run_end)
+        _cover(covered, start=run_start, end=run_end)
         spans.append(
             _Span(start_line=run_start, end_line=run_end, symbol=symbol, node_type=node_type)
         )
@@ -106,7 +106,7 @@ def _gap_spans(
 
 
 def _assemble(
-    spans: list[_Span], lines: list[str], *, repo: str, path: str, lang: str, kind: Kind
+    spans: list[_Span], *, lines: list[str], repo: str, path: str, lang: str, kind: Kind
 ) -> list[Chunk]:
     """Turn spans into Chunks in file order; text is a verbatim line slice."""
     return [
@@ -146,18 +146,18 @@ def _name(node: Node) -> str | None:
     return child.text.decode()
 
 
-def _def_span(outer: Node, covered: list[bool], *, symbol: str, node_type: str) -> _Span:
+def _def_span(outer: Node, *, covered: list[bool], symbol: str, node_type: str) -> _Span:
     """Span of one definition; `outer` includes decorators or the export keyword."""
     start, end = _line_span(outer)
-    _cover(covered, start, end)
+    _cover(covered, start=start, end=end)
     return _Span(start_line=start, end_line=end, symbol=symbol, node_type=node_type)
 
 
 def _ast_chunks(
+    *,
     parsers: dict[str, Parser],
     extractors: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]],
     text: str,
-    *,
     repo: str,
     path: str,
     lang: str,
@@ -171,5 +171,7 @@ def _ast_chunks(
     covered = [False] * (len(lines) + 1)
     root = parser.parse(text.encode()).root_node
     spans = extractors[lang](root, lines, covered)
-    spans += _gap_spans(lines, covered, 1, len(lines), symbol=None, node_type=None)
-    return _assemble(spans, lines, repo=repo, path=path, lang=lang, kind=kind)
+    spans += _gap_spans(
+        lines, covered=covered, start=1, end=len(lines), symbol=None, node_type=None
+    )
+    return _assemble(spans, lines=lines, repo=repo, path=path, lang=lang, kind=kind)

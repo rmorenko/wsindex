@@ -38,7 +38,7 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
         ):
             name = _name(node)
             if name is not None:
-                spans.append(_def_span(child, covered, symbol=name, node_type=node.type))
+                spans.append(_def_span(child, covered=covered, symbol=name, node_type=node.type))
         elif node.type == "class_declaration":
             cls_name = _name(node)
             body = node.child_by_field_name("body")
@@ -53,13 +53,18 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
                     spans.append(
                         _def_span(
                             member,
-                            covered,
+                            covered=covered,
                             symbol=f"{cls_name}.{method_name}",
                             node_type="method_definition",
                         )
                     )
             spans += _gap_spans(
-                lines, covered, cls_start, cls_end, symbol=cls_name, node_type="class_declaration"
+                lines,
+                covered=covered,
+                start=cls_start,
+                end=cls_end,
+                symbol=cls_name,
+                node_type="class_declaration",
             )
         elif node.type == "lexical_declaration":
             declarator = next(
@@ -73,6 +78,6 @@ def spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
             name = _name(declarator)
             if name is not None:
                 spans.append(
-                    _def_span(child, covered, symbol=name, node_type="lexical_declaration")
+                    _def_span(child, covered=covered, symbol=name, node_type="lexical_declaration")
                 )
     return spans

@@ -29,7 +29,7 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
-    def upsert(self, dataset: str, chunks: Sequence[Chunk]) -> int:
+    def upsert(self, dataset: str, *, chunks: Sequence[Chunk]) -> int:
         """Embed and store chunks; return how many were actually written.
 
         Chunks whose deterministic id is already stored are skipped, so a
@@ -38,7 +38,7 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
-    def search(self, dataset: str, query: str, k: int) -> list[Hit]:
+    def search(self, dataset: str, *, query: str, k: int) -> list[Hit]:
         """Return the k nearest chunks of one dataset, best score first.
 
         Single dataset on purpose: merging and re-ranking across datasets is

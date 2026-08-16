@@ -103,7 +103,7 @@ def add_repo(repo_id: str, path: str) -> None:
     """Register a repository; its id becomes the dataset name."""
     config = _load_config()
     try:
-        config.add_repo(repo_id, path)
+        config.add_repo(repo_id, path=path)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc

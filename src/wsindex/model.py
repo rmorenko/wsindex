@@ -23,7 +23,7 @@ class Kind(StrEnum):
     DOC = "doc"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Chunk:
     """One meaningful fragment of a file (function, config table, doc section).
 
@@ -49,14 +49,14 @@ class Chunk:
         # object.__setattr__ is the documented way to assign a field of a
         # frozen dataclass during initialization (plain `self.id = ...`
         # would raise FrozenInstanceError).
-        object.__setattr__(self, "id", self.chunk_id(self.text, self.path))
+        object.__setattr__(self, "id", self.chunk_id(self.text, path=self.path))
 
     def to_metadata(self) -> dict[str, Any]:
         """All fields as a dict — the payload for the vector store `metadata`."""
         return asdict(self)
 
     @staticmethod
-    def chunk_id(text: str, path: str) -> str:
+    def chunk_id(text: str, *, path: str) -> str:
         """Deterministic chunk id: sha256 over (text, path).
 
         The same fragment at the same path always yields the same id, which
@@ -75,7 +75,7 @@ class Chunk:
         return h.hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Hit:
     """Backend-independent search result (ARCH §6.4).
 

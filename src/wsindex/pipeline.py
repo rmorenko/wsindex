@@ -16,7 +16,7 @@ from wsindex.model import Hit
 from wsindex.store.base import VectorStore
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class IndexReport:
     """Immutable summary of one index() run, totals across all repos.
 
@@ -29,7 +29,7 @@ class IndexReport:
     missing_repos: tuple[str, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Pipeline:
     """The wired system: config + store, assembled once.
 
@@ -73,7 +73,7 @@ class Pipeline:
             files=files, chunks=chunks_count, written=written, missing_repos=tuple(missing_repos)
         )
 
-    def search(self, query: str, k: int = 10) -> list[Hit]:
+    def search(self, query: str, *, k: int = 10) -> list[Hit]:
         """Global top-k across all config repos, best score first.
 
         Merge policy lives here and only here: every dataset is asked for

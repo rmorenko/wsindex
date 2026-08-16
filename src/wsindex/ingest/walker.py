@@ -38,7 +38,7 @@ _FILENAME_MAP: dict[str, tuple[str, Kind]] = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class WalkedFile:
     """A file selected for indexing.
 
@@ -86,4 +86,9 @@ def walk_repo(root: Path) -> Iterator[WalkedFile]:
             if is_binary(abs_path):
                 continue
             lang, kind = found
-            yield WalkedFile(abs_path, abs_path.relative_to(root).as_posix(), lang, kind)
+            yield WalkedFile(
+                abs_path=abs_path,
+                rel_path=abs_path.relative_to(root).as_posix(),
+                lang=lang,
+                kind=kind,
+            )

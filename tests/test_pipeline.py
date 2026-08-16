@@ -41,7 +41,7 @@ def config(tmp_path: Path) -> Config:
         metric="cosine",
         repos=[],
     )
-    cfg.add_repo("repo1", str(repo_dir))
+    cfg.add_repo("repo1", path=str(repo_dir))
     return cfg
 
 
@@ -90,7 +90,7 @@ def test_two_repos_get_isolated_datasets(
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", str(repo2))
+    pipeline.config.add_repo("repo2", path=str(repo2))
     pipeline.index()
     for dataset in ("repo1", "repo2"):
         hits = store.search(dataset=dataset, query=PY_TEXT, k=10)
@@ -99,7 +99,7 @@ def test_two_repos_get_isolated_datasets(
 
 
 def test_missing_repo_is_reported_not_fatal(tmp_path: Path, pipeline: Pipeline) -> None:
-    pipeline.config.add_repo("ghost", str(tmp_path / "does-not-exist"))
+    pipeline.config.add_repo("ghost", path=str(tmp_path / "does-not-exist"))
     report = pipeline.index()
     assert report.missing_repos == ("ghost",)
     assert report.written == EXPECTED_CHUNKS  # repo1 still indexed
@@ -118,7 +118,7 @@ def test_search_merges_across_repos(tmp_path: Path, pipeline: Pipeline) -> None:
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", str(repo2))
+    pipeline.config.add_repo("repo2", path=str(repo2))
     pipeline.index()
     hits = pipeline.search("print('two')", k=3)
     assert hits[0].metadata["repo"] == "repo2"
@@ -131,7 +131,7 @@ def test_search_tie_keeps_config_repo_order(tmp_path: Path, pipeline: Pipeline) 
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     make_repo(repo2)
-    pipeline.config.add_repo("repo2", str(repo2))
+    pipeline.config.add_repo("repo2", path=str(repo2))
     pipeline.index()
     hits = pipeline.search(PY_TEXT, k=2)
     assert [h.score for h in hits] == [pytest.approx(1.0)] * 2
@@ -148,7 +148,7 @@ def test_search_skips_unindexed_repo(tmp_path: Path, pipeline: Pipeline) -> None
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", str(repo2))  # in the config, never indexed
+    pipeline.config.add_repo("repo2", path=str(repo2))  # in the config, never indexed
     hits = pipeline.search(PY_TEXT, k=5)
     assert hits  # no crash, repo1 still answers
     assert {h.metadata["repo"] for h in hits} == {"repo1"}

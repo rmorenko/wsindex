@@ -28,7 +28,7 @@ class Provider(StrEnum):
     SENTENCE_TRANSFORMERS = "sentence-transformers"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RepoEntry:
     """One indexed repository: a stable id (used as the dataset name) and its path."""
 
@@ -36,7 +36,7 @@ class RepoEntry:
     path: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Config:
     """In-memory form of `wsindex.toml`. Mutable: `add_repo` edits it in place."""
 
@@ -72,7 +72,7 @@ class Config:
             "repos": [{"id": r.id, "path": r.path} for r in self.repos],
         }
 
-    def add_repo(self, repo_id: str, path: str) -> None:
+    def add_repo(self, repo_id: str, *, path: str) -> None:
         """Register a repository; ids must be unique because they name datasets."""
         if any(r.id == repo_id for r in self.repos):
             raise ValueError(f"repo id already exists: {repo_id}")
@@ -96,7 +96,7 @@ class Config:
         )
 
 
-def save_config(config: Config, path: Path) -> None:
+def save_config(config: Config, *, path: Path) -> None:
     """Serialize the config to `path` as UTF-8 TOML."""
     path.write_text(tomli_w.dumps(config.to_dict()), encoding="utf-8")
 

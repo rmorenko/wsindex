@@ -150,23 +150,23 @@ def _rust_children(source: str) -> "list[Node]":
 def test_extend_back_attaches_contiguous_prelude_chain() -> None:
     children = _rust_children("/// Doc.\n#[derive(Debug)]\nstruct S;\n")
     # struct at index 2 starts on line 3; the chain reaches back to line 1.
-    assert _extend_back(children, 2, 3) == 1
+    assert _extend_back(children, index=2, start_line=3) == 1
 
 
 def test_extend_back_stops_at_a_blank_line() -> None:
     children = _rust_children("/// Far doc.\n\n#[derive(Debug)]\nstruct S;\n")
     # The attribute (line 3) is adjacent, the doc comment (line 1) is not.
-    assert _extend_back(children, 2, 4) == 3
+    assert _extend_back(children, index=2, start_line=4) == 3
 
 
 def test_extend_back_ignores_non_prelude_siblings() -> None:
     children = _rust_children("use std::fmt;\nstruct S;\n")
-    assert _extend_back(children, 1, 2) == 2
+    assert _extend_back(children, index=1, start_line=2) == 2
 
 
 def test_extend_back_with_nothing_before_the_definition() -> None:
     children = _rust_children("struct S;\n")
-    assert _extend_back(children, 0, 1) == 1
+    assert _extend_back(children, index=0, start_line=1) == 1
 
 
 RUST = """\
