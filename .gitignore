@@ -46,6 +46,9 @@ acceptance_report.md
 PLAN_ru.md
 POST_MVP_ru.md
 
+# Assignment probes and scratch scripts (learning workflow)
+probes/
+
 # Models and heavy caches (embeddings / transformers)
 models/
 .cache/

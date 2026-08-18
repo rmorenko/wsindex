@@ -60,6 +60,7 @@ dev = [
   "codespell>=2.4,<3",
   "taplo>=0.9,<1",
   "yamlfix>=1.19,<2",
+  "lancedb>=0.37.1",
 ]
 
 [tool.uv]
@@ -101,7 +102,7 @@ module = "sentence_transformers.*"
 ignore_missing_imports = true
 
 [tool.codespell]
-skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist"
+skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist,probes"
 
 [tool.yamlfix]
 line_length = 100

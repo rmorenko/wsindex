@@ -411,6 +411,7 @@ ______________________________________________________________________
 - **Context.** A self-hosted vector store with k-NN is needed. Tensorus v1 is the project's target DB (including as an educational demonstration of Tensorus itself). But requiring a running Rust server for every run is a barrier for learning and tests.
 - **Decision.** The primary backend is `TensorusStore` (REST to v1, HNSW, cosine). Plus `LocalStore` (numpy brute-force cosine, local files) as an offline fallback. The backend is chosen in the config.
 - **Consequences.** (+) The project runs and is tested without external services; (+) a real production path through Tensorus. (−) Two implementations must be kept at semantic parity (both cosine, the same contract, the unified `Hit` type). (−) LocalStore does not scale, but that is not its job.
+- **Superseded by ADR-7** (`docs/adr/adr-007-post-mvp-storage.md`, 2026-08-19): the premises above died — see ADR-7's Context.
 
 ### ADR-3. Single-vector in the MVP, tensor re-rank deferred
 
@@ -436,6 +437,12 @@ ______________________________________________________________________
 - **Context.** A readable workspace config and a convenient, self-documenting CLI are needed. The priorities are understandability and a low barrier to entry.
 - **Decision.** The workspace config in **TOML** (repositories, backend, model, dim, Tensorus URL, chunking parameters). A CLI on **Typer** (Click under the hood): `init`, `add-repo`, `index`, `search`, `status`.
 - **Consequences.** (+) TOML is familiar to the Python ecosystem and to the corpus itself (`pyproject.toml`, Rust configs); (+) Typer provides typed arguments and auto-help almost for free. (−) TOML is less flexible for deeply nested structures — sufficient for the MVP.
+
+### ADR-7. Post-MVP storage: LanceDB for vectors
+
+Supersedes ADR-2. Full text: `docs/adr/adr-007-post-mvp-storage.md` —
+starting with ADR-7, ADRs live as separate files under `docs/adr/`;
+this section keeps short pointers only.
 
 ______________________________________________________________________
 
