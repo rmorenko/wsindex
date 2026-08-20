@@ -50,18 +50,21 @@ the facts this decision rests on:
    or `s3://bucket/prefix`). Credentials, endpoint and `allow_http`
    come exclusively from the environment (standard `AWS_*`
    variables); a local-path uri requires no environment at all.
-1. **One table per workspace with a `repo` column**, not
-   table-per-dataset. ADR-5's driving premise — Tensorus
-   property-search could not filter by metadata — died with
-   Tensorus; LanceDB prefilters (`where("repo = ...")`) before an
-   exact KNN. This buys: a global top-k in a single query, uniform
-   repo/lang/kind filtering, repo removal as
-   `delete("repo = '...'")`, and cross-repo analytics over one
+1. **One table per workspace with a service `dataset` column**, not
+   table-per-dataset. (Amended during step 17v: the column is named
+   `dataset` and is owned by the store — `Chunk.repo` stays untouched
+   payload; the 17v tests caught the distinction.) ADR-5's driving
+   premise — Tensorus property-search could not filter by metadata —
+   died with Tensorus; LanceDB prefilters (`where("dataset = ...")`)
+   before an exact KNN. This buys: a global top-k in a single query,
+   uniform dataset/lang/kind filtering, repo removal as
+   `delete("dataset = '...'")`, and cross-repo analytics over one
    table. The `VectorStore` contract keeps `dataset_name`; the
-   store maps it onto the `repo` column, so the pipeline and the
+   store maps it onto the `dataset` column, so the pipeline and the
    migration cross-check stay untouched. The 17v test suite must
-   confirm prefilter parity (KNN over a repo subset equals KNN over
-   an equivalent standalone table) and deterministic tie-breaking.
+   confirm prefilter parity (KNN over a dataset subset equals KNN
+   over an equivalent standalone table) and deterministic
+   tie-breaking.
 1. **Chunk metadata are real columns** (id, repo, path, lang, kind,
    symbol, node_type, start_line, end_line, text), never a JSON
    blob: prefiltering (step 19g) is only possible over columns.
