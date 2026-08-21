@@ -105,17 +105,16 @@ class Chunk:
 class Hit:
     """Backend-independent search result (ARCH §6.4).
 
-    Both TensorusStore and LanceDBStore normalize their native responses into
-    this type, so the pipeline reads chunk fields only from `metadata` and
-    never depends on a concrete backend.
+    Concrete stores normalize their native responses into this type, so the
+    pipeline reads chunk fields only from `metadata` and never depends on
+    a concrete backend.
 
     Attributes:
         score: Similarity of the chunk to the query; higher is better,
             comparable across datasets of one workspace.
         metadata: The stored `Chunk.to_metadata()` dict of the found chunk.
-        native_id: Backend-native record id (tensor_id for Tensorus, chunk
-            id for LanceDBStore); service field, not used for ranking or
-            output.
+        native_id: Backend-native record id (chunk id for LanceDBStore);
+            service field, not used for ranking or output.
     """
 
     score: float

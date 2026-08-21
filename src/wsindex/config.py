@@ -2,7 +2,7 @@
 
 The config is the single source of truth for a workspace: which vector-store
 backend to use, which embedding model, and which repositories to index. The
-TOML layout (sections `workspace`, `embeddings`, `tensorus`, `repos`) lives
+TOML layout (sections `workspace`, `embeddings`, `store`, `repos`) lives
 only in `to_dict`/`from_dict`, so the file format has one definition per
 direction.
 """
@@ -19,9 +19,12 @@ DEFAULT_URI = ".wsindex"
 
 
 class Backend(StrEnum):
-    """Vector store selector; StrEnum so the value round-trips through TOML as-is."""
+    """Vector store selector; StrEnum so the value round-trips through TOML as-is.
 
-    TENSORUS = "tensorus"
+    A single member since ADR-7 removed Tensorus — kept as an enum so a
+    future backend is a data change, not an API change.
+    """
+
     LOCAL = "local"
 
 
@@ -51,12 +54,11 @@ class Config:
 
     Attributes:
         name: Workspace name; identification only, nothing derives from it.
-        store_uri: Relative path to local lancedb or s3 URI
+        store_uri: LanceDB location — a local path or an s3:// uri.
         backend: Which VectorStore the composition root builds.
         provider: Which Embedder the composition root builds.
-        model: Embedding model name (both local and server-side).
+        model: Embedding model name.
         dim: Vector dimensionality the model produces.
-        base_url: Tensorus server root; unused by the local backend.
         metric: Similarity metric datasets are created with.
         repos: Repositories to index, in search merge-order.
     """
@@ -67,13 +69,12 @@ class Config:
     provider: Provider
     model: str
     dim: int
-    base_url: str
     metric: str
     repos: list[Repository]
 
     @classmethod
     def default_config(cls, name: str) -> "Config":
-        """Config for a fresh workspace: Tensorus backend, MiniLM model, no repos.
+        """Config for a fresh workspace: local backend, MiniLM model, no repos.
 
         Args:
             name: Workspace name to bake into the config.
@@ -83,11 +84,10 @@ class Config:
         """
         return cls(
             name=name,
-            backend=Backend.TENSORUS,
+            backend=Backend.LOCAL,
             provider=Provider.SENTENCE_TRANSFORMERS,
             model="sentence-transformers/all-MiniLM-L6-v2",
             dim=384,
-            base_url="http://localhost:8000",
             metric="cosine",
             store_uri=DEFAULT_URI,
             repos=[],
@@ -98,14 +98,13 @@ class Config:
 
         Returns:
             Nested dict in the `wsindex.toml` section layout (`workspace`,
-            `embeddings`, `tensorus`, `repos`) — input for tomli_w.
+            `embeddings`, `store`, `repos`) — input for tomli_w.
         """
         return {
             "workspace": {"name": self.name, "backend": self.backend},
             "embeddings": {"model": self.model, "dim": self.dim, "provider": self.provider},
-            "tensorus": {"base_url": self.base_url, "metric": self.metric},
+            "store": {"uri": self.store_uri, "metric": self.metric},
             "repos": [{"id": r.id, "path": r.path} for r in self.repos],
-            "store": {"uri": self.store_uri},
         }
 
     def add_repo(self, repo_id: str, *, path: str) -> None:
@@ -136,21 +135,28 @@ class Config:
         Raises:
             KeyError: A required section or key is missing — strict on
                 purpose, a half-read config must not survive silently.
+                The `store` section is the one defaulted exception
+                (format evolution without a migrator).
+            ValueError: The config is from the removed tensorus era.
         """
         ws = config_dict["workspace"]
+        if "tensorus" in config_dict or ws.get("backend") == "tensorus":
+            raise ValueError(
+                "this wsindex.toml is from the tensorus era, which ADR-7 removed — "
+                "recreate it with `wsindex init` and re-index (ids are deterministic, "
+                "re-indexing is cheap)"
+            )
         emb = config_dict["embeddings"]
-        ts = config_dict["tensorus"]
-        store_uri = config_dict.get("store", {}).get("uri", DEFAULT_URI)
+        store = config_dict.get("store", {})
         return cls(
             name=ws["name"],
             backend=Backend(ws["backend"]),
             provider=Provider(emb["provider"]),
             model=emb["model"],
             dim=emb["dim"],
-            base_url=ts["base_url"],
-            metric=ts["metric"],
+            metric=store.get("metric", "cosine"),
             repos=[Repository(**r) for r in config_dict.get("repos", [])],
-            store_uri=store_uri,
+            store_uri=store.get("uri", DEFAULT_URI),
         )
 
 

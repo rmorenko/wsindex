@@ -37,14 +37,14 @@ query too — semantic search is honest like that.)_
 Re-running `index` embeds nothing: chunks are deduplicated by a
 deterministic id before the (expensive) embedding step.
 
-## Backends
+## Storage
 
-**local** (default) — an embedded [LanceDB](https://github.com/lancedb/lancedb)
-index at the `[store] uri` from `wsindex.toml` (default: `.wsindex/` next
-to the config). Fully offline once the model is downloaded; embedding runs
-in-process. The uri may also point at S3-compatible storage
-(`s3://bucket/prefix`) — endpoint and credentials come from the standard
-`AWS_*` environment variables, never from the config file.
+The vector index is an embedded [LanceDB](https://github.com/lancedb/lancedb)
+database at the `[store] uri` from `wsindex.toml` (default: `.wsindex/`
+next to the config). Fully offline once the model is downloaded;
+embedding runs in-process. The uri may also point at S3-compatible
+storage (`s3://bucket/prefix`) — endpoint and credentials come from the
+standard `AWS_*` environment variables, never from the config file.
 
 The storage cost is modest because embedding dominates: on the acceptance
 corpus (3458 chunks, real model) indexing takes 7.8s on a local path vs
@@ -54,16 +54,8 @@ for local experiments ships in the compose file
 (`docker compose up -d minio minio-init` — the init service creates the
 `wsindex` bucket).
 
-**tensorus** — embedding and search happen server-side on a
-[Tensorus](https://github.com/tensorus/tensorus) instance. The same model
-name travels in the config, so both backends produce identical scores.
-
-```bash
-# .env must define POSTGRES_PASSWORD and TENSORUS_API_KEYS
-docker compose up -d app db
-export TENSORUS_API_KEY=<one key from TENSORUS_API_KEYS>
-uv run wsindex init myws --backend tensorus   # server expected at localhost:8000
-```
+The design decision (LanceDB replacing the earlier Tensorus + LocalStore
+pair) is recorded in [ADR-7](docs/adr/adr-007-post-mvp-storage.md).
 
 ## Extras
 
@@ -81,7 +73,6 @@ back to plain text chunks, nothing crashes.
 uv sync --extra ml --extra ast
 make check                 # ruff + mypy --strict + pytest (fast suite)
 uv run pytest -m slow      # real-model smoke test (network, model download)
-uv run pytest -m live      # integration against a running tensorus server
 ```
 
 | Target           | Description                       |
@@ -99,11 +90,6 @@ uv run pytest -m live      # integration against a running tensorus server
 
 - Javadoc and JSDoc comments land in plain gap chunks instead of sticking
   to the definition below them (Rust `///` docs do attach).
-- The tensorus backend embeds one chunk per HTTP request: indexing is
-  ~30x slower than local (measured: 3458 chunks in 252s vs 7.5s), and
-  each search takes seconds (the server embeds the query per request).
-- The upstream tensorus `/index/build` endpoint is broken, so server-side
-  search runs brute-force.
 - `.tsx` files are not indexed; anonymous TypeScript default exports fall
   into gap chunks.
 - Oversized functions stay whole — no window splitting inside a definition.

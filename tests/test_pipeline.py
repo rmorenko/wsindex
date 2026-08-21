@@ -37,7 +37,6 @@ def config(tmp_path: Path) -> Config:
         provider=Provider.SENTENCE_TRANSFORMERS,
         model="fake",
         dim=8,
-        base_url="",
         metric="cosine",
         repos=[],
         store_uri=str(tmp_path / "db"),

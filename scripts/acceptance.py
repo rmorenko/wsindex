@@ -2,23 +2,19 @@
 
 The criteria queries and their expected path fragments are fixed in code
 BEFORE any run — the antidote to confirmation bias. The script indexes the
-corpus with the local backend, optionally against MinIO (the s3 storage
-scenario, step 17d) and optionally with the tensorus backend (needs
-TENSORUS_API_KEY and a running server), grades every query by whether an
-expected fragment surfaces in the top-k paths, cross-checks every backend
-against the local baseline, and writes a markdown report to stdout and
-`acceptance_report.md`.
+corpus on a local path and optionally against MinIO (the s3 storage
+scenario, step 17d), grades every query by whether an expected fragment
+surfaces in the top-k paths, cross-checks the runs, and writes a markdown
+report to stdout and `acceptance_report.md`.
 
 Usage:
     uv run python scripts/acceptance.py        # or: make acceptance
 
 Environment:
-    WSINDEX_E2E_REPO         corpus repo (default: tensorus/tensorus)
-    WSINDEX_E2E_DIR          clone cache dir
-    WSINDEX_ACCEPT_S3        set to "0" to skip the s3 (MinIO) run
-    WSINDEX_S3_URI           s3 uri prefix (default: s3://wsindex/accept)
-    WSINDEX_ACCEPT_TENSORUS  set to "0" to skip the tensorus half
-    TENSORUS_API_KEY         enables the tensorus half
+    WSINDEX_E2E_REPO   corpus repo (default: tensorus/tensorus)
+    WSINDEX_E2E_DIR    clone cache dir
+    WSINDEX_ACCEPT_S3  set to "0" to skip the s3 (MinIO) run
+    WSINDEX_S3_URI     s3 uri prefix (default: s3://wsindex/accept)
 
 The s3 run assumes the compose MinIO (localhost:9000, bucket `wsindex`);
 credentials default to minioadmin and can be overridden via AWS_* vars.
@@ -40,7 +36,6 @@ from wsindex.model import Hit
 from wsindex.pipeline import IndexReport, Pipeline
 from wsindex.store.base import VectorStore
 from wsindex.store.lancedb import LanceDBStore
-from wsindex.store.tensorus import TensorusStore
 
 REPO_URL = os.environ.get("WSINDEX_E2E_REPO", "https://github.com/tensorus/tensorus")
 K = 5
@@ -219,23 +214,6 @@ def main() -> None:
             runs.append(run_s3(corpus, embedder))
         except ValueError as exc:
             skipped.append(f"s3 run skipped: MinIO is not reachable ({exc})")
-
-    api_key = os.environ.get("TENSORUS_API_KEY")
-    if os.environ.get("WSINDEX_ACCEPT_TENSORUS", "1") == "0":
-        skipped.append("Tensorus half skipped: WSINDEX_ACCEPT_TENSORUS=0")
-    elif not api_key:
-        skipped.append("Tensorus half skipped: TENSORUS_API_KEY is not set")
-    else:
-        dataset = f"accept_{uuid.uuid4().hex[:8]}"
-        config = make_config(corpus, dataset)
-        tensorus = TensorusStore(
-            base_url=config.base_url, api_key=api_key, model_name=config.model, timeout=300.0
-        )
-        try:
-            runs.append(run_backend("tensorus", tensorus, config))
-        finally:
-            tensorus.client.delete(f"/datasets/{dataset}")
-            tensorus.close()
 
     text = render(corpus, runs, skipped)
     print(text)

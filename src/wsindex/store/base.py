@@ -1,9 +1,10 @@
 """Vector store contract: the interface every search backend implements.
 
 The pipeline depends only on this ABC (ARCH §2, modifiability): LanceDBStore
-(embedded, ADR-7) and TensorusStore (REST) plug in behind it, selected by
-`Config.backend`. An ABC on purpose — the set of implementations is closed,
-and an incomplete store must fail loudly at construction time.
+(embedded, ADR-7) plugs in behind it, selected by `Config.backend` — the
+enum keeps a single member so a future backend is a data change.
+An ABC on purpose — the set of implementations is closed, and an
+incomplete store must fail loudly at construction time.
 """
 
 from abc import ABC, abstractmethod
@@ -16,8 +17,7 @@ class VectorStore(ABC):
     """A searchable store of chunks, grouped into datasets (one dataset = one repo).
 
     The contract is text in, hits out: who and where embeds is an
-    implementation detail — LanceDBStore embeds with an injected Embedder,
-    TensorusStore delegates to the server.
+    implementation detail — LanceDBStore embeds with an injected Embedder.
     """
 
     @abstractmethod

@@ -1,8 +1,9 @@
 """End-to-end acceptance test: clone a real repository, index it, search it.
 
 Runs under the `slow` marker: needs git, network for the clone, the ml
-extra and the real embedding model. The corpus and query are overridable,
-so the test can point at any repository:
+extra and the real embedding model. The default corpus is the tensorus
+repo — used purely as a real polyglot codebase, not because we still ship
+that backend. Corpus and query are overridable:
 
     WSINDEX_E2E_REPO  (default: https://github.com/tensorus/tensorus)
     WSINDEX_E2E_DIR   (default: ~/.cache/wsindex-e2e/<repo name>)

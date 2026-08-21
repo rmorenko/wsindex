@@ -20,13 +20,27 @@ def test_roundtrip(tmp_path: Path) -> None:
 
 def test_default_config(tmp_path: Path) -> None:
     config = Config.default_config("demo")
-    assert config.backend == Backend.TENSORUS
+    assert config.backend == Backend.LOCAL
     assert config.dim == 384
     assert config.model == "sentence-transformers/all-MiniLM-L6-v2"
-    assert config.base_url == "http://localhost:8000"
     assert config.metric == "cosine"
     assert config.provider == Provider.SENTENCE_TRANSFORMERS
     assert config.repos == []
+    assert config.store_uri == DEFAULT_URI
+
+
+def test_tensorus_era_config_is_rejected(tmp_path: Path) -> None:
+    # Pre-ADR-7 configs carry a `[tensorus]` section and backend="tensorus";
+    # loading one must fail loudly with a hint to re-init, not silently.
+    legacy = {
+        "workspace": {"name": "demo", "backend": "tensorus"},
+        "embeddings": {"model": "m", "dim": 8, "provider": "fake"},
+        "tensorus": {"base_url": "http://x", "metric": "cosine"},
+    }
+    path = tmp_path / "wsindex.toml"
+    path.write_text(tomli_w.dumps(legacy), encoding="utf-8")
+    with pytest.raises(ValueError, match="tensorus era"):
+        load_config(path)
 
 
 def test_missing_store_section_gets_default_uri() -> None:
@@ -69,5 +83,5 @@ def test_saved_file_is_valid_toml(tmp_path: Path) -> None:
     config.add_repo(repo_id="test2", path="path2/test2")
     save_config(config, path=tmp_path / "wsindex.toml")
     data = tomllib.loads((tmp_path / "wsindex.toml").read_text())
-    assert data["workspace"]["backend"] == "tensorus"
+    assert data["workspace"]["backend"] == "local"
     assert data["repos"][0]["id"] == "test1"
