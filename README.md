@@ -39,9 +39,20 @@ deterministic id before the (expensive) embedding step.
 
 ## Backends
 
-**local** (default) — a numpy index under `.wsindex/` next to your
-`wsindex.toml`. Fully offline once the model is downloaded; embedding runs
-in-process.
+**local** (default) — an embedded [LanceDB](https://github.com/lancedb/lancedb)
+index at the `[store] uri` from `wsindex.toml` (default: `.wsindex/` next
+to the config). Fully offline once the model is downloaded; embedding runs
+in-process. The uri may also point at S3-compatible storage
+(`s3://bucket/prefix`) — endpoint and credentials come from the standard
+`AWS_*` environment variables, never from the config file.
+
+The storage cost is modest because embedding dominates: on the acceptance
+corpus (3458 chunks, real model) indexing takes 7.8s on a local path vs
+10.1s over MinIO, and the 7 acceptance searches take 0.1s vs 0.3s. Both
+storages return bit-identical results (cross-check delta 0.0000). A MinIO
+for local experiments ships in the compose file
+(`docker compose up -d minio minio-init` — the init service creates the
+`wsindex` bucket).
 
 **tensorus** — embedding and search happen server-side on a
 [Tensorus](https://github.com/tensorus/tensorus) instance. The same model

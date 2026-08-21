@@ -2,10 +2,11 @@
 
 The criteria queries and their expected path fragments are fixed in code
 BEFORE any run — the antidote to confirmation bias. The script indexes the
-corpus with the local backend, optionally with the tensorus backend
-(needs TENSORUS_API_KEY and a running server), grades every query by
-whether an expected fragment surfaces in the top-k paths, cross-checks
-the two backends, and writes a markdown report to stdout and
+corpus with the local backend, optionally against MinIO (the s3 storage
+scenario, step 17d) and optionally with the tensorus backend (needs
+TENSORUS_API_KEY and a running server), grades every query by whether an
+expected fragment surfaces in the top-k paths, cross-checks every backend
+against the local baseline, and writes a markdown report to stdout and
 `acceptance_report.md`.
 
 Usage:
@@ -14,8 +15,13 @@ Usage:
 Environment:
     WSINDEX_E2E_REPO         corpus repo (default: tensorus/tensorus)
     WSINDEX_E2E_DIR          clone cache dir
+    WSINDEX_ACCEPT_S3        set to "0" to skip the s3 (MinIO) run
+    WSINDEX_S3_URI           s3 uri prefix (default: s3://wsindex/accept)
     WSINDEX_ACCEPT_TENSORUS  set to "0" to skip the tensorus half
     TENSORUS_API_KEY         enables the tensorus half
+
+The s3 run assumes the compose MinIO (localhost:9000, bucket `wsindex`);
+credentials default to minioadmin and can be overridden via AWS_* vars.
 """
 
 from __future__ import annotations
@@ -123,7 +129,7 @@ def run_backend(name: str, store: VectorStore, config: Config) -> BackendRun:
     return BackendRun(name, report, index_seconds, search_seconds, results)
 
 
-def render(corpus: Path, runs: list[BackendRun], skipped: str | None) -> str:
+def render(corpus: Path, runs: list[BackendRun], skipped: list[str]) -> str:
     lines = [
         "# WSIndex MVP acceptance report",
         "",
@@ -148,15 +154,15 @@ def render(corpus: Path, runs: list[BackendRun], skipped: str | None) -> str:
                 f"| {result.query} | {'/'.join(result.expected)} | {rank} | {result.top} |"
             )
         lines += ["", f"**Verdict: {run.passed}/{len(run.results)} criteria passed.**", ""]
-    if len(runs) == 2:
+    for right_run in runs[1:]:
         lines += [
-            "## Backend cross-check",
+            f"## Cross-check: {runs[0].name} vs {right_run.name}",
             "",
             "| Query | Same top-1 | Score delta |",
             "| --- | --- | --- |",
         ]
         agreements = 0
-        for left, right in zip(runs[0].results, runs[1].results, strict=True):
+        for left, right in zip(runs[0].results, right_run.results, strict=True):
             if not left.hits or not right.hits:
                 lines.append(f"| {left.query} | n/a | n/a |")
                 continue
@@ -165,14 +171,40 @@ def render(corpus: Path, runs: list[BackendRun], skipped: str | None) -> str:
             agreements += same and delta < 1e-3
             lines.append(f"| {left.query} | {'yes' if same else 'NO'} | {delta:.4f} |")
         lines += ["", f"**Backends agree on {agreements}/{len(CRITERIA)} queries.**", ""]
-    if skipped:
-        lines += [f"_Tensorus half skipped: {skipped}_", ""]
+    for note in skipped:
+        lines += [f"_{note}_", ""]
     return "\n".join(lines)
+
+
+def run_s3(corpus: Path, embedder: SentenceTransformerEmbedder) -> BackendRun:
+    """The step-17d storage scenario: the same store code over MinIO.
+
+    Credentials default to the compose MinIO so `make acceptance` works
+    out of the box; real S3 overrides them via the standard AWS_* vars.
+    """
+    os.environ.setdefault("AWS_ENDPOINT", "http://localhost:9000")
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", os.environ.get("MINIO_ROOT_USER", "minioadmin"))
+    os.environ.setdefault(
+        "AWS_SECRET_ACCESS_KEY", os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin")
+    )
+    os.environ.setdefault("AWS_ALLOW_HTTP", "true")
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    prefix = os.environ.get("WSINDEX_S3_URI", "s3://wsindex/accept")
+    uri = f"{prefix}_{uuid.uuid4().hex[:8]}"
+    store = LanceDBStore(uri=uri, embedder=embedder)
+    try:
+        return run_backend("local-s3", store, make_config(corpus, "corpus"))
+    finally:
+        # Leave the bucket clean: a re-run must not inherit our tables.
+        # list_tables() returns a response object, not a list of names.
+        for name in store.db.list_tables().tables:
+            store.db.drop_table(name)
 
 
 def main() -> None:
     corpus = ensure_corpus()
     runs: list[BackendRun] = []
+    skipped: list[str] = []
 
     embedder = SentenceTransformerEmbedder(model_name=Config.default_config("x").model)
     with tempfile.TemporaryDirectory() as tmp:
@@ -180,12 +212,19 @@ def main() -> None:
         store = LanceDBStore(uri=str(Path(tmp) / ".wsindex"), embedder=embedder)
         runs.append(run_backend("local", store, config))
 
-    skipped: str | None = None
+    if os.environ.get("WSINDEX_ACCEPT_S3", "1") == "0":
+        skipped.append("s3 run skipped: WSINDEX_ACCEPT_S3=0")
+    else:
+        try:
+            runs.append(run_s3(corpus, embedder))
+        except ValueError as exc:
+            skipped.append(f"s3 run skipped: MinIO is not reachable ({exc})")
+
     api_key = os.environ.get("TENSORUS_API_KEY")
     if os.environ.get("WSINDEX_ACCEPT_TENSORUS", "1") == "0":
-        skipped = "WSINDEX_ACCEPT_TENSORUS=0"
+        skipped.append("Tensorus half skipped: WSINDEX_ACCEPT_TENSORUS=0")
     elif not api_key:
-        skipped = "TENSORUS_API_KEY is not set"
+        skipped.append("Tensorus half skipped: TENSORUS_API_KEY is not set")
     else:
         dataset = f"accept_{uuid.uuid4().hex[:8]}"
         config = make_config(corpus, dataset)
