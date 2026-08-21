@@ -1,4 +1,4 @@
-"""End-to-end pipeline tests: fake repo on disk -> FakeEmbedder -> LocalStore.
+"""End-to-end pipeline tests: fake repo on disk -> FakeEmbedder -> LanceDBStore.
 
 FakeEmbedder is deterministic, so querying with the exact text of a chunk
 must return that chunk with cosine score ~1.0 — that is what makes the
@@ -12,7 +12,7 @@ import pytest
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed.embedder import FakeEmbedder
 from wsindex.pipeline import Pipeline
-from wsindex.store.local import LocalStore
+from wsindex.store.lancedb import LanceDBStore
 
 PY_TEXT = "def f():\n    return 1"
 
@@ -40,14 +40,15 @@ def config(tmp_path: Path) -> Config:
         base_url="",
         metric="cosine",
         repos=[],
+        store_uri=str(tmp_path / "db"),
     )
     cfg.add_repo("repo1", path=str(repo_dir))
     return cfg
 
 
 @pytest.fixture
-def store(tmp_path: Path, embedder: FakeEmbedder) -> LocalStore:
-    return LocalStore(tmp_path / ".wsindex", embedder=embedder)
+def store(tmp_path: Path, embedder: FakeEmbedder) -> LanceDBStore:
+    return LanceDBStore(uri=str(tmp_path / ".wsindex"), embedder=embedder)
 
 
 @pytest.fixture
@@ -56,7 +57,7 @@ def embedder() -> FakeEmbedder:
 
 
 @pytest.fixture
-def pipeline(config: Config, store: LocalStore) -> Pipeline:
+def pipeline(config: Config, store: LanceDBStore) -> Pipeline:
     return Pipeline(config=config, store=store)
 
 
@@ -68,7 +69,7 @@ def test_report_counts(pipeline: Pipeline) -> None:
     assert report.missing_repos == ()
 
 
-def test_store_search_finds_exact_chunk(pipeline: Pipeline, store: LocalStore) -> None:
+def test_store_search_finds_exact_chunk(pipeline: Pipeline, store: LanceDBStore) -> None:
     pipeline.index()
     hits = store.search(dataset_name="repo1", query=PY_TEXT, k=3)
     assert hits[0].metadata["path"] == "src/main.py"  # rel_path, POSIX, no tmp leak
@@ -85,7 +86,7 @@ def test_second_run_writes_nothing(pipeline: Pipeline) -> None:
 
 
 def test_two_repos_get_isolated_datasets(
-    tmp_path: Path, pipeline: Pipeline, store: LocalStore
+    tmp_path: Path, pipeline: Pipeline, store: LanceDBStore
 ) -> None:
     repo2 = tmp_path / "repo2"
     repo2.mkdir()

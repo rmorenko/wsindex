@@ -15,6 +15,8 @@ from typing import Any
 
 import tomli_w
 
+DEFAULT_URI = ".wsindex"
+
 
 class Backend(StrEnum):
     """Vector store selector; StrEnum so the value round-trips through TOML as-is."""
@@ -49,6 +51,7 @@ class Config:
 
     Attributes:
         name: Workspace name; identification only, nothing derives from it.
+        store_uri: Relative path to local lancedb or s3 URI
         backend: Which VectorStore the composition root builds.
         provider: Which Embedder the composition root builds.
         model: Embedding model name (both local and server-side).
@@ -59,6 +62,7 @@ class Config:
     """
 
     name: str
+    store_uri: str
     backend: Backend
     provider: Provider
     model: str
@@ -85,6 +89,7 @@ class Config:
             dim=384,
             base_url="http://localhost:8000",
             metric="cosine",
+            store_uri=DEFAULT_URI,
             repos=[],
         )
 
@@ -100,6 +105,7 @@ class Config:
             "embeddings": {"model": self.model, "dim": self.dim, "provider": self.provider},
             "tensorus": {"base_url": self.base_url, "metric": self.metric},
             "repos": [{"id": r.id, "path": r.path} for r in self.repos],
+            "store": {"uri": self.store_uri},
         }
 
     def add_repo(self, repo_id: str, *, path: str) -> None:
@@ -134,6 +140,7 @@ class Config:
         ws = config_dict["workspace"]
         emb = config_dict["embeddings"]
         ts = config_dict["tensorus"]
+        store_uri = config_dict.get("store", {}).get("uri", DEFAULT_URI)
         return cls(
             name=ws["name"],
             backend=Backend(ws["backend"]),
@@ -143,6 +150,7 @@ class Config:
             base_url=ts["base_url"],
             metric=ts["metric"],
             repos=[Repository(**r) for r in config_dict.get("repos", [])],
+            store_uri=store_uri,
         )
 
 

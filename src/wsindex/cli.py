@@ -17,7 +17,7 @@ from wsindex.config import Backend, Config, Provider, load_config, save_config
 from wsindex.embed.embedder import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.pipeline import Pipeline
 from wsindex.store.base import VectorStore
-from wsindex.store.local import LocalStore
+from wsindex.store.lancedb import LanceDBStore
 from wsindex.store.tensorus import TensorusStore
 
 WSINDEX_TOML = "wsindex.toml"
@@ -55,7 +55,7 @@ def _build_pipeline(config: Config) -> Pipeline:
                     embedder = FakeEmbedder(dim=config.dim)
                 case _:  # pragma: no cover - mypy proves this branch unreachable
                     assert_never(config.provider)
-            store = LocalStore(root=Path(INDEX_DIR), embedder=embedder)
+            store = LanceDBStore(uri=config.store_uri, embedder=embedder)
         case Backend.TENSORUS:
             api_key = os.environ.get("TENSORUS_API_KEY")
             if not api_key:

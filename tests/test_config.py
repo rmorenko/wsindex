@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import tomli_w
 
-from wsindex.config import Backend, Config, Provider, load_config, save_config
+from wsindex.config import DEFAULT_URI, Backend, Config, Provider, load_config, save_config
 
 
 def test_roundtrip(tmp_path: Path) -> None:
@@ -27,6 +27,14 @@ def test_default_config(tmp_path: Path) -> None:
     assert config.metric == "cosine"
     assert config.provider == Provider.SENTENCE_TRANSFORMERS
     assert config.repos == []
+
+
+def test_missing_store_section_gets_default_uri() -> None:
+    # Configs written before the [store] section existed must keep loading;
+    # this is the only defaulted key — everything else stays strict.
+    config_dict = Config.default_config("demo").to_dict()
+    del config_dict["store"]
+    assert Config.from_dict(config_dict).store_uri == DEFAULT_URI
 
 
 def test_add_repo_duplicate_raises() -> None:

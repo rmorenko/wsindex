@@ -33,7 +33,7 @@ from wsindex.embed.embedder import SentenceTransformerEmbedder
 from wsindex.model import Hit
 from wsindex.pipeline import IndexReport, Pipeline
 from wsindex.store.base import VectorStore
-from wsindex.store.local import LocalStore
+from wsindex.store.lancedb import LanceDBStore
 from wsindex.store.tensorus import TensorusStore
 
 REPO_URL = os.environ.get("WSINDEX_E2E_REPO", "https://github.com/tensorus/tensorus")
@@ -106,7 +106,7 @@ def ensure_corpus() -> Path:
 
 def make_config(corpus: Path, repo_id: str) -> Config:
     config = Config.default_config("acceptance")
-    config.add_repo(repo_id, str(corpus))
+    config.add_repo(repo_id, path=str(corpus))
     return config
 
 
@@ -177,7 +177,7 @@ def main() -> None:
     embedder = SentenceTransformerEmbedder(model_name=Config.default_config("x").model)
     with tempfile.TemporaryDirectory() as tmp:
         config = make_config(corpus, "corpus")
-        store = LocalStore(root=Path(tmp) / ".wsindex", embedder=embedder)
+        store = LanceDBStore(uri=str(Path(tmp) / ".wsindex"), embedder=embedder)
         runs.append(run_backend("local", store, config))
 
     skipped: str | None = None

@@ -475,19 +475,19 @@ wheels = [
 
 [[package]]
 name = "lance-namespace"
-version = "0.11.0"
+version = "0.11.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lance-namespace-urllib3-client" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/b2/6db06b38de16a0032c8324ef55ebd7af4bea6518ebfecbdfc79dd2e35936/lance_namespace-0.11.0.tar.gz", hash = "sha256:5d91de188ed4420a02507da4ac1354fc0f4b8e409267f11c3b4c253f47e57a19", size = 11636, upload-time = "2026-08-14T18:52:01.721Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/93/da5f7fcac690db9b282a3439ed9e34960c147619a0d6e1f4eb8cd240e7a5/lance_namespace-0.11.1.tar.gz", hash = "sha256:f67cfbbe0647b7cb42f23b673e7edf8a75b7d8a047265a916492f8d247ee1bc2", size = 11631, upload-time = "2026-08-18T17:40:06.294Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/37/1e1e638219cbb3e31cb9edf785efbf875186451d4d4faa710640759f58c6/lance_namespace-0.11.0-py3-none-any.whl", hash = "sha256:34fe37755f3a676c0f8ca4870dd877f790328d0d3d88f1afb995ac662c84d8c3", size = 13508, upload-time = "2026-08-14T18:51:59.755Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/bc/601f2b3cc4cfa0070d858a33223bc823fffdd7981a25c45984a5216ca952/lance_namespace-0.11.1-py3-none-any.whl", hash = "sha256:07643fce9a42ad4d58cc8bf91e3f592bc7f4cbd8d0ad5233223506debf67551c", size = 13507, upload-time = "2026-08-18T17:40:03.561Z" },
 ]
 
 [[package]]
 name = "lance-namespace-urllib3-client"
-version = "0.11.0"
+version = "0.11.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
@@ -495,9 +495,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5b/b0/fe391f747134635d1cb21c3b891346672dbb42224c1eacafd1f580b9a7ad/lance_namespace_urllib3_client-0.11.0.tar.gz", hash = "sha256:eeac5b4f48411e7e7a764abdd01a0a9a4aa4218a18850e5358ba661ccad2b7c6", size = 236668, upload-time = "2026-08-14T18:52:02.459Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/c5/2bdd0ff98b469894c8a73be809d26ffdad5402517b0e5f9e758026cba29e/lance_namespace_urllib3_client-0.11.1.tar.gz", hash = "sha256:145a9e9424d7597487249b5b95ee274423bf2910e1a9160b6a07b676b61ea46a", size = 237345, upload-time = "2026-08-18T17:40:07.308Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/d1/f87c834e427cd84b473b2708d29cd3763ce46bfbc74eb26dd5e730f75a6f/lance_namespace_urllib3_client-0.11.0-py3-none-any.whl", hash = "sha256:bae3761ff64d29c56868faf78a671f5fdc75576b43688d76026ab0563edd67d7", size = 405947, upload-time = "2026-08-14T18:52:00.62Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/2a/eaaefd55d1190291207049fedc6b3eb22b506e57d6de91bae46bbaaa9c60/lance_namespace_urllib3_client-0.11.1-py3-none-any.whl", hash = "sha256:36537f529294da6d884ba0fe783704483f0a75463497c7705fd083a4d0257990", size = 406311, upload-time = "2026-08-18T17:40:04.842Z" },
 ]
 
 [[package]]
@@ -2358,6 +2358,7 @@ name = "wsindex"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "lancedb" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tomli-w" },
@@ -2383,7 +2384,6 @@ ml = [
 [package.dev-dependencies]
 dev = [
     { name = "codespell" },
-    { name = "lancedb" },
     { name = "mdformat" },
     { name = "mdformat-gfm" },
     { name = "mypy" },
@@ -2399,6 +2399,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "lancedb", specifier = ">=0.37.1" },
     { name = "numpy", specifier = ">=2.4,<3" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=5.7,<6" },
     { name = "tomli-w", specifier = ">=1.2,<2" },
@@ -2418,7 +2419,6 @@ provides-extras = ["ast", "ml"]
 [package.metadata.requires-dev]
 dev = [
     { name = "codespell", specifier = ">=2.4,<3" },
-    { name = "lancedb", specifier = ">=0.37.1" },
     { name = "mdformat", specifier = ">=1.0,<2" },
     { name = "mdformat-gfm", specifier = ">=1.0,<2" },
     { name = "mypy", specifier = ">=2.3,<3" },

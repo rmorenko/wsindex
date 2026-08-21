@@ -26,6 +26,7 @@ classifiers = [
 ]
 dependencies = [
   "httpx>=0.28,<1",
+  "lancedb>=0.37.1",
   "numpy>=2.4,<3",
   "tomli-w>=1.2,<2",
   "typer>=0.27,<1",
@@ -60,7 +61,6 @@ dev = [
   "codespell>=2.4,<3",
   "taplo>=0.9,<1",
   "yamlfix>=1.19,<2",
-  "lancedb>=0.37.1",
   "pyarrow-stubs>=20.0.0.20260819",
 ]
 
