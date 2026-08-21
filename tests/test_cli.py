@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 from wsindex.cli import WSINDEX_TOML, app
 from wsindex.config import Provider, load_config
 from wsindex.embed.embedder import FakeEmbedder
-from wsindex.store.local import LocalStore
+from wsindex.store.lancedb import LanceDBStore
 
 runner = CliRunner()
 
@@ -124,11 +124,11 @@ def test_tensorus_backend_builds_store_from_config_and_env(
 ) -> None:
     built: dict[str, str] = {}
 
-    class StubStore(LocalStore):
-        # A LocalStore in disguise: satisfies the contract so `index` runs
+    class StubStore(LanceDBStore):
+        # A LanceDBStore in disguise: satisfies the contract so `index` runs
         # end to end; we only capture what the composition root passed in.
         def __init__(self, base_url: str, api_key: str, model_name: str) -> None:
-            super().__init__(root=workspace / ".wsindex", embedder=FakeEmbedder(dim=8))
+            super().__init__(str(workspace / ".wsindex"), embedder=FakeEmbedder(dim=8))
             built.update(base_url=base_url, api_key=api_key, model_name=model_name)
 
     monkeypatch.setenv("TENSORUS_API_KEY", "s3cret")
