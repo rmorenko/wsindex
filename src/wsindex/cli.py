@@ -15,6 +15,7 @@ import typer
 from wsindex.config import Backend, Config, Provider, load_config, save_config
 from wsindex.embed.embedder import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.pipeline import Pipeline
+from wsindex.rank.reranker import CrossEncoderReranker
 from wsindex.store.base import VectorStore
 from wsindex.store.lancedb import LanceDBStore
 
@@ -56,7 +57,8 @@ def _build_pipeline(config: Config) -> Pipeline:
             store = LanceDBStore(uri=config.store_uri, embedder=embedder)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
-    return Pipeline(config=config, store=store)
+    reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
+    return Pipeline(config=config, store=store, reranker=reranker)
 
 
 @app.command()

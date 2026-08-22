@@ -71,6 +71,8 @@ class Config:
     dim: int
     metric: str
     repos: list[Repository]
+    rank_enabled: bool
+    rank_model: str
 
     @classmethod
     def default_config(cls, name: str) -> "Config":
@@ -91,6 +93,8 @@ class Config:
             metric="cosine",
             store_uri=DEFAULT_URI,
             repos=[],
+            rank_enabled=False,
+            rank_model="cross-encoder/ms-marco-MiniLM-L6-v2",
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -105,6 +109,7 @@ class Config:
             "embeddings": {"model": self.model, "dim": self.dim, "provider": self.provider},
             "store": {"uri": self.store_uri, "metric": self.metric},
             "repos": [{"id": r.id, "path": r.path} for r in self.repos],
+            "rank": {"enabled": self.rank_enabled, "model": self.rank_model},
         }
 
     def add_repo(self, repo_id: str, *, path: str) -> None:
@@ -148,6 +153,7 @@ class Config:
             )
         emb = config_dict["embeddings"]
         store = config_dict.get("store", {})
+        reranker = config_dict.get("reranker", {})
         return cls(
             name=ws["name"],
             backend=Backend(ws["backend"]),
@@ -157,6 +163,8 @@ class Config:
             metric=store.get("metric", "cosine"),
             repos=[Repository(**r) for r in config_dict.get("repos", [])],
             store_uri=store.get("uri", DEFAULT_URI),
+            rank_enabled=reranker.get("rank_enabled", False),
+            rank_model=reranker.get("rank_model", "cross-encoder/ms-marco-MiniLM-L6-v2"),
         )
 
 

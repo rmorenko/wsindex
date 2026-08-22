@@ -6,14 +6,17 @@ constructed once at the edge (the CLI composition root) and injected
 through the Pipeline constructor.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from wsindex.config import Config
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.walker import walk_repo
 from wsindex.model import Hit
+from wsindex.rank.reranker import Reranker
 from wsindex.store.base import VectorStore
+
+_CANDIDATE_MULTIPLIER = 4
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -52,6 +55,7 @@ class Pipeline:
 
     config: Config
     store: VectorStore
+    reranker: Reranker | None = None
 
     def index(self) -> IndexReport:
         """Index every repo from the config into its own dataset (= repo id).
@@ -106,11 +110,15 @@ class Pipeline:
         Returns:
             At most k hits across all repos, best score first.
         """
+        n = _CANDIDATE_MULTIPLIER if self.reranker else 1
         all_hits: list[Hit] = []
         for repo in self.config.repos:
             try:
-                hits = self.store.search(dataset_name=repo.id, query=query, k=k)
+                hits = self.store.search(dataset_name=repo.id, query=query, k=k * n)
             except ValueError:
                 continue
             all_hits.extend(hits)
+        if self.reranker:
+            scores = self.reranker.rank(query, [h.metadata["text"] for h in all_hits])
+            all_hits = [replace(h, score=s) for h, s in zip(all_hits, scores, strict=True)]
         return sorted(all_hits, key=lambda h: h.score, reverse=True)[:k]

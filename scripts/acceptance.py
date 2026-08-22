@@ -34,6 +34,7 @@ from wsindex.config import Config
 from wsindex.embed.embedder import SentenceTransformerEmbedder
 from wsindex.model import Hit
 from wsindex.pipeline import IndexReport, Pipeline
+from wsindex.rank.reranker import CrossEncoderReranker, Reranker
 from wsindex.store.base import VectorStore
 from wsindex.store.lancedb import LanceDBStore
 
@@ -111,8 +112,10 @@ def make_config(corpus: Path, repo_id: str) -> Config:
     return config
 
 
-def run_backend(name: str, store: VectorStore, config: Config) -> BackendRun:
-    pipeline = Pipeline(config=config, store=store)
+def run_backend(
+    name: str, store: VectorStore, config: Config, reranker: Reranker | None = None
+) -> BackendRun:
+    pipeline = Pipeline(config=config, store=store, reranker=reranker)
     started = time.perf_counter()
     report = pipeline.index()
     index_seconds = time.perf_counter() - started
@@ -206,6 +209,14 @@ def main() -> None:
         config = make_config(corpus, "corpus")
         store = LanceDBStore(uri=str(Path(tmp) / ".wsindex"), embedder=embedder)
         runs.append(run_backend("local", store, config))
+
+        # Same corpus, same store — but with the cross-encoder reranker on top.
+        # The cross-check delta shows how much re-rank moved ranks.
+        if os.environ.get("WSINDEX_ACCEPT_RERANK", "1") != "0":
+            reranker = CrossEncoderReranker(model_name=config.rank_model)
+            runs.append(run_backend("local-reranked", store, config, reranker=reranker))
+        else:
+            skipped.append("rerank run skipped: WSINDEX_ACCEPT_RERANK=0")
 
     if os.environ.get("WSINDEX_ACCEPT_S3", "1") == "0":
         skipped.append("s3 run skipped: WSINDEX_ACCEPT_S3=0")

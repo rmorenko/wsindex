@@ -5,13 +5,16 @@ must return that chunk with cosine score ~1.0 — that is what makes the
 pipeline assertable end to end without a real model.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed.embedder import FakeEmbedder
-from wsindex.pipeline import Pipeline
+from wsindex.pipeline import _CANDIDATE_MULTIPLIER, Pipeline
+from wsindex.rank.reranker import FakeReranker
 from wsindex.store.lancedb import LanceDBStore
 
 PY_TEXT = "def f():\n    return 1"
@@ -40,6 +43,8 @@ def config(tmp_path: Path) -> Config:
         metric="cosine",
         repos=[],
         store_uri=str(tmp_path / "db"),
+        rank_enabled=False,
+        rank_model="cross-encoder/ms-marco-MiniLM-L6-v2",
     )
     cfg.add_repo("repo1", path=str(repo_dir))
     return cfg
@@ -152,3 +157,45 @@ def test_search_skips_unindexed_repo(tmp_path: Path, pipeline: Pipeline) -> None
     hits = pipeline.search(PY_TEXT, k=5)
     assert hits  # no crash, repo1 still answers
     assert {h.metadata["repo"] for h in hits} == {"repo1"}
+
+
+class InvertingReranker(FakeReranker):
+    """Returns descending scores in input order: last input gets the highest.
+
+    Proves the pipeline actually adopts reranker output — the final order
+    must be the reverse of what the store returned by cosine.
+    """
+
+    def _rank(self, query: str, texts: Sequence[str]) -> list[float]:
+        n = len(texts)
+        return [(i + 1) / n for i in range(n)]  # ascending: 0->1/n, last->1.0
+
+
+def test_reranker_replaces_scores_and_reorders(config: Config, store: LanceDBStore) -> None:
+    plain = Pipeline(config=config, store=store)
+    plain.index()
+    baseline = [h.native_id for h in plain.search(PY_TEXT, k=3)]
+
+    ranked_pipeline = Pipeline(config=config, store=store, reranker=InvertingReranker())
+    ranked = ranked_pipeline.search(PY_TEXT, k=3)
+
+    # Reranker inverts store's cosine order — top-k reverses.
+    assert [h.native_id for h in ranked] == list(reversed(baseline))
+    # Scores come from the reranker, not from cosine — all in (0, 1].
+    assert all(0 < h.score <= 1 for h in ranked)
+
+
+def test_pipeline_fetches_k_times_multiplier_with_reranker(
+    config: Config, store: LanceDBStore
+) -> None:
+    spied = MagicMock(wraps=store)
+    Pipeline(config=config, store=spied).index()
+
+    Pipeline(config=config, store=spied, reranker=FakeReranker()).search(PY_TEXT, k=3)
+    _, kwargs = spied.search.call_args
+    assert kwargs["k"] == 3 * _CANDIDATE_MULTIPLIER
+
+    spied.reset_mock()
+    Pipeline(config=config, store=spied).search(PY_TEXT, k=3)
+    _, kwargs_plain = spied.search.call_args
+    assert kwargs_plain["k"] == 3

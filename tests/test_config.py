@@ -27,6 +27,8 @@ def test_default_config(tmp_path: Path) -> None:
     assert config.provider == Provider.SENTENCE_TRANSFORMERS
     assert config.repos == []
     assert config.store_uri == DEFAULT_URI
+    assert not config.rank_enabled
+    assert config.rank_model == "cross-encoder/ms-marco-MiniLM-L6-v2"
 
 
 def test_tensorus_era_config_is_rejected(tmp_path: Path) -> None:
