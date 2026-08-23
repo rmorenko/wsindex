@@ -41,6 +41,7 @@ nosetests.xml
 .wsindex/
 wsindex.toml
 acceptance_report.md
+bench_embedders_report.md
 
 # Local working notes (learning plan / progress journal)
 PLAN_ru.md
