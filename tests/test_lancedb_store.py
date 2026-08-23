@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from wsindex.embed.embedder import FakeEmbedder
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, Kind, SearchFilter
 from wsindex.store.lancedb import LanceDBStore
 
 DIM = 8
@@ -32,13 +32,20 @@ class CountingFake(FakeEmbedder):
         return super()._embed(texts)
 
 
-def make_chunk(text: str, path: str = "doc.md") -> Chunk:
+def make_chunk(
+    text: str,
+    path: str = "doc.md",
+    *,
+    lang: str = "text",
+    kind: Kind = Kind.DOC,
+    symbol: str | None = None,
+) -> Chunk:
     return Chunk(
         repo="r",
         path=path,
-        lang="text",
-        kind=Kind.DOC,
-        symbol=None,
+        lang=lang,
+        kind=kind,
+        symbol=symbol,
         node_type=None,
         start_line=1,
         end_line=1,
@@ -215,3 +222,131 @@ def test_dataset_name_with_quote(tmp_path: Path) -> None:
     assert store.add_chunks("o'reilly", chunks=[a]) == 0  # dedup scan escaped too
     hits = store.search("o'reilly", query="a", k=5)
     assert [h.native_id for h in hits] == [a.id]
+
+
+# --- step 19g: structural filters, prefilter semantics ---------------------
+
+
+@pytest.fixture
+def mixed_store(tmp_path: Path) -> LanceDBStore:
+    """Store with a mixed corpus: 3 langs, 2 kinds, path variety."""
+    s = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    s.create_dataset("ds", metric="cosine")
+    chunks = [
+        make_chunk("py code alpha", "src/a.py", lang="python", kind=Kind.CODE, symbol="alpha"),
+        make_chunk("py code beta", "src/b.py", lang="python", kind=Kind.CODE, symbol="beta"),
+        make_chunk("ts code gamma", "web/a.ts", lang="typescript", kind=Kind.CODE, symbol="gamma"),
+        make_chunk("ts code delta", "web/b.ts", lang="typescript", kind=Kind.CODE, symbol="delta"),
+        make_chunk("md doc one", "docs/one.md", lang="markdown", kind=Kind.DOC),
+        make_chunk("md doc two", "docs/two.md", lang="markdown", kind=Kind.DOC),
+        make_chunk("toml cfg", "pyproject.toml", lang="toml", kind=Kind.CONFIG),
+    ]
+    s.add_chunks("ds", chunks=chunks)
+    return s
+
+
+def test_filter_by_single_lang(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(lang=("python",)))
+    assert {h.metadata["lang"] for h in hits} == {"python"}
+    assert len(hits) == 2
+
+
+def test_filter_by_multiple_langs_is_OR(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search(
+        "ds", query="x", k=10, filters=SearchFilter(lang=("python", "typescript"))
+    )
+    assert {h.metadata["lang"] for h in hits} == {"python", "typescript"}
+    assert len(hits) == 4
+
+
+def test_filter_by_kind(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(kind=(Kind.DOC,)))
+    assert {h.metadata["kind"] for h in hits} == {"doc"}
+    assert len(hits) == 2
+
+
+def test_filter_by_path_prefix_glob(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(path="src/*"))
+    assert {h.metadata["path"] for h in hits} == {"src/a.py", "src/b.py"}
+
+
+def test_filter_by_path_suffix_glob(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(path="*.md"))
+    assert {h.metadata["path"] for h in hits} == {"docs/one.md", "docs/two.md"}
+
+
+def test_filter_by_path_literal(mixed_store: LanceDBStore) -> None:
+    # No wildcard: exact-string match through LIKE.
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(path="pyproject.toml"))
+    assert [h.metadata["path"] for h in hits] == ["pyproject.toml"]
+
+
+def test_filter_by_single_char_wildcard(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(path="src/?.py"))
+    assert {h.metadata["path"] for h in hits} == {"src/a.py", "src/b.py"}
+
+
+def test_filter_by_symbol_substring(mixed_store: LanceDBStore) -> None:
+    hits = mixed_store.search("ds", query="x", k=10, filters=SearchFilter(symbol="lph"))
+    assert [h.metadata["symbol"] for h in hits] == ["alpha"]
+
+
+def test_filter_combined_is_AND(mixed_store: LanceDBStore) -> None:
+    # python AND CODE AND src/* — same set as python alone here, but the
+    # AND semantic must hold when fields would disagree.
+    hits = mixed_store.search(
+        "ds",
+        query="x",
+        k=10,
+        filters=SearchFilter(lang=("python",), kind=(Kind.DOC,)),
+    )
+    assert hits == []  # python doesn't intersect DOC
+
+
+def test_empty_filter_matches_all(mixed_store: LanceDBStore) -> None:
+    # An all-empty SearchFilter is functionally the same as passing None:
+    # the store must not build a broken WHERE with no predicates.
+    hits_none = mixed_store.search("ds", query="x", k=10, filters=None)
+    hits_empty = mixed_store.search("ds", query="x", k=10, filters=SearchFilter())
+    assert [h.native_id for h in hits_none] == [h.native_id for h in hits_empty]
+    assert len(hits_none) == 7  # every chunk in the store
+
+
+def test_prefilter_returns_k_when_selective(tmp_path: Path) -> None:
+    # THE key invariant: with a selective filter, top-k is computed over
+    # the filtered subset — the caller gets k hits, not k-minus-filtered.
+    # A postfilter over top-k would return under-full lists.
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    store.create_dataset("ds", metric="cosine")
+    targets = [
+        make_chunk(f"py {i}", path=f"src/t{i}.py", lang="python", kind=Kind.CODE) for i in range(5)
+    ]
+    noise = [
+        make_chunk(f"noise {i}", path=f"n/n{i}.md", lang="markdown", kind=Kind.DOC)
+        for i in range(50)
+    ]
+    store.add_chunks("ds", chunks=targets + noise)
+    hits = store.search("ds", query="query", k=5, filters=SearchFilter(lang=("python",)))
+    assert len(hits) == 5  # the whole target set, none dropped by a would-be postfilter
+    assert {h.metadata["lang"] for h in hits} == {"python"}
+
+
+def test_filter_sql_injection_in_lang_is_escaped(mixed_store: LanceDBStore) -> None:
+    # Malicious value must not break the query or escape the predicate;
+    # the store escapes single quotes just like it does for the dataset name.
+    hits = mixed_store.search(
+        "ds", query="x", k=10, filters=SearchFilter(lang=("python' OR '1'='1",))
+    )
+    assert hits == []  # no chunk has that literal language
+
+
+def test_filter_path_escapes_like_metachars(tmp_path: Path) -> None:
+    # `_` in a path is a SQL LIKE wildcard; the store must escape it so
+    # `test_a.py` filter does NOT match `testXa.py`.
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    store.create_dataset("ds", metric="cosine")
+    match = make_chunk("m", path="test_a.py")
+    almost = make_chunk("n", path="testXa.py")
+    store.add_chunks("ds", chunks=[match, almost])
+    hits = store.search("ds", query="q", k=10, filters=SearchFilter(path="test_a.py"))
+    assert [h.metadata["path"] for h in hits] == ["test_a.py"]

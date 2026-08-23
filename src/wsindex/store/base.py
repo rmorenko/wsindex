@@ -10,7 +10,7 @@ incomplete store must fail loudly at construction time.
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from wsindex.model import Chunk, Hit
+from wsindex.model import Chunk, Hit, SearchFilter
 
 
 class VectorStore(ABC):
@@ -54,7 +54,14 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
-    def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
+    def search(
+        self,
+        dataset_name: str,
+        *,
+        query: str,
+        k: int,
+        filters: SearchFilter | None = None,
+    ) -> list[Hit]:
         """Find the chunks of one dataset nearest to a text query.
 
         Single dataset on purpose: merging and re-ranking across datasets is
@@ -66,6 +73,9 @@ class VectorStore(ABC):
             query: Query text; the store embeds it into the dataset's
                 vector space itself.
             k: Maximum number of hits to return.
+            filters: Structural filters (lang/kind/path/symbol) applied
+                as a PREfilter — top-k is computed over the filtered
+                subset, not slashed out of an unfiltered top-k.
 
         Returns:
             At most k hits, best score first; empty for an empty dataset.

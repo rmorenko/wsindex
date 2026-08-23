@@ -102,6 +102,38 @@ class Chunk:
 
 
 @dataclass(frozen=True, kw_only=True)
+class SearchFilter:
+    """Store-side filters applied BEFORE the vector KNN (ADR-7).
+
+    Prefilter, not postfilter: a selective filter over a postfilter of
+    top-k could leave two hits instead of k. Repo scope is NOT here —
+    repo maps to dataset, so narrowing by repo happens by choosing which
+    datasets to ask, not by predicate.
+
+    Attributes:
+        lang: Restrict to these languages (OR within the field); empty
+            tuple means "any language".
+        kind: Restrict to these Kind values (OR within the field); empty
+            tuple means "any kind".
+        path: Path glob (`*`, `?` wildcards) matched against the chunk
+            path; None means "any path". Chunks whose path is exactly
+            equal to a literal without wildcards match too.
+        symbol: Substring matched against the chunk symbol; only chunks
+            with a non-null symbol pass this filter.
+    """
+
+    lang: tuple[str, ...] = ()
+    kind: tuple[Kind, ...] = ()
+    path: str | None = None
+    symbol: str | None = None
+
+    @property
+    def is_empty(self) -> bool:
+        """True when no fields are set — the caller should pass None instead."""
+        return not (self.lang or self.kind or self.path or self.symbol)
+
+
+@dataclass(frozen=True, kw_only=True)
 class Hit:
     """Backend-independent search result (ARCH §6.4).
 

@@ -14,6 +14,7 @@ import typer
 
 from wsindex.config import Backend, Config, Provider, load_config, save_config
 from wsindex.embed.embedder import Embedder, FakeEmbedder, SentenceTransformerEmbedder
+from wsindex.model import Kind, SearchFilter
 from wsindex.pipeline import Pipeline
 from wsindex.rank.reranker import CrossEncoderReranker
 from wsindex.store.base import VectorStore
@@ -113,10 +114,42 @@ def index() -> None:
 def search(
     query: str,
     top: Annotated[int, typer.Option("--top", "-k", help="How many hits")] = 10,
+    repo: Annotated[str | None, typer.Option("--repo", help="Restrict to a single repo id")] = None,
+    lang: Annotated[
+        list[str] | None,
+        typer.Option("--lang", help="Restrict to a language (repeat for OR)"),
+    ] = None,
+    kind: Annotated[
+        list[Kind] | None,
+        typer.Option("--kind", help="Restrict to a Kind (code/config/doc; repeat for OR)"),
+    ] = None,
+    path: Annotated[
+        str | None,
+        typer.Option("--path", help="Path glob (`*`, `?` wildcards)"),
+    ] = None,
+    symbol: Annotated[
+        str | None, typer.Option("--symbol", help="Substring of the chunk symbol")
+    ] = None,
 ) -> None:
-    """Search all indexed repos, best hits first."""
+    """Search all indexed repos, best hits first.
+
+    Scope flags stack: --repo narrows the dataset list, structural
+    filters (--lang/--kind/--path/--symbol) go down to the store as a
+    prefilter (top-k over the filtered subset, not slashed out of it).
+    """
     pipeline = _build_pipeline(_load_config())
-    hits = pipeline.search(query, k=top)
+    candidate = SearchFilter(
+        lang=tuple(lang or ()),
+        kind=tuple(kind or ()),
+        path=path,
+        symbol=symbol,
+    )
+    filters: SearchFilter | None = None if candidate.is_empty else candidate
+    try:
+        hits = pipeline.search(query, k=top, repo=repo, filters=filters)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     if not hits:
         typer.echo("no results")
         return

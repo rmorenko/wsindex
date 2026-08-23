@@ -140,3 +140,51 @@ def test_embedder_dim_mismatch_is_rejected(
     result = runner.invoke(app, ["index"])
     assert result.exit_code == 1
     assert "dim" in result.output
+
+
+# --- step 19g: scope + filter flags on `search` ----------------------------
+
+
+def _bootstrap_two_repos(workspace: Path) -> None:
+    """A workspace with two indexed repos so the scope flags have room to act."""
+    repo2 = workspace / "repo2"
+    (repo2 / "src").mkdir(parents=True)
+    (repo2 / "src" / "main.py").write_text("print('two')\n")
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    runner.invoke(app, ["add-repo", "repo2", str(repo2)])
+    runner.invoke(app, ["index"])
+
+
+def test_search_repo_flag_narrows_output(workspace: Path) -> None:
+    _bootstrap_two_repos(workspace)
+    result = runner.invoke(app, ["search", "def f", "--repo", "repo1", "-k", "5"])
+    assert result.exit_code == 0
+    assert "repo1/" in result.output
+    assert "repo2/" not in result.output
+
+
+def test_search_unknown_repo_exits_with_error(workspace: Path) -> None:
+    _bootstrap_two_repos(workspace)
+    result = runner.invoke(app, ["search", "def f", "--repo", "ghost"])
+    assert result.exit_code == 1
+    assert "unknown repo id" in result.output
+
+
+def test_search_lang_flag_filters(workspace: Path) -> None:
+    _bootstrap_two_repos(workspace)
+    result = runner.invoke(app, ["search", "def f", "--lang", "python", "-k", "5"])
+    assert result.exit_code == 0
+    for line in result.output.splitlines():
+        # every hit line has the form `repo/path:... score first_line`
+        if ".md" in line:
+            pytest.fail(f"markdown hit leaked through --lang python: {line!r}")
+
+
+def test_search_path_glob_filters(workspace: Path) -> None:
+    _bootstrap_two_repos(workspace)
+    result = runner.invoke(app, ["search", "def f", "--path", "src/*.py", "-k", "5"])
+    assert result.exit_code == 0
+    for line in result.output.splitlines():
+        if "/" in line and ":" in line:
+            assert "src/" in line, f"path filter failed to constrain: {line!r}"

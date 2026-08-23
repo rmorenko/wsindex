@@ -13,6 +13,7 @@ import pytest
 
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed.embedder import FakeEmbedder
+from wsindex.model import Kind, SearchFilter
 from wsindex.pipeline import _CANDIDATE_MULTIPLIER, Pipeline
 from wsindex.rank.reranker import FakeReranker
 from wsindex.store.lancedb import LanceDBStore
@@ -199,3 +200,61 @@ def test_pipeline_fetches_k_times_multiplier_with_reranker(
     Pipeline(config=config, store=spied).search(PY_TEXT, k=3)
     _, kwargs_plain = spied.search.call_args
     assert kwargs_plain["k"] == 3
+
+
+# --- step 19g: repo scope + filter passthrough -----------------------------
+
+
+def test_search_with_repo_narrows_dataset_list(tmp_path: Path, pipeline: Pipeline) -> None:
+    repo2 = tmp_path / "repo2"
+    repo2.mkdir()
+    (repo2 / "app.py").write_text("print('two')\n")
+    pipeline.config.add_repo("repo2", path=str(repo2))
+    pipeline.index()
+    # Query text is from repo1's main.py, but --repo repo2 must exclude it.
+    hits = pipeline.search(PY_TEXT, k=5, repo="repo2")
+    assert hits
+    assert {h.metadata["repo"] for h in hits} == {"repo2"}
+
+
+def test_search_with_unknown_repo_raises(pipeline: Pipeline) -> None:
+    pipeline.index()
+    with pytest.raises(ValueError, match="unknown repo id"):
+        pipeline.search(PY_TEXT, k=5, repo="does-not-exist")
+
+
+def test_search_repo_only_asks_that_dataset(config: Config, store: LanceDBStore) -> None:
+    # --repo is a pipeline-layer decision: the store must only be asked
+    # for the scoped dataset, not for the others.
+    Pipeline(config=config, store=store).index()
+    spied = MagicMock(wraps=store)
+    Pipeline(config=config, store=spied).search(PY_TEXT, k=3, repo="repo1")
+    called_datasets = [call.kwargs["dataset_name"] for call in spied.search.call_args_list]
+    assert called_datasets == ["repo1"]
+
+
+def test_search_forwards_filters_to_store(config: Config, store: LanceDBStore) -> None:
+    Pipeline(config=config, store=store).index()
+    spied = MagicMock(wraps=store)
+    flt = SearchFilter(lang=("python",), kind=(Kind.CODE,))
+    Pipeline(config=config, store=spied).search(PY_TEXT, k=3, filters=flt)
+    _, kwargs = spied.search.call_args
+    assert kwargs["filters"] is flt  # exact object, not rebuilt
+
+
+def test_search_no_filters_forwards_none(config: Config, store: LanceDBStore) -> None:
+    Pipeline(config=config, store=store).index()
+    spied = MagicMock(wraps=store)
+    Pipeline(config=config, store=spied).search(PY_TEXT, k=3)
+    _, kwargs = spied.search.call_args
+    assert kwargs["filters"] is None
+
+
+def test_reranker_respects_filters(config: Config, store: LanceDBStore) -> None:
+    # The reranker sees only the filtered candidates: with a filter that
+    # excludes the exact-match chunk, the top hit cannot be from src/.
+    Pipeline(config=config, store=store).index()
+    ranked = Pipeline(config=config, store=store, reranker=FakeReranker())
+    hits = ranked.search(PY_TEXT, k=3, filters=SearchFilter(kind=(Kind.DOC,)))
+    assert hits  # README yields doc chunks
+    assert all(h.metadata["kind"] == "doc" for h in hits)

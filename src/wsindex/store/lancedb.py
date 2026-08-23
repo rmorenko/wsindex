@@ -26,8 +26,56 @@ from lancedb.query import LanceVectorQueryBuilder
 from lancedb.table import Table
 
 from wsindex.embed.embedder import Embedder
-from wsindex.model import Chunk, Hit
+from wsindex.model import Chunk, Hit, SearchFilter
 from wsindex.store.base import VectorStore
+
+
+def _sql_quote(value: str) -> str:
+    """Escape a value for embedding into a single-quoted SQL literal."""
+    return value.replace("'", "''")
+
+
+def _glob_to_like(glob: str) -> str:
+    """Convert an fnmatch-style glob to a SQL LIKE pattern with `\\` escape.
+
+    Both `*` and `**` map to `%` — DataFusion LIKE has no depth
+    distinction, so `src/*.py` matches `src/a/b.py` too. Literal `%`,
+    `_`, `\\` in the input are escaped, and the caller pairs the pattern
+    with `ESCAPE '\\'` in the LIKE clause.
+    """
+    out: list[str] = []
+    for ch in glob:
+        if ch in ("%", "_", "\\"):
+            out.append("\\" + ch)
+        elif ch == "*":
+            out.append("%")
+        elif ch == "?":
+            out.append("_")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _filter_predicates(filters: SearchFilter) -> list[str]:
+    """Turn SearchFilter fields into a list of AND-joinable SQL predicates.
+
+    Empty tuples / None fields contribute no predicate. Lang and kind
+    become IN clauses (OR within the field); path and symbol become
+    LIKE clauses with `\\` as the escape character.
+    """
+    parts: list[str] = []
+    if filters.lang:
+        joined = ", ".join(f"'{_sql_quote(v)}'" for v in filters.lang)
+        parts.append(f"lang IN ({joined})")
+    if filters.kind:
+        joined = ", ".join(f"'{_sql_quote(v.value)}'" for v in filters.kind)
+        parts.append(f"kind IN ({joined})")
+    if filters.path is not None:
+        parts.append(f"path LIKE '{_sql_quote(_glob_to_like(filters.path))}' ESCAPE '\\'")
+    if filters.symbol is not None:
+        pattern = "%" + _sql_quote(_glob_to_like(filters.symbol)) + "%"
+        parts.append(f"symbol LIKE '{pattern}' ESCAPE '\\'")
+    return parts
 
 
 class LanceDBStore(VectorStore):
@@ -138,7 +186,7 @@ class LanceDBStore(VectorStore):
         """
         if self._get_datasets().get(dataset_name) is None:
             raise ValueError("Dataset is not present in the store")
-        predicate = "dataset = '" + dataset_name.replace("'", "''") + "'"
+        predicate = f"dataset = '{_sql_quote(dataset_name)}'"
         known = {r["id"] for r in self.tbl.search().where(predicate).select(["id"]).to_list()}
         new_chunks = []
         for chunk in chunks:
@@ -158,17 +206,26 @@ class LanceDBStore(VectorStore):
         self.tbl.add(rows)
         return len(rows)
 
-    def search(self, dataset_name: str, *, query: str, k: int) -> list[Hit]:
+    def search(
+        self,
+        dataset_name: str,
+        *,
+        query: str,
+        k: int,
+        filters: SearchFilter | None = None,
+    ) -> list[Hit]:
         """Exact cosine top-k over one dataset via a prefiltered KNN.
 
-        The `repo` predicate is applied BEFORE the vector search
-        (prefilter), so the top-k is computed over the dataset subset —
-        a post-filter would silently under-fill the result.
+        Both the `dataset` predicate and any user filters are applied
+        BEFORE the vector search (prefilter=True) and joined with AND, so
+        the top-k is computed over the fully filtered subset — a
+        postfilter over an unfiltered top-k would silently under-fill.
 
         Args:
             dataset_name: Dataset to search in.
             query: Query text; embedded locally with the injected embedder.
             k: Maximum number of hits to return.
+            filters: Structural filters composed into the same WHERE.
 
         Returns:
             At most k hits, best score first; empty for an empty dataset.
@@ -179,7 +236,10 @@ class LanceDBStore(VectorStore):
         """
         if self._get_datasets().get(dataset_name) is None:
             raise ValueError("Dataset is not present in the store")
-        predicate = "dataset = '" + dataset_name.replace("'", "''") + "'"
+        parts = [f"dataset = '{_sql_quote(dataset_name)}'"]
+        if filters is not None and not filters.is_empty:
+            parts.extend(_filter_predicates(filters))
+        predicate = " AND ".join(parts)
         vec = self.embedder.embed([query])[0]
         builder = cast("LanceVectorQueryBuilder", self.tbl.search(vec))
         rows = builder.where(predicate, prefilter=True).distance_type("cosine").limit(k).to_list()

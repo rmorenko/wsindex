@@ -12,7 +12,7 @@ from pathlib import Path
 from wsindex.config import Config
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.walker import walk_repo
-from wsindex.model import Hit
+from wsindex.model import Hit, SearchFilter
 from wsindex.rank.reranker import Reranker
 from wsindex.store.base import VectorStore
 
@@ -92,7 +92,14 @@ class Pipeline:
             files=files, chunks=chunks_count, written=written, missing_repos=tuple(missing_repos)
         )
 
-    def search(self, query: str, *, k: int = 10) -> list[Hit]:
+    def search(
+        self,
+        query: str,
+        *,
+        k: int = 10,
+        repo: str | None = None,
+        filters: SearchFilter | None = None,
+    ) -> list[Hit]:
         """Global top-k across all config repos, best score first.
 
         Merge policy lives here and only here: every dataset is asked for
@@ -103,18 +110,33 @@ class Pipeline:
         ValueError) silently contributes zero hits: not yet indexed is a
         normal state, not an error.
 
+        Repo scope is applied here (dataset list), structural filters go
+        down to the store as a prefilter — reranker sees only the
+        filtered candidates, so the funnel stays consistent (ADR-7).
+
         Args:
             query: Query text; embedding is the store's business.
             k: Maximum number of hits in the merged result.
+            repo: Restrict to a single repo id; unknown id is an error,
+                not a silent empty result.
+            filters: Structural filters passed through to the store.
 
         Returns:
-            At most k hits across all repos, best score first.
+            At most k hits across all (scoped) repos, best score first.
+
+        Raises:
+            ValueError: `repo` is set but not present in the config.
         """
+        repos = self.config.repos
+        if repo is not None:
+            repos = [r for r in repos if r.id == repo]
+            if not repos:
+                raise ValueError(f"unknown repo id: {repo!r}")
         n = _CANDIDATE_MULTIPLIER if self.reranker else 1
         all_hits: list[Hit] = []
-        for repo in self.config.repos:
+        for r in repos:
             try:
-                hits = self.store.search(dataset_name=repo.id, query=query, k=k * n)
+                hits = self.store.search(dataset_name=r.id, query=query, k=k * n, filters=filters)
             except ValueError:
                 continue
             all_hits.extend(hits)
