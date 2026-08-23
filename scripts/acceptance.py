@@ -50,6 +50,12 @@ CRITERIA: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("compress tensors to save space", ("compression",)),
     ("build an index for faster lookups", ("index",)),
     ("expose dataset operations over http", ("api",)),
+    # step 19v: identifier-flavoured queries — BM25 should own these.
+    # Exact strings live in one place each: verified against the corpus
+    # before pinning the expected fragments.
+    ("list_to_tensor", ("api.py", "app.py")),
+    ("tensorus-models>=0.0.3", ("pyproject",)),
+    ("Scalar tensor data must be a single number", ("api.py", "app.py")),
 )
 
 
