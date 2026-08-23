@@ -350,3 +350,74 @@ def test_filter_path_escapes_like_metachars(tmp_path: Path) -> None:
     store.add_chunks("ds", chunks=[match, almost])
     hits = store.search("ds", query="q", k=10, filters=SearchFilter(path="test_a.py"))
     assert [h.metadata["path"] for h in hits] == ["test_a.py"]
+
+
+# --- step 20: delete_chunks -----------------------------------------------
+
+
+def test_delete_makes_chunks_invisible_to_search(store: LanceDBStore) -> None:
+    # THE invariant of the method: everything else is "syntax works".
+    a, b = make_chunk("a"), make_chunk("b", path="b.md")
+    store.add_chunks("ds", chunks=[a, b])
+    assert len(store.search("ds", query="a", k=10)) == 2  # control
+    store.delete_chunks("ds", ids=[a.id])
+    hits = store.search("ds", query="a", k=10)
+    assert [h.native_id for h in hits] == [b.id]
+
+
+def test_delete_returns_num_deleted_rows(store: LanceDBStore) -> None:
+    # Returns what LanceDB actually removed, not what the caller asked to.
+    a, b = make_chunk("a"), make_chunk("b", path="b.md")
+    store.add_chunks("ds", chunks=[a, b])
+    assert store.delete_chunks("ds", ids=[a.id, b.id]) == 2
+
+
+def test_delete_empty_ids_is_noop_returns_zero(store: LanceDBStore) -> None:
+    # Short-circuit before SQL: DataFusion rejects `IN ()`, so an empty
+    # batch must never reach the query builder.
+    a = make_chunk("a")
+    store.add_chunks("ds", chunks=[a])
+    assert store.delete_chunks("ds", ids=[]) == 0
+    assert len(store.search("ds", query="a", k=10)) == 1  # nothing was touched
+
+
+def test_delete_unknown_ids_returns_zero(store: LanceDBStore) -> None:
+    # Idempotent on missing ids: no crash, no partial-delete, returns 0.
+    a = make_chunk("a")
+    store.add_chunks("ds", chunks=[a])
+    ghost = Chunk.chunk_id("never added", path="nowhere.md")
+    assert store.delete_chunks("ds", ids=[ghost]) == 0
+    assert len(store.search("ds", query="a", k=10)) == 1
+
+
+def test_delete_bare_string_ids_raises_typeerror(store: LanceDBStore) -> None:
+    # `str` is itself a Sequence[str] (by character); the guard prevents
+    # the caller from silently deleting 64 one-char "ids".
+    with pytest.raises(TypeError, match="batch of ids"):
+        store.delete_chunks("ds", ids="abc")
+
+
+def test_delete_unknown_dataset_raises_valueerror(store: LanceDBStore) -> None:
+    # Symmetry with add_chunks: same guard, same message.
+    with pytest.raises(ValueError, match="not present"):
+        store.delete_chunks("nope", ids=["anything"])
+
+
+def test_delete_scopes_by_dataset(tmp_path: Path) -> None:
+    # Cross-dataset isolation: chunk_id = sha256(text, path) — repo is NOT
+    # in the hash, so the same chunk lives with the same id in both
+    # datasets. Deleting from ds1 must NOT touch ds2 — a naive
+    # `id IN (...)` without a dataset predicate would (proved by probe B).
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    store.create_dataset("ds1", metric="cosine")
+    store.create_dataset("ds2", metric="cosine")
+    shared = make_chunk("shared", path="x.md")
+    ds2_only = make_chunk("only ds2", path="y.md")
+    store.add_chunks("ds1", chunks=[shared])
+    store.add_chunks("ds2", chunks=[shared, ds2_only])
+
+    assert store.delete_chunks("ds1", ids=[shared.id]) == 1
+
+    assert store.search("ds1", query="shared", k=10) == []
+    hits2 = store.search("ds2", query="shared", k=10)
+    assert {h.native_id for h in hits2} == {shared.id, ds2_only.id}

@@ -84,3 +84,26 @@ class VectorStore(ABC):
             ValueError: The dataset was never indexed — a normal state,
                 the pipeline skips such datasets silently.
         """
+
+    @abstractmethod
+    def delete_chunks(self, dataset_name: str, *, ids: Sequence[str]) -> int:
+        """Delete chunks from a dataset.
+
+        Deleting an id that is not in the dataset is a no-op; the method just returns 0.
+
+        On-disk reclaim is NOT part of this contract — a backend may keep
+        deleted rows physically until a separate housekeeping pass; the
+        row is invisible to `search` immediately, but the storage footprint
+        can drift up until that pass runs.
+
+        Args:
+            dataset_name: Dataset to delete from.
+            ids: ids of chunks to delete.
+
+        Returns:
+            Number of deleted chunks.
+
+        Raises:
+            TypeError: when ids is bare string
+            ValueError: when unknown dataset
+        """

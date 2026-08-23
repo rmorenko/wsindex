@@ -255,3 +255,42 @@ class LanceDBStore(VectorStore):
             )
             for row in rows
         ]
+
+    def delete_chunks(self, dataset_name: str, *, ids: Sequence[str]) -> int:
+        """Delete chunks by id, scoped to one dataset.
+
+        The dataset predicate is required, not decorative: the workspace
+        keeps every repo's chunks in one physical table (ADR-7), and a
+        bare `id IN (...)` would silently wipe matching rows across every
+        dataset. The risk is real because `Chunk.chunk_id = sha256(text, path)`
+        does not include repo, so two repos with the same file share the
+        same id. Both the dataset name and each id are `_sql_quote`-escaped
+        before being embedded into the WHERE clause.
+
+        Args:
+            dataset_name: Dataset to delete from; must be registered
+                (see `create_dataset`).
+            ids: Chunk ids to remove; missing ids are silently skipped.
+
+        Returns:
+            How many rows the delete actually removed (may be below
+            `len(ids)` when some were not there).
+
+        Raises:
+            TypeError: `ids` is a bare string instead of a batch.
+            ValueError: The dataset was never created.
+        """
+        if isinstance(ids, str):
+            raise TypeError("expected a batch of ids, got a single str")
+        if self._get_datasets().get(dataset_name) is None:
+            raise ValueError("Dataset is not present in the store")
+        if not ids:
+            return 0
+        id_list = ", ".join(f"'{_sql_quote(x)}'" for x in ids)
+        predicate = f"dataset = '{_sql_quote(dataset_name)}' AND id IN ({id_list})"
+        result = self.tbl.delete(predicate)
+        # LanceDB's DeleteResult carries num_deleted_rows at runtime (see
+        # probes/step20/probe_delete.py), but the field is missing from
+        # the stubs as of 0.21+; the cast + ignore is self-cleaning via
+        # `warn_unused_ignores` when the stubs catch up.
+        return cast("int", result.num_deleted_rows)  # type: ignore[attr-defined]
