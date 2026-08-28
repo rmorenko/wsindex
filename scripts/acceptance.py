@@ -9,7 +9,7 @@ the two backends, and writes a markdown report to stdout and
 `acceptance_report.md`.
 
 Usage:
-    uv run python scripts/acceptance.py        # or: make acceptance
+    uv run python scripts/acceptance.py        # or: uv run poe acceptance
 
 Environment:
     WSINDEX_E2E_REPO         corpus repo (default: tensorus/tensorus)

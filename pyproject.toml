@@ -60,6 +60,7 @@ dev = [
   "codespell>=2.4,<3",
   "taplo>=0.9,<1",
   "yamlfix>=1.19,<2",
+  "poethepoet>=0.38,<1",
 ]
 
 [tool.uv]
@@ -101,7 +102,7 @@ module = "sentence_transformers.*"
 ignore_missing_imports = true
 
 [tool.codespell]
-skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist"
+skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist,probes"
 
 [tool.yamlfix]
 line_length = 100
@@ -125,3 +126,109 @@ source = ["wsindex"]
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
+
+# Task runner (replaces the retired Makefile). Run `uv run poe <task>` or
+# `uv run poe --help` to see the list. Bare tool names work because `uv run`
+# puts the project venv on PATH before launching poe.
+[tool.poe.tasks.install]
+help = "Install dependencies (uv sync)"
+cmd = "uv sync"
+
+[tool.poe.tasks.lint]
+help = "Run linter (ruff check)"
+cmd = "ruff check ."
+
+[tool.poe.tasks.spell]
+help = "Spell check (codespell)"
+cmd = "codespell"
+
+[tool.poe.tasks.typecheck]
+help = "Type check (mypy)"
+cmd = "mypy src tests"
+
+[tool.poe.tasks.test]
+help = "Run tests (pytest, no coverage)"
+cmd = "pytest"
+
+[tool.poe.tasks.cov]
+help = "Run tests with coverage, fail under 90%"
+cmd = "pytest --cov --cov-report=term-missing"
+
+[tool.poe.tasks.run]
+help = "Run the wsindex CLI"
+cmd = "wsindex"
+
+[tool.poe.tasks.acceptance]
+help = "Full MVP acceptance on a real corpus, writes acceptance_report.md"
+cmd = "python scripts/acceptance.py"
+
+[tool.poe.tasks.hooks]
+help = "Run pre-commit on all files"
+cmd = "pre-commit run --all-files"
+
+[tool.poe.tasks.install-hooks]
+help = "Install the git pre-commit hook"
+cmd = "pre-commit install"
+
+[tool.poe.tasks.up]
+help = "Start compose services (docker compose up -d)"
+cmd = "docker compose up -d"
+
+[tool.poe.tasks.down]
+help = "Stop compose services (docker compose down)"
+cmd = "docker compose down"
+
+[tool.poe.tasks.logs]
+help = "Tail compose logs (docker compose logs -f)"
+cmd = "docker compose logs -f"
+
+# `git ls-files` (not a bare glob) so generated files like uv.lock and anything
+# under .venv never reach the formatters.
+[tool.poe.tasks.fmt]
+help = "Format code, docs and configs (ruff w/ safe fixes, mdformat, taplo, yamlfix, json.tool, xmllint)"
+interpreter = "bash"
+shell = """
+set -eu -o pipefail
+ruff check --fix .
+ruff format .
+mdformat *.md
+git ls-files '*.toml' | xargs -r taplo fmt
+git ls-files '*.yml' '*.yaml' | xargs -r yamlfix
+for f in $(git ls-files '*.json'); do
+  python -m json.tool --indent 2 "$f" "$f.tmp" && mv "$f.tmp" "$f"
+done
+for f in $(git ls-files '*.xml' '*.xsd'); do
+  xmllint --format "$f" --output "$f"
+done
+"""
+
+[tool.poe.tasks.fmt-check]
+help = "Check formatting without changing files"
+interpreter = "bash"
+shell = """
+set -eu -o pipefail
+ruff format --check .
+mdformat --check *.md
+git ls-files '*.toml' | xargs -r taplo fmt --check
+git ls-files '*.yml' '*.yaml' | xargs -r yamlfix --check
+for f in $(git ls-files '*.json'); do
+  python -m json.tool --indent 2 "$f" | diff -u "$f" -
+done
+for f in $(git ls-files '*.xml' '*.xsd'); do
+  xmllint --format "$f" | diff -u "$f" -
+done
+"""
+
+[tool.poe.tasks.check]
+help = "Auto-format, then lint + spelling + types + tests w/ coverage"
+sequence = ["fmt", "lint", "spell", "typecheck", "cov"]
+
+[tool.poe.tasks.clean]
+help = "Remove caches, build artifacts and index"
+interpreter = "bash"
+shell = """
+rm -rf .mypy_cache .ruff_cache .pytest_cache .wsindex build dist
+rm -rf htmlcov .coverage coverage.xml
+find . -type d -name __pycache__ -exec rm -rf {} +
+find . -type d -name '*.egg-info' -exec rm -rf {} +
+"""

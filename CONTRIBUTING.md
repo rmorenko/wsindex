@@ -14,24 +14,25 @@ uv run pre-commit install   # enable git hooks (optional but recommended)
 
 ## Everyday workflow
 
-Use the `make` shortcuts (all wrap `uv run …`):
+Tasks are defined with [poethepoet](https://poethepoet.natn.io/) in
+`pyproject.toml`; `uv run poe --help` lists them.
 
 ```bash
-make check   # ruff (lint) + mypy (types) + pytest — run this before pushing
-make fmt     # auto-format with ruff
-make run     # run the wsindex CLI
+uv run poe check   # ruff (lint) + mypy (types) + pytest — run this before pushing
+uv run poe fmt     # auto-format with ruff
+uv run poe run     # run the wsindex CLI
 ```
 
 Run everything the pre-commit hooks would run:
 
 ```bash
-make hooks
+uv run poe hooks
 ```
 
 ## Standards
 
-- **Formatting & linting:** `ruff` (config in `pyproject.toml`). Run `make fmt`
-  before committing; CI runs `ruff format --check`.
+- **Formatting & linting:** `ruff` (config in `pyproject.toml`). Run
+  `uv run poe fmt` before committing; CI runs `ruff format --check`.
 - **Types:** `mypy` in `strict` mode. All functions must be fully annotated.
 - **Tests:** `pytest`. Add a test for any new behavior; keep tests fast and
   offline (no network, no heavy models).
@@ -42,7 +43,7 @@ make hooks
 
 1. Branch off `main`.
 1. Make your change with a matching test.
-1. Ensure `make check` passes locally.
+1. Ensure `uv run poe check` passes locally.
 1. Open a PR; CI must be green before merge.
 
 See the design docs (`CONCEPT_en.md`, `BRD_en.md`, `ARCH_en.md`) for where the

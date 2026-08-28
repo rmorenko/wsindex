@@ -38,7 +38,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Format check (ruff, mdformat, taplo, yamlfix)
-        run: make fmt-check
+        run: uv run poe fmt-check
 
       - name: Spelling (codespell)
         run: uv run codespell
