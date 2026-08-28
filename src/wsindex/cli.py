@@ -1,10 +1,18 @@
 """Command-line interface and the composition root.
 
-Every invocation is a fresh process: the only state shared between commands
-is the filesystem — `wsindex.toml` in the CWD and the `.wsindex/` index dir.
-Each command loads the config, does one thing, saves if it mutated anything,
-and speaks human: expected failures go to stderr and exit with code 1,
-a traceback in the output is always a bug.
+Every invocation is a fresh process. State shared between commands has
+two very different owners:
+
+- `wsindex.toml` in the CWD — the workspace declaration (repo list,
+  backend choice). Human-edited, read on every command, small.
+- `.wsindex/` — the index database. Tool-managed, accumulates chunks
+  and embeddings across `index` runs; deduplication reads it before
+  the (expensive) embedding step, which is why re-indexing is
+  incremental. Cannot be safely hand-edited or naively copied.
+
+Each command loads the config, does one thing, saves if it mutated
+anything, and speaks human: expected failures go to stderr and exit
+with code 1, a traceback in the output is always a bug.
 """
 
 import os
