@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from wsindex.model import Chunk, Kind
-from wsindex.store.tensorus import TensorusStore
+from wsindex.store import TensorusStore
 
 MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 

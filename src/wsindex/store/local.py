@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from wsindex.embed.embedder import Embedder
+from wsindex.embed import Embedder
 from wsindex.model import Chunk, Hit
 from wsindex.store.base import VectorStore
 

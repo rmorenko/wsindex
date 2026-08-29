@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.embed.embedder import FakeEmbedder, SentenceTransformerEmbedder
+from wsindex.embed import FakeEmbedder, SentenceTransformerEmbedder
 
 
 class FakeST:

@@ -11,9 +11,9 @@ from typer.testing import CliRunner
 
 from wsindex.cli import app
 from wsindex.config import Provider, load_config
-from wsindex.embed.embedder import FakeEmbedder
+from wsindex.embed import FakeEmbedder
 from wsindex.paths import CONFIG_FILE
-from wsindex.store.local import LocalStore
+from wsindex.store import LocalStore
 
 runner = CliRunner()
 

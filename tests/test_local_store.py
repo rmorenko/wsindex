@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.embed.embedder import FakeEmbedder
+from wsindex.embed import FakeEmbedder
 from wsindex.model import Chunk, Kind
-from wsindex.store.local import LocalStore
+from wsindex.store import LocalStore
 
 DIM = 3
 

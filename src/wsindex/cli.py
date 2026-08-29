@@ -24,7 +24,7 @@ from typing import Annotated, assert_never
 import typer
 
 from wsindex.config import Backend, Config, Provider, load_config, save_config
-from wsindex.embed.embedder import Embedder, FakeEmbedder, SentenceTransformerEmbedder
+from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.paths import (
     ConfigLocation,
     find_config,
@@ -35,9 +35,7 @@ from wsindex.paths import (
     workspace_config_path,
 )
 from wsindex.pipeline import Pipeline
-from wsindex.store.base import VectorStore
-from wsindex.store.local import LocalStore
-from wsindex.store.tensorus import TensorusStore
+from wsindex.store import LocalStore, TensorusStore, VectorStore
 
 app = typer.Typer(no_args_is_help=True)
 

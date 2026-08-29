@@ -11,7 +11,7 @@ import uuid
 import pytest
 
 from wsindex.model import Chunk, Kind
-from wsindex.store.tensorus import TensorusStore
+from wsindex.store import TensorusStore
 
 pytestmark = pytest.mark.live
 

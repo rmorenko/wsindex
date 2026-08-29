@@ -10,10 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wsindex.config import Config
-from wsindex.ingest.chunker import chunk_file
-from wsindex.ingest.walker import walk_repo
+from wsindex.ingest import chunk_file, walk_repo
 from wsindex.model import Hit
-from wsindex.store.base import VectorStore
+from wsindex.store import VectorStore
 
 
 @dataclass(frozen=True, kw_only=True)

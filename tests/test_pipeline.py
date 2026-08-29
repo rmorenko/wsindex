@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from wsindex.config import Backend, Config, Provider
-from wsindex.embed.embedder import FakeEmbedder
+from wsindex.embed import FakeEmbedder
 from wsindex.pipeline import Pipeline
-from wsindex.store.local import LocalStore
+from wsindex.store import LocalStore
 
 PY_TEXT = "def f():\n    return 1"
 

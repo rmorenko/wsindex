@@ -29,12 +29,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wsindex.config import Config
-from wsindex.embed.embedder import SentenceTransformerEmbedder
+from wsindex.embed import SentenceTransformerEmbedder
 from wsindex.model import Hit
 from wsindex.pipeline import IndexReport, Pipeline
-from wsindex.store.base import VectorStore
-from wsindex.store.local import LocalStore
-from wsindex.store.tensorus import TensorusStore
+from wsindex.store import LocalStore, TensorusStore, VectorStore
 
 REPO_URL = os.environ.get("WSINDEX_E2E_REPO", "https://github.com/tensorus/tensorus")
 K = 5
