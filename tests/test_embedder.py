@@ -2,6 +2,7 @@
 error branches on stubbed modules, and a slow real-model smoke test."""
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -9,8 +10,9 @@ from wsindex.embed.embedder import FakeEmbedder, SentenceTransformerEmbedder
 
 
 class FakeST:
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, cache_folder: str | None = None) -> None:
         self.model_name = model_name
+        self.cache_folder = cache_folder
 
     def get_embedding_dimension(self) -> None:
         return None
@@ -74,6 +76,60 @@ def test_model_without_dim_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
     with pytest.raises(RuntimeError, match="does not report an embedding dimension"):
         SentenceTransformerEmbedder(model_name="sentence-transformer")
+
+
+def test_cache_folder_is_passed_through_and_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Wsindex owns its model cache under $XDG_CACHE_HOME/wsindex/models/ so
+    # the composition root can control where a ~90 MB download lands (see
+    # ADR-8 amendment). The embedder must both propagate the path to
+    # sentence-transformers AND create the directory before use — the
+    # library assumes it exists.
+    import types
+
+    captured: dict[str, object] = {}
+
+    class CapturingST(FakeST):
+        def __init__(self, model_name: str, cache_folder: str | None = None) -> None:
+            super().__init__(model_name, cache_folder=cache_folder)
+            captured["cache_folder"] = cache_folder
+
+        def get_embedding_dimension(self) -> int:  # type: ignore[override]
+            return 8
+
+    fake = types.ModuleType("sentence_transformers")
+    fake.SentenceTransformer = CapturingST  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
+
+    cache = tmp_path / "cache" / "wsindex" / "models"
+    assert not cache.exists()
+    SentenceTransformerEmbedder(model_name="irrelevant", cache_folder=cache)
+    assert cache.is_dir()
+    assert captured["cache_folder"] == str(cache)
+
+
+def test_cache_folder_none_leaves_library_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Direct users of the embedder (outside the CLI) can skip the argument
+    # and get sentence-transformers' own default (~/.cache/huggingface/hub).
+    import types
+
+    captured: dict[str, object] = {}
+
+    class CapturingST(FakeST):
+        def __init__(self, model_name: str, **kwargs: object) -> None:
+            super().__init__(model_name)
+            captured["kwargs"] = kwargs
+
+        def get_embedding_dimension(self) -> int:  # type: ignore[override]
+            return 8
+
+    fake = types.ModuleType("sentence_transformers")
+    fake.SentenceTransformer = CapturingST  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
+
+    SentenceTransformerEmbedder(model_name="irrelevant")
+    assert captured["kwargs"] == {}
 
 
 def cos(a: list[float], b: list[float]) -> float:

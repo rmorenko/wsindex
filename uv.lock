@@ -2227,6 +2227,7 @@ dependencies = [
     { name = "httpx" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "platformdirs" },
     { name = "tomli-w" },
     { name = "typer" },
 ]
@@ -2266,6 +2267,7 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "numpy", specifier = ">=2.4,<3" },
+    { name = "platformdirs", specifier = ">=4,<5" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=5.7,<6" },
     { name = "tomli-w", specifier = ">=1.2,<2" },
     { name = "tree-sitter", marker = "extra == 'ast'", specifier = ">=0.26,<1" },

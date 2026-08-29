@@ -9,6 +9,7 @@ slice, SentenceTransformerEmbedder wraps a real model behind the optional
 import hashlib
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from pathlib import Path
 from typing import cast
 
 import numpy as np
@@ -90,12 +91,18 @@ class SentenceTransformerEmbedder(Embedder):
     Vectors are L2-normalized, so cosine similarity equals dot product.
     """
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
         """Load the model; `dim` is taken from the model itself.
 
         Args:
             model_name: sentence-transformers model id, e.g.
                 "sentence-transformers/all-MiniLM-L6-v2".
+            cache_folder: Where sentence-transformers stores downloaded
+                model files. When None, the library uses its own default
+                (typically `~/.cache/huggingface/hub/`); the wsindex CLI
+                passes an explicit path under `$XDG_CACHE_HOME/wsindex/`
+                (see `wsindex.paths.resolve_cache_dir`) so wsindex-owned
+                cache is namespaced and safe to `rm -rf`.
 
         Raises:
             RuntimeError: The `ml` extra is not installed, or the model
@@ -107,7 +114,11 @@ class SentenceTransformerEmbedder(Embedder):
             raise RuntimeError(
                 "sentence-transformers is not installed — run `uv sync --extra ml`"
             ) from exc
-        self._model = SentenceTransformer(model_name)
+        st_kwargs: dict[str, str] = {}
+        if cache_folder is not None:
+            cache_folder.mkdir(parents=True, exist_ok=True)
+            st_kwargs["cache_folder"] = str(cache_folder)
+        self._model = SentenceTransformer(model_name, **st_kwargs)
         dim: int | None = self._model.get_embedding_dimension()
         if dim is None:
             raise RuntimeError(f"model {model_name!r} does not report an embedding dimension")

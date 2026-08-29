@@ -9,9 +9,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from wsindex.cli import WSINDEX_TOML, app
+from wsindex.cli import app
 from wsindex.config import Provider, load_config
 from wsindex.embed.embedder import FakeEmbedder
+from wsindex.paths import CONFIG_FILE
 from wsindex.store.local import LocalStore
 
 runner = CliRunner()
@@ -33,7 +34,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_init_creates_config(workspace: Path) -> None:
     result = runner.invoke(app, ["init", "ws"])
     assert result.exit_code == 0
-    assert (workspace / WSINDEX_TOML).exists()
+    assert (workspace / CONFIG_FILE).exists()
     assert "created" in result.output
 
 
@@ -41,7 +42,7 @@ def test_init_provider_option_reaches_the_file(workspace: Path) -> None:
     # Regression: this line once got lost in a refactor, and every workspace
     # silently initialized with the real model — green tests, 100x slower.
     runner.invoke(app, ["init", "ws", "--provider", "fake"])
-    assert load_config(workspace / WSINDEX_TOML).provider == Provider.FAKE
+    assert load_config(workspace / CONFIG_FILE).provider == Provider.FAKE
 
 
 def test_init_refuses_to_overwrite(workspace: Path) -> None:
@@ -144,14 +145,15 @@ def test_tensorus_backend_builds_store_from_config_and_env(
 
 
 def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    created: dict[str, str] = {}
+    captured: dict[str, object] = {}
 
     class StubST(FakeEmbedder):
         # Same constructor signature as the real class; dim must match
         # config.dim (384) or the composition-root guard rejects it.
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
             super().__init__(dim=384)
-            created["model"] = model_name
+            captured["model"] = model_name
+            captured["cache_folder"] = cache_folder
 
     # Patch where the name is looked up: cli.py imported its own reference.
     monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", StubST)
@@ -159,14 +161,20 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])
     assert result.exit_code == 0
-    assert created["model"] == "sentence-transformers/all-MiniLM-L6-v2"
+    assert captured["model"] == "sentence-transformers/all-MiniLM-L6-v2"
+    # cli passes an explicit models subdir under $XDG_CACHE_HOME/wsindex/
+    # so the wsindex-owned cache is namespaced (see ADR-8 amendment).
+    cache_folder = captured["cache_folder"]
+    assert isinstance(cache_folder, Path)
+    assert cache_folder.name == "models"
+    assert cache_folder.parent.name == "wsindex"
 
 
 def test_embedder_dim_mismatch_is_rejected(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class WrongDimST(FakeEmbedder):
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
             super().__init__(dim=8)
 
     monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", WrongDimST)
