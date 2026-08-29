@@ -12,8 +12,24 @@ from pathlib import Path
 
 from wsindex.model import Kind
 
-IGNORED_DIRS: frozenset[str] = frozenset([".git", "node_modules", "target", "__pycache__", ".venv"])
+# Directory-pruning policy in one place: any hidden directory (dot-prefix)
+# is skipped, plus a short list of well-known build/artifact dirs that
+# are not hidden. Hidden ones like `.git`/`.venv`/`.pytest_cache` are
+# caught by the `startswith(".")` rule automatically — do not list them
+# here, the two rules would drift.
+IGNORED_DIRS: frozenset[str] = frozenset(["node_modules", "target", "__pycache__"])
 MAX_FILE_SIZE = 1024 * 1024
+
+
+def _skip_dir(name: str) -> bool:
+    """One place to answer 'should the walker descend into this directory?'.
+
+    Splitting the policy across an inline filter and a constant made the
+    two rules easy to drift apart (an added ignored dir with a dot would
+    duplicate the hidden-dir rule silently). Colocating them is cheap.
+    """
+    return name.startswith(".") or name in IGNORED_DIRS
+
 
 # Decision tables instead of if/elif chains: adding a format is one data row.
 # Only the ARCH §1 corpus is listed on purpose — every extra format is a
@@ -42,9 +58,23 @@ _FILENAME_MAP: dict[str, tuple[str, Kind]] = {
 class WalkedFile:
     """A file selected for indexing.
 
-    rel_path is POSIX-style and relative to the repo root: it becomes
-    Chunk.path and participates in chunk_id, so it must be identical
-    across operating systems.
+    Two paths on purpose:
+
+    - `abs_path` is where the file lives right now on this machine.
+      The walker opens it (stat, sniff for NULs, read text later).
+    - `rel_path` is POSIX-style, relative to the repo root. It goes
+      into `Chunk.path` and the deterministic `chunk_id`, so it MUST
+      be stable across clones and across OSes: the same file cloned
+      into `~/proj` and `/opt/proj` produces one id, and the same
+      repo indexed on macOS and on Windows produces the same id
+      (backslashes would silently split the two). Dedup — skipping
+      already-embedded chunks — depends on this equality.
+
+    Attributes:
+        abs_path: Runtime location on this machine.
+        rel_path: Stable POSIX path relative to the repo root.
+        lang: Detected language ("python", "rust", ...).
+        kind: Broad category (CODE / DOC / CONFIG).
     """
 
     abs_path: Path
@@ -72,9 +102,7 @@ def walk_repo(root: Path) -> Iterator[WalkedFile]:
         # never descended into (plain `dir_names = ...` would rebind the local
         # name and silently disable the filter). Sorting makes traversal
         # order reproducible across OSes.
-        dir_names[:] = sorted(
-            d for d in dir_names if d not in IGNORED_DIRS and not d.startswith(".")
-        )
+        dir_names[:] = sorted(d for d in dir_names if not _skip_dir(d))
         for f_name in sorted(filenames):
             abs_path = Path(dirpath) / f_name
             # Cheapest check first (name only), then stat, then open+read.
