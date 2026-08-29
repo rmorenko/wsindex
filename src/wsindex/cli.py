@@ -56,7 +56,7 @@ def _load_config() -> tuple[Config, ConfigLocation]:
         for line in searched_paths():
             typer.echo(f"  - {line}", err=True)
         typer.echo(
-            "Run `wsindex init <name>` (workspace) " "or `wsindex init --user <name>` (user).",
+            "Run `wsindex init <name>` (workspace) or `wsindex init --user <name>` (user).",
             err=True,
         )
         raise typer.Exit(code=1)

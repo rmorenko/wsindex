@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from wsindex.ingest.ast.core import _cover, _line_span, _Span
+from wsindex.ingest.ast.core import Span, line_span, mark_covered
 
 if TYPE_CHECKING:
     from tree_sitter import Node
@@ -12,22 +12,22 @@ if TYPE_CHECKING:
 
 def _config_span(
     node: Node, lines: list[str], covered: list[bool], *, symbol: str | None, node_type: str
-) -> _Span:
+) -> Span:
     """Span of one config unit.
 
     Container nodes (a TOML table, a YAML mapping) often swallow trailing
     blank separator lines — trim them so chunks end on content.
     """
-    start, end = _line_span(node)
+    start, end = line_span(node)
     while end > start and not lines[end - 1].strip():
         end -= 1
-    _cover(covered, start=start, end=end)
-    return _Span(start_line=start, end_line=end, symbol=symbol, node_type=node_type)
+    mark_covered(covered, start=start, end=end)
+    return Span(start_line=start, end_line=end, symbol=symbol, node_type=node_type)
 
 
-def toml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+def toml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Top-level tables and arrays of tables; leading bare pairs go to gaps."""
-    spans: list[_Span] = []
+    spans: list[Span] = []
     for child in root.named_children:
         if child.type not in ("table", "table_array_element"):
             continue
@@ -42,9 +42,9 @@ def toml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]
     return spans
 
 
-def yaml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+def yaml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Top-level mapping pairs of every document in the stream."""
-    spans: list[_Span] = []
+    spans: list[Span] = []
     for document in root.named_children:
         for block_node in document.named_children:
             for mapping in block_node.named_children:
@@ -63,9 +63,9 @@ def yaml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]
     return spans
 
 
-def json_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+def json_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Top-level object pairs; a top-level array yields no spans (gaps take over)."""
-    spans: list[_Span] = []
+    spans: list[Span] = []
     for top in root.named_children:
         if top.type != "object":
             continue
@@ -91,27 +91,27 @@ def _stage_symbol(node: Node) -> str | None:
     return None
 
 
-def dockerfile_spans(root: Node, lines: list[str], covered: list[bool]) -> list[_Span]:
+def dockerfile_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """One span per build stage: FROM up to the last instruction before the next FROM.
 
     `node_type` is the synthetic "stage" — unlike other extractors the unit
     here is a group of nodes, not a single grammar node. Instructions before
     the first FROM (global ARGs) fall through to gap chunks.
     """
-    spans: list[_Span] = []
+    spans: list[Span] = []
     start: int | None = None
     end = 0
     symbol: str | None = None
 
     def close() -> None:
         if start is not None:
-            _cover(covered, start=start, end=end)
-            spans.append(_Span(start_line=start, end_line=end, symbol=symbol, node_type="stage"))
+            mark_covered(covered, start=start, end=end)
+            spans.append(Span(start_line=start, end_line=end, symbol=symbol, node_type="stage"))
 
     for node in root.named_children:
         if not node.type.endswith("_instruction"):
             continue
-        node_start, node_end = _line_span(node)
+        node_start, node_end = line_span(node)
         if node.type == "from_instruction":
             close()
             start, symbol = node_start, _stage_symbol(node)
