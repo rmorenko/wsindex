@@ -7,11 +7,12 @@ only in `to_dict`/`from_dict`, so the file format has one definition per
 direction.
 """
 
+from __future__ import annotations
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import tomli_w
 
@@ -66,6 +67,13 @@ class Config:
     base_url: str
     metric: str
     repos: list[Repository]
+
+    _instance: ClassVar[Config | None] = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     @classmethod
     def default_config(cls, name: str) -> "Config":
