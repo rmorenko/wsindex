@@ -23,7 +23,7 @@ from typing import Annotated, assert_never
 
 import typer
 
-from wsindex.config import Backend, Config, Provider, load_config, save_config
+from wsindex.config import Backend, Config, Provider, get_config, load_config, save_config
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.paths import (
     ConfigLocation,
@@ -40,13 +40,14 @@ from wsindex.store import LocalStore, TensorusStore, VectorStore
 app = typer.Typer(no_args_is_help=True)
 
 
-def _load_config() -> tuple[Config, ConfigLocation]:
+def _load_config() -> ConfigLocation:
     """Locate and load a wsindex config, or abort with exit code 1.
 
-    Returns:
-        The parsed Config and the ConfigLocation that found it — the
-        location is needed downstream to resolve the index directory
-        and to save mutations back to the same file.
+    Side effect: `load_config` publishes the parsed Config into the module
+    singleton, so subsequent `get_config()` calls in this process return
+    it. The composition root and commands read via `get_config()` — this
+    function only returns the location, which is needed for index-dir
+    resolution and for saving mutations back to the same file.
     """
     location = find_config()
     if location is None:
@@ -58,11 +59,18 @@ def _load_config() -> tuple[Config, ConfigLocation]:
             err=True,
         )
         raise typer.Exit(code=1)
-    return load_config(location.path), location
+    load_config(location.path)
+    return location
 
 
-def _build_pipeline(config: Config, location: ConfigLocation) -> Pipeline:
-    """Composition root: the only place that turns config strings into objects."""
+def _build_pipeline(location: ConfigLocation) -> Pipeline:
+    """Composition root: turns config strings into objects, wires Pipeline.
+
+    Reads Config from the module singleton (published by `_load_config`)
+    and passes only the fields Pipeline actually uses — Pipeline stays
+    Config-free by design.
+    """
+    config = get_config()
     store: VectorStore
     embedder: Embedder
     match config.backend:
@@ -99,7 +107,7 @@ def _build_pipeline(config: Config, location: ConfigLocation) -> Pipeline:
             )
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
-    return Pipeline(config=config, store=store)
+    return Pipeline(repos=config.repos, metric=config.metric, store=store)
 
 
 @app.command()
@@ -143,7 +151,8 @@ def init(
 @app.command()
 def add_repo(repo_id: str, path: str) -> None:
     """Register a repository; its id becomes the dataset name."""
-    config, location = _load_config()
+    location = _load_config()
+    config = get_config()
     try:
         config.add_repo(repo_id, path=path)
     except ValueError as exc:
@@ -156,8 +165,8 @@ def add_repo(repo_id: str, path: str) -> None:
 @app.command()
 def index() -> None:
     """Walk, chunk and embed every configured repo into the store."""
-    config, location = _load_config()
-    pipeline = _build_pipeline(config, location)
+    location = _load_config()
+    pipeline = _build_pipeline(location)
     report = pipeline.index()
     typer.echo(f"files: {report.files}  chunks: {report.chunks}  written: {report.written}")
     if report.missing_repos:
@@ -170,8 +179,8 @@ def search(
     top: Annotated[int, typer.Option("--top", "-k", help="How many hits")] = 10,
 ) -> None:
     """Search all indexed repos, best hits first."""
-    config, location = _load_config()
-    pipeline = _build_pipeline(config, location)
+    location = _load_config()
+    pipeline = _build_pipeline(location)
     hits = pipeline.search(query, k=top)
     if not hits:
         typer.echo("no results")
@@ -188,7 +197,8 @@ def search(
 @app.command()
 def status() -> None:
     """Show the workspace: name, backend, registered repos."""
-    config, location = _load_config()
+    location = _load_config()
+    config = get_config()
     typer.echo(f"config: {location.path} ({location.mode.value})")
     typer.echo(f"workspace: {config.name}")
     typer.echo(f"backend: {config.backend.value}")

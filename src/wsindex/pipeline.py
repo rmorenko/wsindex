@@ -1,15 +1,17 @@
-"""Indexing and search pipeline: repos from the config in, Hits out.
+"""Indexing and search pipeline: repos in, Hits out.
 
 The pipeline sees only the VectorStore contract and works in plain text —
-embedding is the store's private business. Concrete backends are
-constructed once at the edge (the CLI composition root) and injected
-through the Pipeline constructor.
+embedding is the store's private business. Concrete backends AND the
+repo list are built once at the edge (the CLI composition root, which
+reads Config and passes only what Pipeline uses) and injected through
+the constructor. Pipeline never imports Config — that keeps it testable
+without the config module and honest about what it depends on.
 """
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from wsindex.config import Config
+from wsindex.config import Repository
 from wsindex.ingest import chunk_file, walk_repo
 from wsindex.model import Hit
 from wsindex.store import VectorStore
@@ -36,24 +38,26 @@ class IndexReport:
 
 @dataclass(frozen=True, kw_only=True)
 class Pipeline:
-    """The wired system: config + store, assembled once.
+    """The wired system: repo list + store, assembled once.
 
     Frozen on purpose: a Pipeline is a bundle of dependencies, not state —
-    nothing may accumulate between calls. The composition root (the place
-    that turns config values into concrete backends) lives with the CLI.
+    nothing may accumulate between calls. Depends on the concrete values
+    it uses (repo list, metric), not on Config as a whole — the CLI
+    composition root does the extraction.
 
     Attributes:
-        config: Workspace configuration; its repo list drives both
-            indexing and search.
+        repos: Repositories to index and search, in merge order.
+        metric: Similarity metric for new datasets (see `create_dataset`).
         store: Any VectorStore backend; the pipeline never looks behind
             the contract.
     """
 
-    config: Config
+    repos: list[Repository]
+    metric: str
     store: VectorStore
 
     def index(self) -> IndexReport:
-        """Index every repo from the config into its own dataset (= repo id).
+        """Index every repo into its own dataset (dataset name = repo id).
 
         Decisions fixed here: files are read with errors="replace" so a
         stray non-UTF-8 file cannot abort the run; a repo whose directory
@@ -67,11 +71,11 @@ class Pipeline:
         chunks_count = 0
         written = 0
         missing_repos: list[str] = []
-        for repo in self.config.repos:
+        for repo in self.repos:
             if not Path(repo.path).is_dir():
                 missing_repos.append(repo.id)
                 continue
-            self.store.create_dataset(dataset_name=repo.id, metric=self.config.metric)
+            self.store.create_dataset(dataset_name=repo.id, metric=self.metric)
             for file in walk_repo(root=Path(repo.path)):
                 files += 1
                 chunks = chunk_file(
@@ -88,12 +92,12 @@ class Pipeline:
         )
 
     def search(self, query: str, *, k: int = 10) -> list[Hit]:
-        """Global top-k across all config repos, best score first.
+        """Global top-k across all repos, best score first.
 
         Merge policy lives here and only here: every dataset is asked for
         k hits (the global top may sit entirely in one repo, so asking for
         less is wrong), then one stable sort merges and cuts to k — on
-        equal scores the config repo order wins, which keeps results
+        equal scores the given repo order wins, which keeps results
         deterministic. A repo that was never indexed (store raises
         ValueError) silently contributes zero hits: not yet indexed is a
         normal state, not an error.
@@ -106,7 +110,7 @@ class Pipeline:
             At most k hits across all repos, best score first.
         """
         all_hits: list[Hit] = []
-        for repo in self.config.repos:
+        for repo in self.repos:
             try:
                 hits = self.store.search(dataset_name=repo.id, query=query, k=k)
             except ValueError:

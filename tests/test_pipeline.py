@@ -5,11 +5,12 @@ must return that chunk with cosine score ~1.0 — that is what makes the
 pipeline assertable end to end without a real model.
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from wsindex.config import Backend, Config, Provider
+from wsindex.config import Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.pipeline import Pipeline
 from wsindex.store import LocalStore
@@ -27,22 +28,11 @@ def make_repo(root: Path) -> None:
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> Config:
+def repo1(tmp_path: Path) -> Repository:
     repo_dir = tmp_path / "repo1"
     repo_dir.mkdir()
     make_repo(repo_dir)
-    cfg = Config(
-        name="ws",
-        backend=Backend.LOCAL,
-        provider=Provider.SENTENCE_TRANSFORMERS,
-        model="fake",
-        dim=8,
-        base_url="",
-        metric="cosine",
-        repos=[],
-    )
-    cfg.add_repo("repo1", path=str(repo_dir))
-    return cfg
+    return Repository(id="repo1", path=str(repo_dir))
 
 
 @pytest.fixture
@@ -56,8 +46,8 @@ def embedder() -> FakeEmbedder:
 
 
 @pytest.fixture
-def pipeline(config: Config, store: LocalStore) -> Pipeline:
-    return Pipeline(config=config, store=store)
+def pipeline(repo1: Repository, store: LocalStore) -> Pipeline:
+    return Pipeline(repos=[repo1], metric="cosine", store=store)
 
 
 def test_report_counts(pipeline: Pipeline) -> None:
@@ -90,7 +80,7 @@ def test_two_repos_get_isolated_datasets(
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))
+    pipeline = replace(pipeline, repos=[*pipeline.repos, Repository(id="repo2", path=str(repo2))])
     pipeline.index()
     for dataset in ("repo1", "repo2"):
         hits = store.search(dataset_name=dataset, query=PY_TEXT, k=10)
@@ -99,7 +89,10 @@ def test_two_repos_get_isolated_datasets(
 
 
 def test_missing_repo_is_reported_not_fatal(tmp_path: Path, pipeline: Pipeline) -> None:
-    pipeline.config.add_repo("ghost", path=str(tmp_path / "does-not-exist"))
+    pipeline = replace(
+        pipeline,
+        repos=[*pipeline.repos, Repository(id="ghost", path=str(tmp_path / "does-not-exist"))],
+    )
     report = pipeline.index()
     assert report.missing_repos == ("ghost",)
     assert report.written == EXPECTED_CHUNKS  # repo1 still indexed
@@ -118,7 +111,7 @@ def test_search_merges_across_repos(tmp_path: Path, pipeline: Pipeline) -> None:
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))
+    pipeline = replace(pipeline, repos=[*pipeline.repos, Repository(id="repo2", path=str(repo2))])
     pipeline.index()
     hits = pipeline.search("print('two')", k=3)
     assert hits[0].metadata["repo"] == "repo2"
@@ -131,7 +124,7 @@ def test_search_tie_keeps_config_repo_order(tmp_path: Path, pipeline: Pipeline) 
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     make_repo(repo2)
-    pipeline.config.add_repo("repo2", path=str(repo2))
+    pipeline = replace(pipeline, repos=[*pipeline.repos, Repository(id="repo2", path=str(repo2))])
     pipeline.index()
     hits = pipeline.search(PY_TEXT, k=2)
     assert [h.score for h in hits] == [pytest.approx(1.0)] * 2
@@ -148,7 +141,8 @@ def test_search_skips_unindexed_repo(tmp_path: Path, pipeline: Pipeline) -> None
     repo2 = tmp_path / "repo2"
     repo2.mkdir()
     (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))  # in the config, never indexed
+    # repo2 is listed but never indexed — search must skip it silently.
+    pipeline = replace(pipeline, repos=[*pipeline.repos, Repository(id="repo2", path=str(repo2))])
     hits = pipeline.search(PY_TEXT, k=5)
     assert hits  # no crash, repo1 still answers
     assert {h.metadata["repo"] for h in hits} == {"repo1"}
