@@ -4,7 +4,16 @@ from pathlib import Path
 import pytest
 import tomli_w
 
-from wsindex.config import Backend, Config, Provider, load_config, save_config
+from wsindex.config import (
+    Backend,
+    Config,
+    Provider,
+    get_config,
+    load_config,
+    reset_config,
+    save_config,
+    set_config,
+)
 
 
 def test_roundtrip(tmp_path: Path) -> None:
@@ -63,3 +72,46 @@ def test_saved_file_is_valid_toml(tmp_path: Path) -> None:
     data = tomllib.loads((tmp_path / "wsindex.toml").read_text())
     assert data["workspace"]["backend"] == "tensorus"
     assert data["repos"][0]["id"] == "test1"
+
+
+# Module-level singleton: get/set/reset + load_config side effect.
+# The autouse fixture in conftest.py resets the module slot around every
+# test, so each case starts with `get_config()` in the "not loaded" state.
+
+
+def test_get_config_without_load_raises() -> None:
+    # No load_config/set_config called in this test — slot must be empty.
+    with pytest.raises(RuntimeError):
+        get_config()
+
+
+def test_set_config_publishes_to_module_slot() -> None:
+    cfg = Config.default_config("demo")
+    set_config(cfg)
+    # `is`, not `==`: singleton means one object shared, not equal values.
+    assert get_config() is cfg
+
+
+def test_load_config_publishes_to_module_slot(tmp_path: Path) -> None:
+    original = Config.default_config("demo")
+    save_config(original, path=tmp_path / "wsindex.toml")
+    loaded = load_config(tmp_path / "wsindex.toml")
+    assert get_config() is loaded
+
+
+def test_reset_config_clears_slot() -> None:
+    set_config(Config.default_config("demo"))
+    reset_config()
+    with pytest.raises(RuntimeError):
+        get_config()
+
+
+def test_two_independent_configs_dont_collide() -> None:
+    # The point of dropping the __new__ hack: two Config(...) calls now
+    # produce two distinct objects. Before the refactor this failed —
+    # `a` and `b` shared the same instance and `a.name` became "b".
+    a = Config.default_config("a")
+    b = Config.default_config("b")
+    assert a is not b
+    assert a.name == "a"
+    assert b.name == "b"
