@@ -58,26 +58,20 @@ _FILENAME_MAP: dict[str, tuple[str, Kind]] = {
 class WalkedFile:
     """A file selected for indexing.
 
-    Two paths on purpose:
-
-    - `abs_path` is where the file lives right now on this machine.
-      The walker opens it (stat, sniff for NULs, read text later).
-    - `rel_path` is POSIX-style, relative to the repo root. It goes
-      into `Chunk.path` and the deterministic `chunk_id`, so it MUST
-      be stable across clones and across OSes: the same file cloned
-      into `~/proj` and `/opt/proj` produces one id, and the same
-      repo indexed on macOS and on Windows produces the same id
-      (backslashes would silently split the two). Dedup — skipping
-      already-embedded chunks — depends on this equality.
+    `rel_path` is the file's identity in the index: it enters `chunk_id`,
+    drives dedup, and is what the user sees in search results. POSIX and
+    repo-relative on purpose — the same file cloned into different roots
+    (or different OSes) must yield the same id, otherwise dedup breaks.
+    Runtime absolute paths are the caller's business: they hold `root`
+    already, so `root / rel_path` reconstructs the on-disk location when
+    needed — no reason to duplicate it in this type.
 
     Attributes:
-        abs_path: Runtime location on this machine.
-        rel_path: Stable POSIX path relative to the repo root.
+        rel_path: POSIX path relative to the repo root; the file's identity.
         lang: Detected language ("python", "rust", ...).
         kind: Broad category (CODE / DOC / CONFIG).
     """
 
-    abs_path: Path
     rel_path: str
     lang: str
     kind: Kind
@@ -115,7 +109,6 @@ def walk_repo(root: Path) -> Iterator[WalkedFile]:
                 continue
             lang, kind = found
             yield WalkedFile(
-                abs_path=abs_path,
                 rel_path=abs_path.relative_to(root).as_posix(),
                 lang=lang,
                 kind=kind,

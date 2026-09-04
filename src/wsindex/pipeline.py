@@ -76,10 +76,11 @@ class Pipeline:
                 missing_repos.append(repo.id)
                 continue
             self.store.create_dataset(dataset_name=repo.id, metric=self.metric)
-            for file in walk_repo(root=Path(repo.path)):
+            root = Path(repo.path)
+            for file in walk_repo(root=root):
                 files += 1
                 chunks = chunk_file(
-                    text=file.abs_path.read_text(encoding="utf-8", errors="replace"),
+                    text=(root / file.rel_path).read_text(encoding="utf-8", errors="replace"),
                     path=file.rel_path,
                     repo=repo.id,
                     lang=file.lang,
