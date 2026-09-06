@@ -11,6 +11,7 @@ from collections.abc import Callable
 import httpx
 import pytest
 
+from wsindex.config import Config
 from wsindex.model import Chunk, Kind
 from wsindex.store import TensorusStore
 
@@ -38,6 +39,18 @@ def make_store(handler: Callable[[httpx.Request], httpx.Response]) -> TensorusSt
         model_name=MODEL,
         transport=httpx.MockTransport(handler),
     )
+
+
+def test_base_url_and_model_default_to_the_config() -> None:
+    # Only the api key is injected by the composition root; the server URL
+    # and the model come from the workspace config, which is what keeps the
+    # remote vector space equal to the local one.
+    Config.default("demo")
+    store = TensorusStore(
+        api_key="k3y", transport=httpx.MockTransport(lambda _: httpx.Response(200))
+    )
+    assert str(store.client.base_url).rstrip("/") == Config().base_url
+    assert store.model_name == Config().model
 
 
 def test_api_key_header_travels_with_every_request() -> None:

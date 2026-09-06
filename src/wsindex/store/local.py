@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
+from wsindex.config import Config
 from wsindex.embed import Embedder
 from wsindex.model import Chunk, Hit
 from wsindex.store.base import VectorStore
@@ -33,16 +34,24 @@ class LocalStore(VectorStore):
     root: Path
     embedder: Embedder
 
-    def __init__(self, root: Path, embedder: Embedder) -> None:
+    def __init__(self, root: Path | None = None, *, embedder: Embedder) -> None:
         """Wire the store to its disk location and embedding strategy.
 
         Args:
             root: Directory that holds one subdirectory per dataset;
-                created lazily by `create_dataset`.
+                created lazily by `create_dataset`. Defaults to the index
+                dir of the current workspace (`Config().index_dir`), which
+                is what the CLI wants; tests pass a tmp path instead.
             embedder: Embeds chunk texts and queries; its `dim` defines
-                the vector space of every dataset under this root.
+                the vector space of every dataset under this root. Stays
+                explicit: which embedder to use follows from the config,
+                but *building* it is the composition root's job.
+
+        Raises:
+            ValueError: No root given and the current config was built
+                from defaults, so there is no workspace to index into.
         """
-        self.root = root
+        self.root = root if root is not None else Config().index_dir
         self.embedder = embedder
 
     def _dataset_dir(self, dataset: str) -> Path:

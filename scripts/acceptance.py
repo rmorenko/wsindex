@@ -103,13 +103,17 @@ def ensure_corpus() -> Path:
 
 
 def make_config(corpus: Path, repo_id: str) -> Config:
-    config = Config.default_config("acceptance")
-    config.add_repo(repo_id, str(corpus))
+    # `Config.default` replaces the process-wide instance, which is exactly
+    # what this script wants: it never reads a real workspace config.
+    config = Config.default("acceptance")
+    config.add_repo(repo_id, path=str(corpus))
     return config
 
 
-def run_backend(name: str, store: VectorStore, config: Config) -> BackendRun:
-    pipeline = Pipeline(config=config, store=store)
+def run_backend(name: str, store: VectorStore) -> BackendRun:
+    # Repos and metric come from the current Config, which make_config
+    # installed as the process-wide instance.
+    pipeline = Pipeline(store=store)
     started = time.perf_counter()
     report = pipeline.index()
     index_seconds = time.perf_counter() - started
@@ -172,11 +176,13 @@ def main() -> None:
     corpus = ensure_corpus()
     runs: list[BackendRun] = []
 
-    embedder = SentenceTransformerEmbedder(model_name=Config.default_config("x").model)
+    # Installs the acceptance config first, so the embedder picks its model
+    # up from it — same source the two backends read everything else from.
+    make_config(corpus, "corpus")
+    embedder = SentenceTransformerEmbedder()
     with tempfile.TemporaryDirectory() as tmp:
-        config = make_config(corpus, "corpus")
         store = LocalStore(root=Path(tmp) / ".wsindex", embedder=embedder)
-        runs.append(run_backend("local", store, config))
+        runs.append(run_backend("local", store))
 
     skipped: str | None = None
     api_key = os.environ.get("TENSORUS_API_KEY")
@@ -186,12 +192,10 @@ def main() -> None:
         skipped = "TENSORUS_API_KEY is not set"
     else:
         dataset = f"accept_{uuid.uuid4().hex[:8]}"
-        config = make_config(corpus, dataset)
-        tensorus = TensorusStore(
-            base_url=config.base_url, api_key=api_key, model_name=config.model, timeout=300.0
-        )
+        make_config(corpus, dataset)
+        tensorus = TensorusStore(api_key=api_key, timeout=300.0)
         try:
-            runs.append(run_backend("tensorus", tensorus, config))
+            runs.append(run_backend("tensorus", tensorus))
         finally:
             tensorus.client.delete(f"/datasets/{dataset}")
             tensorus.close()

@@ -4,15 +4,16 @@ Every command starts from disk state only (fresh-process model), so each
 test chdirs into its own tmp_path and drives the full loop through files.
 """
 
+import tomllib
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from wsindex.cli import app
-from wsindex.config import Provider, load_config
+from wsindex.config import Provider
 from wsindex.embed import FakeEmbedder
-from wsindex.paths import CONFIG_FILE
+from wsindex.paths import CONFIG_FILE, ENV_OVERRIDE
 from wsindex.store import LocalStore
 
 runner = CliRunner()
@@ -22,7 +23,13 @@ PY_TEXT = "def f():\n    return 1"
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Empty CWD of its own for every test + a small repo to register."""
+    """Empty CWD of its own for every test + a small repo to register.
+
+    Drops the `$WSINDEX_CONFIG` guard the autouse fixture installs: these
+    tests drive the real four-mode resolver, and tmp_path being the CWD is
+    what keeps it away from the developer's own config.
+    """
+    monkeypatch.delenv(ENV_OVERRIDE, raising=False)
     monkeypatch.chdir(tmp_path)
     repo = tmp_path / "repo1"
     (repo / "src").mkdir(parents=True)
@@ -41,8 +48,10 @@ def test_init_creates_config(workspace: Path) -> None:
 def test_init_provider_option_reaches_the_file(workspace: Path) -> None:
     # Regression: this line once got lost in a refactor, and every workspace
     # silently initialized with the real model — green tests, 100x slower.
+    # Read the file, not Config(): the option only counts once it lands there.
     runner.invoke(app, ["init", "ws", "--provider", "fake"])
-    assert load_config(workspace / CONFIG_FILE).provider == Provider.FAKE
+    data = tomllib.loads((workspace / CONFIG_FILE).read_text())
+    assert data["embeddings"]["provider"] == Provider.FAKE.value
 
 
 def test_init_refuses_to_overwrite(workspace: Path) -> None:
@@ -50,9 +59,29 @@ def test_init_refuses_to_overwrite(workspace: Path) -> None:
     assert runner.invoke(app, ["init", "other"]).exit_code == 1
 
 
-def test_command_without_config_fails(workspace: Path) -> None:
-    for cmd in (["status"], ["index"], ["search", "x"], ["add-repo", "r", "."]):
-        assert runner.invoke(app, cmd).exit_code == 1
+def test_commands_needing_a_config_file_fail_without_one(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An override pointing at a missing file makes discovery come up empty
+    # no matter what config dirs exist on the machine running the tests.
+    monkeypatch.setenv(ENV_OVERRIDE, str(workspace / "absent.toml"))
+    for cmd in (["index"], ["search", "x"], ["add-repo", "r", "."]):
+        result = runner.invoke(app, cmd)
+        assert result.exit_code == 1, cmd
+        assert "wsindex init" in result.output
+
+
+def test_status_without_config_reports_defaults(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No config is not a failure for `status`: Config falls back to the
+    # built-in defaults, the CLI warns, and status says what it is showing.
+    monkeypatch.setenv(ENV_OVERRIDE, str(workspace / "absent.toml"))
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "warning: no wsindex config found" in result.output
+    assert "built-in defaults" in result.output
+    assert not (workspace / CONFIG_FILE).exists()
 
 
 def test_add_repo_and_status(workspace: Path) -> None:
@@ -120,28 +149,28 @@ def test_tensorus_without_api_key_exits_with_hint(
     assert "TENSORUS_API_KEY" in result.output
 
 
-def test_tensorus_backend_builds_store_from_config_and_env(
+def test_tensorus_backend_gets_the_api_key_from_the_env(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The key is the only thing the composition root still hands a store:
+    # it comes from the environment and must never reach a config file.
+    # base_url and model_name the store reads from Config itself — see
+    # test_tensorus_store.py.
     built: dict[str, str] = {}
 
     class StubStore(LocalStore):
         # A LocalStore in disguise: satisfies the contract so `index` runs
         # end to end; we only capture what the composition root passed in.
-        def __init__(self, base_url: str, api_key: str, model_name: str) -> None:
+        def __init__(self, *, api_key: str) -> None:
             super().__init__(root=workspace / ".wsindex", embedder=FakeEmbedder(dim=8))
-            built.update(base_url=base_url, api_key=api_key, model_name=model_name)
+            built["api_key"] = api_key
 
     monkeypatch.setenv("TENSORUS_API_KEY", "s3cret")
     monkeypatch.setattr("wsindex.cli.TensorusStore", StubStore)
     runner.invoke(app, ["init", "ws", "--backend", "tensorus"])
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     assert runner.invoke(app, ["index"]).exit_code == 0
-    assert built == {
-        "base_url": "http://localhost:8000",
-        "api_key": "s3cret",
-        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
-    }
+    assert built == {"api_key": "s3cret"}
 
 
 def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,7 +179,7 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     class StubST(FakeEmbedder):
         # Same constructor signature as the real class; dim must match
         # config.dim (384) or the composition-root guard rejects it.
-        def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
+        def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
             super().__init__(dim=384)
             captured["model"] = model_name
             captured["cache_folder"] = cache_folder
@@ -161,7 +190,10 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])
     assert result.exit_code == 0
-    assert captured["model"] == "sentence-transformers/all-MiniLM-L6-v2"
+    # The model name is not forwarded any more — the embedder reads it from
+    # Config (test_embedder.py). The cache dir still is: it is a paths
+    # concern, shared by every workspace, and not a config field at all.
+    assert captured["model"] is None
     # cli passes an explicit models subdir under $XDG_CACHE_HOME/wsindex/
     # so the wsindex-owned cache is namespaced (see ADR-8 amendment).
     cache_folder = captured["cache_folder"]
@@ -174,7 +206,7 @@ def test_embedder_dim_mismatch_is_rejected(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class WrongDimST(FakeEmbedder):
-        def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
+        def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
             super().__init__(dim=8)
 
     monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", WrongDimST)

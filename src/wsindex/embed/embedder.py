@@ -14,6 +14,8 @@ from typing import cast
 
 import numpy as np
 
+from wsindex.config import Config
+
 
 class Embedder(ABC):
     """Turns texts into vectors of a fixed dimensionality.
@@ -91,12 +93,14 @@ class SentenceTransformerEmbedder(Embedder):
     Vectors are L2-normalized, so cosine similarity equals dot product.
     """
 
-    def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
+    def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
         """Load the model; `dim` is taken from the model itself.
 
         Args:
             model_name: sentence-transformers model id, e.g.
-                "sentence-transformers/all-MiniLM-L6-v2".
+                "sentence-transformers/all-MiniLM-L6-v2". Defaults to
+                `Config().model` — the workspace model is the only one
+                this embedder is ever asked for.
             cache_folder: Where sentence-transformers stores downloaded
                 model files. When None, the library uses its own default
                 (typically `~/.cache/huggingface/hub/`); the wsindex CLI
@@ -114,6 +118,8 @@ class SentenceTransformerEmbedder(Embedder):
             raise RuntimeError(
                 "sentence-transformers is not installed — run `uv sync --extra ml`"
             ) from exc
+        if model_name is None:
+            model_name = Config().model
         st_kwargs: dict[str, str] = {}
         if cache_folder is not None:
             cache_folder.mkdir(parents=True, exist_ok=True)

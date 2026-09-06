@@ -1,17 +1,18 @@
 """Indexing and search pipeline: repos in, Hits out.
 
 The pipeline sees only the VectorStore contract and works in plain text —
-embedding is the store's private business. Concrete backends AND the
-repo list are built once at the edge (the CLI composition root, which
-reads Config and passes only what Pipeline uses) and injected through
-the constructor. Pipeline never imports Config — that keeps it testable
-without the config module and honest about what it depends on.
+embedding is the store's private business. The concrete backend is built
+at the edge (the CLI composition root) and injected through the
+constructor; which repositories to index and with which metric comes from
+`Config()`, read at call time. One process serves one workspace, so
+threading those two values through the composition root only to hand them
+back unchanged was ceremony.
 """
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from wsindex.config import Repository
+from wsindex.config import Config
 from wsindex.ingest import chunk_file, walk_repo
 from wsindex.model import Hit
 from wsindex.store import VectorStore
@@ -38,22 +39,19 @@ class IndexReport:
 
 @dataclass(frozen=True, kw_only=True)
 class Pipeline:
-    """The wired system: repo list + store, assembled once.
+    """The wired system: a store, plus whatever the current Config says.
 
     Frozen on purpose: a Pipeline is a bundle of dependencies, not state —
-    nothing may accumulate between calls. Depends on the concrete values
-    it uses (repo list, metric), not on Config as a whole — the CLI
-    composition root does the extraction.
+    nothing may accumulate between calls. The repo list and the metric are
+    read from `Config()` inside the methods rather than captured at
+    construction, so a config that changed (a repo added, say) is picked
+    up by the next call instead of going stale in a field.
 
     Attributes:
-        repos: Repositories to index and search, in merge order.
-        metric: Similarity metric for new datasets (see `create_dataset`).
         store: Any VectorStore backend; the pipeline never looks behind
             the contract.
     """
 
-    repos: list[Repository]
-    metric: str
     store: VectorStore
 
     def index(self) -> IndexReport:
@@ -67,15 +65,16 @@ class Pipeline:
         Returns:
             Totals across all repos; see IndexReport field docs.
         """
+        config = Config()
         files = 0
         chunks_count = 0
         written = 0
         missing_repos: list[str] = []
-        for repo in self.repos:
+        for repo in config.repos:
             if not Path(repo.path).is_dir():
                 missing_repos.append(repo.id)
                 continue
-            self.store.create_dataset(dataset_name=repo.id, metric=self.metric)
+            self.store.create_dataset(dataset_name=repo.id, metric=config.metric)
             root = Path(repo.path)
             for file in walk_repo(root=root):
                 files += 1
@@ -111,7 +110,7 @@ class Pipeline:
             At most k hits across all repos, best score first.
         """
         all_hits: list[Hit] = []
-        for repo in self.repos:
+        for repo in Config().repos:
             try:
                 hits = self.store.search(dataset_name=repo.id, query=query, k=k)
             except ValueError:

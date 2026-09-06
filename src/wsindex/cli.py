@@ -13,9 +13,15 @@ two very different owners:
   config (`.wsindex/` next to a workspace config; `$XDG_DATA_HOME/
   wsindex/<name>/` for a user or system config).
 
-Each command loads the config, does one thing, saves if it mutated
-anything, and speaks human: expected failures go to stderr and exit
-with code 1, a traceback in the output is always a bug.
+Each command asks `Config()` for the workspace, does one thing, saves
+if it mutated anything, and speaks human: expected failures go to
+stderr and exit with code 1, a traceback in the output is always a bug.
+
+`Config` never refuses to exist: with no file anywhere it serves built-in
+defaults and says so through `is_default`. It stays silent about it —
+having a user to talk to is a property of this module, not of the config
+— so telling them is `_config`'s job, and refusing to go on without a
+real file is `_require_config_file`'s.
 """
 
 import os
@@ -23,13 +29,11 @@ from typing import Annotated, assert_never
 
 import typer
 
-from wsindex.config import Backend, Config, Provider, get_config, load_config, save_config
+from wsindex.config import Backend, Config, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.paths import (
     ConfigLocation,
-    find_config,
     resolve_cache_dir,
-    resolve_index_dir,
     searched_paths,
     user_config_file,
     workspace_config_path,
@@ -40,46 +44,78 @@ from wsindex.store import LocalStore, TensorusStore, VectorStore
 app = typer.Typer(no_args_is_help=True)
 
 
-def _load_config() -> ConfigLocation:
-    """Locate and load a wsindex config, or abort with exit code 1.
+@app.callback()
+def main() -> None:
+    """wsindex — semantic search across the repositories of a workspace."""
+    # One wsindex process serves exactly one command, so `Config()` loads
+    # once and stays cached on the class. The reset matters only when
+    # several commands share a process (the CliRunner in the test suite):
+    # it keeps every command starting from disk state, as it does in
+    # production.
+    Config.reset()
 
-    Side effect: `load_config` publishes the parsed Config into the module
-    singleton, so subsequent `get_config()` calls in this process return
-    it. The composition root and commands read via `get_config()` — this
-    function only returns the location, which is needed for index-dir
-    resolution and for saving mutations back to the same file.
+
+def _config() -> Config:
+    """Load the workspace config, telling the user when there is none.
+
+    `Config()` falls back to built-in defaults instead of failing, which
+    is the right call for a library but a silent one — the user asked
+    about *their* workspace and would be reading numbers about a
+    workspace that does not exist. So the message lives here, where
+    there is a terminal to write it to.
     """
-    location = find_config()
-    if location is None:
-        typer.echo("error: no wsindex config found. Checked:", err=True)
+    config = Config()
+    if config.is_default:
+        typer.echo("warning: no wsindex config found. Checked:", err=True)
         for line in searched_paths():
             typer.echo(f"  - {line}", err=True)
+        typer.echo("Showing built-in defaults instead.", err=True)
+    return config
+
+
+def _require_config_file(config: Config) -> ConfigLocation:
+    """Abort a command that cannot work without a config file on disk.
+
+    `Config()` never fails — a missing file means a warning and the
+    built-in defaults (see `wsindex.config`). That is enough for `status`,
+    which only reports what it sees, but `index` and `search` need
+    somewhere to keep the index and `add-repo` needs somewhere to save.
+    The warning already listed where wsindex looked; this only adds the
+    way out.
+    """
+    location = config.location
+    if location is None:
         typer.echo(
-            "Run `wsindex init <name>` (workspace) or `wsindex init --user <name>` (user).",
+            "error: this command needs a config file — run `wsindex init <name>` "
+            "(workspace) or `wsindex init --user <name>` (user).",
             err=True,
         )
         raise typer.Exit(code=1)
-    load_config(location.path)
     return location
 
 
-def _build_pipeline(location: ConfigLocation) -> Pipeline:
-    """Composition root: turns config strings into objects, wires Pipeline.
+def _build_pipeline() -> Pipeline:
+    """Composition root: decides *which* objects exist, not what they hold.
 
-    Reads Config from the module singleton (published by `_load_config`)
-    and passes only the fields Pipeline actually uses — Pipeline stays
-    Config-free by design.
+    Every value that lives in the config — the model, the dimensionality,
+    the server URL, the index dir, the repo list, the metric — each object
+    now reads for itself from `Config()`. What is left here is the part a
+    config cannot do: choosing a class per `backend`/`provider`, reading
+    the API key out of the environment (it must never reach a file), and
+    turning a bad combination into a human error instead of a traceback.
     """
-    config = get_config()
+    config = _config()
+    _require_config_file(config)
     store: VectorStore
     embedder: Embedder
     match config.backend:
         case Backend.LOCAL:
             match config.provider:
                 case Provider.SENTENCE_TRANSFORMERS:
+                    # cache_folder is a paths concern, not a config field:
+                    # the model cache is shared by every workspace.
                     embedder = SentenceTransformerEmbedder(
-                        model_name=config.model,
-                        cache_folder=resolve_cache_dir() / "models",
+                        cache_folder=resolve_cache_dir() / "models"
                     )
                     if embedder.dim != config.dim:
                         typer.echo(
@@ -92,7 +128,7 @@ def _build_pipeline(location: ConfigLocation) -> Pipeline:
                     embedder = FakeEmbedder(dim=config.dim)
                 case _:  # pragma: no cover - mypy proves this branch unreachable
                     assert_never(config.provider)
-            store = LocalStore(root=resolve_index_dir(location, config.name), embedder=embedder)
+            store = LocalStore(embedder=embedder)
         case Backend.TENSORUS:
             api_key = os.environ.get("TENSORUS_API_KEY")
             if not api_key:
@@ -102,12 +138,10 @@ def _build_pipeline(location: ConfigLocation) -> Pipeline:
                     err=True,
                 )
                 raise typer.Exit(code=1)
-            store = TensorusStore(
-                base_url=config.base_url, api_key=api_key, model_name=config.model
-            )
+            store = TensorusStore(api_key=api_key)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
-    return Pipeline(repos=config.repos, metric=config.metric, store=store)
+    return Pipeline(store=store)
 
 
 @app.command()
@@ -141,32 +175,29 @@ def init(
         )
         raise typer.Exit(code=1)
     target.parent.mkdir(parents=True, exist_ok=True)
-    config = Config.default_config(name)
-    config.backend = backend
-    config.provider = provider
-    save_config(config=config, path=target)
+    config = Config.default(name, backend=backend, provider=provider)
+    config.save(target)
     typer.echo(f"created {target}: workspace '{name}', backend '{backend.value}'")
 
 
 @app.command()
 def add_repo(repo_id: str, path: str) -> None:
     """Register a repository; its id becomes the dataset name."""
-    location = _load_config()
-    config = get_config()
+    config = _config()
+    location = _require_config_file(config)
     try:
         config.add_repo(repo_id, path=path)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
-    save_config(config=config, path=location.path)
+    config.save(location.path)
     typer.echo(f"added repo '{repo_id}' -> {path}")
 
 
 @app.command()
 def index() -> None:
     """Walk, chunk and embed every configured repo into the store."""
-    location = _load_config()
-    pipeline = _build_pipeline(location)
+    pipeline = _build_pipeline()
     report = pipeline.index()
     typer.echo(f"files: {report.files}  chunks: {report.chunks}  written: {report.written}")
     if report.missing_repos:
@@ -179,8 +210,7 @@ def search(
     top: Annotated[int, typer.Option("--top", "-k", help="How many hits")] = 10,
 ) -> None:
     """Search all indexed repos, best hits first."""
-    location = _load_config()
-    pipeline = _build_pipeline(location)
+    pipeline = _build_pipeline()
     hits = pipeline.search(query, k=top)
     if not hits:
         typer.echo("no results")
@@ -197,9 +227,12 @@ def search(
 @app.command()
 def status() -> None:
     """Show the workspace: name, backend, registered repos."""
-    location = _load_config()
-    config = get_config()
-    typer.echo(f"config: {location.path} ({location.mode.value})")
+    config = _config()
+    location = config.location
+    if location is None:
+        typer.echo("config: none — showing built-in defaults")
+    else:
+        typer.echo(f"config: {location.path} ({location.mode.value})")
     typer.echo(f"workspace: {config.name}")
     typer.echo(f"backend: {config.backend.value}")
     if not config.repos:

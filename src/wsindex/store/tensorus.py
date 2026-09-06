@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from wsindex.config import Config
 from wsindex.model import Chunk, Hit
 from wsindex.store.base import VectorStore
 
@@ -22,26 +23,32 @@ class TensorusStore(VectorStore):
 
     def __init__(
         self,
-        base_url: str,
-        api_key: str,
-        model_name: str,
         *,
+        api_key: str,
+        base_url: str | None = None,
+        model_name: str | None = None,
         timeout: float = 10.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         """Open an HTTP client against a Tensorus server.
 
         Args:
-            base_url: Server root, e.g. "http://localhost:8000".
             api_key: Sent as the `x-api-key` header on every request.
+                Stays explicit — it comes from the environment, not from
+                the config, and must never be written to a file.
+            base_url: Server root, e.g. "http://localhost:8000". Defaults
+                to `Config().base_url`.
             model_name: Embedding model the server uses for chunks and
                 queries; kept equal to the workspace model so local and
-                remote backends share one vector space.
+                remote backends share one vector space. Defaults to
+                `Config().model`, which is what keeps them equal.
             timeout: Per-request timeout in seconds; the first embed call
                 may need a large one (the server downloads the model).
             transport: httpx transport override — tests inject a mock one.
         """
-        self.model_name = model_name
+        config = Config()
+        base_url = base_url if base_url is not None else config.base_url
+        self.model_name = model_name if model_name is not None else config.model
         self.client = httpx.Client(
             base_url=base_url, headers={"x-api-key": api_key}, transport=transport, timeout=timeout
         )

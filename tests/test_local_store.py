@@ -9,11 +9,21 @@ from pathlib import Path
 
 import pytest
 
+from wsindex.config import Config
 from wsindex.embed import FakeEmbedder
 from wsindex.model import Chunk, Kind
 from wsindex.store import LocalStore
 
 DIM = 3
+
+
+def test_root_defaults_to_the_workspace_index_dir(tmp_path: Path) -> None:
+    # The composition root does not compute the index dir any more: the
+    # store asks the config, which derives it from where the config file is.
+    path = Config.default("demo").save(tmp_path / "wsindex.toml")
+    Config.reset()
+    Config(path)
+    assert LocalStore(embedder=FakeEmbedder(dim=DIM)).root == tmp_path / ".wsindex"
 
 
 class CountingFake(FakeEmbedder):
