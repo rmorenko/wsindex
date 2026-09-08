@@ -8,7 +8,7 @@ surfaces in the top-k paths, cross-checks the runs, and writes a markdown
 report to stdout and `acceptance_report.md`.
 
 Usage:
-    uv run python scripts/acceptance.py        # or: make acceptance
+    uv run python scripts/acceptance.py        # or: uv run poe acceptance
 
 Environment:
     WSINDEX_E2E_REPO   corpus repo (default: tensorus/tensorus)
@@ -31,12 +31,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wsindex.config import Config
-from wsindex.embed.embedder import SentenceTransformerEmbedder
+from wsindex.embed import SentenceTransformerEmbedder
 from wsindex.model import Hit
 from wsindex.pipeline import IndexReport, Pipeline
 from wsindex.rank.reranker import CrossEncoderReranker, Reranker
-from wsindex.store.base import VectorStore
-from wsindex.store.lancedb import LanceDBStore
+from wsindex.store import LanceDBStore, VectorStore
 
 REPO_URL = os.environ.get("WSINDEX_E2E_REPO", "https://github.com/tensorus/tensorus")
 K = 5
@@ -113,15 +112,17 @@ def ensure_corpus() -> Path:
 
 
 def make_config(corpus: Path, repo_id: str) -> Config:
-    config = Config.default_config("acceptance")
+    # `Config.default` replaces the process-wide instance, which is exactly
+    # what this script wants: it never reads a real workspace config.
+    config = Config.default("acceptance")
     config.add_repo(repo_id, path=str(corpus))
     return config
 
 
-def run_backend(
-    name: str, store: VectorStore, config: Config, reranker: Reranker | None = None
-) -> BackendRun:
-    pipeline = Pipeline(config=config, store=store, reranker=reranker)
+def run_backend(name: str, store: VectorStore, reranker: Reranker | None = None) -> BackendRun:
+    # Repos and metric come from the current Config, which make_config
+    # installed as the process-wide instance.
+    pipeline = Pipeline(store=store, reranker=reranker)
     started = time.perf_counter()
     report = pipeline.index()
     index_seconds = time.perf_counter() - started
@@ -197,7 +198,10 @@ def run_s3(corpus: Path, embedder: SentenceTransformerEmbedder) -> BackendRun:
     uri = f"{prefix}_{uuid.uuid4().hex[:8]}"
     store = LanceDBStore(uri=uri, embedder=embedder)
     try:
-        return run_backend("local-s3", store, make_config(corpus, "corpus"))
+        # Reinstalls the process-wide Config: the pipeline reads its repo
+        # list from `Config()` at call time, not from a constructor arg.
+        make_config(corpus, "corpus")
+        return run_backend("local-s3", store)
     finally:
         # Leave the bucket clean: a re-run must not inherit our tables.
         # list_tables() returns a response object, not a list of names.
@@ -210,17 +214,20 @@ def main() -> None:
     runs: list[BackendRun] = []
     skipped: list[str] = []
 
-    embedder = SentenceTransformerEmbedder(model_name=Config.default_config("x").model)
+    # Installs the acceptance config first, so the embedder picks its model
+    # up from it — same source the two backends read everything else from.
+    make_config(corpus, "corpus")
+    embedder = SentenceTransformerEmbedder()
     with tempfile.TemporaryDirectory() as tmp:
         config = make_config(corpus, "corpus")
         store = LanceDBStore(uri=str(Path(tmp) / ".wsindex"), embedder=embedder)
-        runs.append(run_backend("local", store, config))
+        runs.append(run_backend("local", store))
 
         # Same corpus, same store — but with the cross-encoder reranker on top.
         # The cross-check delta shows how much re-rank moved ranks.
         if os.environ.get("WSINDEX_ACCEPT_RERANK", "1") != "0":
             reranker = CrossEncoderReranker(model_name=config.rank_model)
-            runs.append(run_backend("local-reranked", store, config, reranker=reranker))
+            runs.append(run_backend("local-reranked", store, reranker=reranker))
         else:
             skipped.append("rerank run skipped: WSINDEX_ACCEPT_RERANK=0")
 

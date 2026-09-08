@@ -111,8 +111,10 @@ def run_model(label: str, model_name: str, trust_remote_code: bool, corpus: Path
 
     with tempfile.TemporaryDirectory() as tmp:
         store = LanceDBStore(uri=str(Path(tmp) / ".wsindex"), embedder=embedder)
-        config = make_config(corpus, "corpus")
-        pipeline = Pipeline(config=config, store=store)
+        # Installs the process-wide Config; the pipeline reads its repo
+        # list from `Config()` at call time, not from a constructor arg.
+        make_config(corpus, "corpus")
+        pipeline = Pipeline(store=store)
         started = time.perf_counter()
         pipeline.index()
         index_seconds = time.perf_counter() - started

@@ -9,8 +9,8 @@ from textwrap import dedent
 
 import pytest
 
+from wsindex.ingest import chunk_file
 from wsindex.ingest.ast import CODE_PARSERS, CONFIG_PARSERS
-from wsindex.ingest.chunker import chunk_file
 from wsindex.model import Kind
 
 REPO = "test"

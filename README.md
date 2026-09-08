@@ -71,20 +71,23 @@ back to plain text chunks, nothing crashes.
 
 ```bash
 uv sync --extra ml --extra ast
-make check                 # ruff + mypy --strict + pytest (fast suite)
+uv run poe check           # ruff + mypy --strict + pytest (fast suite)
 uv run pytest -m slow      # real-model smoke test (network, model download)
 ```
 
-| Target           | Description                       |
-| ---------------- | --------------------------------- |
-| `make install`   | Sync dependencies (`uv sync`)     |
-| `make lint`      | Lint with ruff                    |
-| `make fmt`       | Format with ruff                  |
-| `make typecheck` | Type-check with mypy              |
-| `make test`      | Run pytest                        |
-| `make check`     | Lint + type-check + test          |
-| `make hooks`     | Run all pre-commit hooks          |
-| `make clean`     | Remove caches and build artifacts |
+Tasks are defined in `pyproject.toml` under `[tool.poe.tasks]`; `uv run poe --help`
+lists them.
+
+| Task                   | Description                       |
+| ---------------------- | --------------------------------- |
+| `uv run poe install`   | Sync dependencies (`uv sync`)     |
+| `uv run poe lint`      | Lint with ruff                    |
+| `uv run poe fmt`       | Format with ruff                  |
+| `uv run poe typecheck` | Type-check with mypy              |
+| `uv run poe test`      | Run pytest                        |
+| `uv run poe check`     | Lint + type-check + test          |
+| `uv run poe hooks`     | Run all pre-commit hooks          |
+| `uv run poe clean`     | Remove caches and build artifacts |
 
 ## Known limitations
 

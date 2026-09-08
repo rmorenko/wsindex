@@ -4,14 +4,16 @@ Every command starts from disk state only (fresh-process model), so each
 test chdirs into its own tmp_path and drives the full loop through files.
 """
 
+import tomllib
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from wsindex.cli import WSINDEX_TOML, app
-from wsindex.config import Provider, load_config
-from wsindex.embed.embedder import FakeEmbedder
+from wsindex.cli import app
+from wsindex.config import Provider
+from wsindex.embed import FakeEmbedder
+from wsindex.paths import CONFIG_FILE, ENV_OVERRIDE
 
 runner = CliRunner()
 
@@ -20,7 +22,13 @@ PY_TEXT = "def f():\n    return 1"
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Empty CWD of its own for every test + a small repo to register."""
+    """Empty CWD of its own for every test + a small repo to register.
+
+    Drops the `$WSINDEX_CONFIG` guard the autouse fixture installs: these
+    tests drive the real four-mode resolver, and tmp_path being the CWD is
+    what keeps it away from the developer's own config.
+    """
+    monkeypatch.delenv(ENV_OVERRIDE, raising=False)
     monkeypatch.chdir(tmp_path)
     repo = tmp_path / "repo1"
     (repo / "src").mkdir(parents=True)
@@ -32,15 +40,17 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_init_creates_config(workspace: Path) -> None:
     result = runner.invoke(app, ["init", "ws"])
     assert result.exit_code == 0
-    assert (workspace / WSINDEX_TOML).exists()
+    assert (workspace / CONFIG_FILE).exists()
     assert "created" in result.output
 
 
 def test_init_provider_option_reaches_the_file(workspace: Path) -> None:
     # Regression: this line once got lost in a refactor, and every workspace
     # silently initialized with the real model — green tests, 100x slower.
+    # Read the file, not Config(): the option only counts once it lands there.
     runner.invoke(app, ["init", "ws", "--provider", "fake"])
-    assert load_config(workspace / WSINDEX_TOML).provider == Provider.FAKE
+    data = tomllib.loads((workspace / CONFIG_FILE).read_text())
+    assert data["embeddings"]["provider"] == Provider.FAKE.value
 
 
 def test_init_refuses_to_overwrite(workspace: Path) -> None:
@@ -48,9 +58,29 @@ def test_init_refuses_to_overwrite(workspace: Path) -> None:
     assert runner.invoke(app, ["init", "other"]).exit_code == 1
 
 
-def test_command_without_config_fails(workspace: Path) -> None:
-    for cmd in (["status"], ["index"], ["search", "x"], ["add-repo", "r", "."]):
-        assert runner.invoke(app, cmd).exit_code == 1
+def test_commands_needing_a_config_file_fail_without_one(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An override pointing at a missing file makes discovery come up empty
+    # no matter what config dirs exist on the machine running the tests.
+    monkeypatch.setenv(ENV_OVERRIDE, str(workspace / "absent.toml"))
+    for cmd in (["index"], ["search", "x"], ["add-repo", "r", "."]):
+        result = runner.invoke(app, cmd)
+        assert result.exit_code == 1, cmd
+        assert "wsindex init" in result.output
+
+
+def test_status_without_config_reports_defaults(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No config is not a failure for `status`: Config falls back to the
+    # built-in defaults, the CLI warns, and status says what it is showing.
+    monkeypatch.setenv(ENV_OVERRIDE, str(workspace / "absent.toml"))
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "warning: no wsindex config found" in result.output
+    assert "built-in defaults" in result.output
+    assert not (workspace / CONFIG_FILE).exists()
 
 
 def test_add_repo_and_status(workspace: Path) -> None:
@@ -109,14 +139,15 @@ def test_index_warns_about_missing_repo(workspace: Path) -> None:
 
 
 def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    created: dict[str, str] = {}
+    captured: dict[str, object] = {}
 
     class StubST(FakeEmbedder):
         # Same constructor signature as the real class; dim must match
         # config.dim (384) or the composition-root guard rejects it.
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
             super().__init__(dim=384)
-            created["model"] = model_name
+            captured["model"] = model_name
+            captured["cache_folder"] = cache_folder
 
     # Patch where the name is looked up: cli.py imported its own reference.
     monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", StubST)
@@ -124,14 +155,23 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])
     assert result.exit_code == 0
-    assert created["model"] == "sentence-transformers/all-MiniLM-L6-v2"
+    # The model name is not forwarded any more — the embedder reads it from
+    # Config (test_embedder.py). The cache dir still is: it is a paths
+    # concern, shared by every workspace, and not a config field at all.
+    assert captured["model"] is None
+    # cli passes an explicit models subdir under $XDG_CACHE_HOME/wsindex/
+    # so the wsindex-owned cache is namespaced (see ADR-8 amendment).
+    cache_folder = captured["cache_folder"]
+    assert isinstance(cache_folder, Path)
+    assert cache_folder.name == "models"
+    assert cache_folder.parent.name == "wsindex"
 
 
 def test_embedder_dim_mismatch_is_rejected(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class WrongDimST(FakeEmbedder):
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
             super().__init__(dim=8)
 
     monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", WrongDimST)

@@ -3,6 +3,10 @@
 FakeEmbedder is deterministic, so querying with the exact text of a chunk
 must return that chunk with cosine score ~1.0 — that is what makes the
 pipeline assertable end to end without a real model.
+
+Pipeline reads the repo list from `Config()`, so "add a second repo" is
+`config.add_repo(...)` rather than a new Pipeline: the object under test
+stays the same one across the whole test.
 """
 
 from collections.abc import Sequence
@@ -11,12 +15,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from wsindex.config import Backend, Config, Provider
-from wsindex.embed.embedder import FakeEmbedder
+from wsindex.config import Config
+from wsindex.embed import FakeEmbedder
 from wsindex.model import Kind, SearchFilter
 from wsindex.pipeline import _CANDIDATE_MULTIPLIER, Pipeline
 from wsindex.rank.reranker import FakeReranker
-from wsindex.store.lancedb import LanceDBStore
+from wsindex.store import LanceDBStore
 
 PY_TEXT = "def f():\n    return 1"
 
@@ -32,23 +36,24 @@ def make_repo(root: Path) -> None:
 
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
+    """The workspace under test: one repo, in memory, nothing on disk."""
     repo_dir = tmp_path / "repo1"
     repo_dir.mkdir()
     make_repo(repo_dir)
-    cfg = Config(
-        name="ws",
-        backend=Backend.LOCAL,
-        provider=Provider.SENTENCE_TRANSFORMERS,
-        model="fake",
-        dim=8,
-        metric="cosine",
-        repos=[],
-        store_uri=str(tmp_path / "db"),
-        rank_enabled=False,
-        rank_model="cross-encoder/ms-marco-MiniLM-L6-v2",
-    )
-    cfg.add_repo("repo1", path=str(repo_dir))
-    return cfg
+    config = Config.default("test")
+    config.add_repo("repo1", path=str(repo_dir))
+    return config
+
+
+def add_repo(config: Config, tmp_path: Path, name: str, *, full: bool = False) -> None:
+    """Create a second repo on disk and register it in the config."""
+    repo_dir = tmp_path / name
+    repo_dir.mkdir()
+    if full:
+        make_repo(repo_dir)
+    else:
+        (repo_dir / "app.py").write_text("print('two')\n")
+    config.add_repo(name, path=str(repo_dir))
 
 
 @pytest.fixture
@@ -63,7 +68,9 @@ def embedder() -> FakeEmbedder:
 
 @pytest.fixture
 def pipeline(config: Config, store: LanceDBStore) -> Pipeline:
-    return Pipeline(config=config, store=store)
+    # `config` is requested for its side effect: it installs the workspace
+    # as the process-wide Config, which is where Pipeline reads its repos.
+    return Pipeline(store=store)
 
 
 def test_report_counts(pipeline: Pipeline) -> None:
@@ -91,12 +98,9 @@ def test_second_run_writes_nothing(pipeline: Pipeline) -> None:
 
 
 def test_two_repos_get_isolated_datasets(
-    tmp_path: Path, pipeline: Pipeline, store: LanceDBStore
+    tmp_path: Path, config: Config, pipeline: Pipeline, store: LanceDBStore
 ) -> None:
-    repo2 = tmp_path / "repo2"
-    repo2.mkdir()
-    (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))
+    add_repo(config, tmp_path, "repo2")
     pipeline.index()
     for dataset in ("repo1", "repo2"):
         hits = store.search(dataset_name=dataset, query=PY_TEXT, k=10)
@@ -104,8 +108,10 @@ def test_two_repos_get_isolated_datasets(
         assert {h.metadata["repo"] for h in hits} == {dataset}
 
 
-def test_missing_repo_is_reported_not_fatal(tmp_path: Path, pipeline: Pipeline) -> None:
-    pipeline.config.add_repo("ghost", path=str(tmp_path / "does-not-exist"))
+def test_missing_repo_is_reported_not_fatal(
+    tmp_path: Path, config: Config, pipeline: Pipeline
+) -> None:
+    config.add_repo("ghost", path=str(tmp_path / "does-not-exist"))
     report = pipeline.index()
     assert report.missing_repos == ("ghost",)
     assert report.written == EXPECTED_CHUNKS  # repo1 still indexed
@@ -120,24 +126,20 @@ def test_search_exact_text_wins(pipeline: Pipeline) -> None:
     assert scores == sorted(scores, reverse=True)
 
 
-def test_search_merges_across_repos(tmp_path: Path, pipeline: Pipeline) -> None:
-    repo2 = tmp_path / "repo2"
-    repo2.mkdir()
-    (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))
+def test_search_merges_across_repos(tmp_path: Path, config: Config, pipeline: Pipeline) -> None:
+    add_repo(config, tmp_path, "repo2")
     pipeline.index()
     hits = pipeline.search("print('two')", k=3)
     assert hits[0].metadata["repo"] == "repo2"
     assert hits[0].score == pytest.approx(1.0)
 
 
-def test_search_tie_keeps_config_repo_order(tmp_path: Path, pipeline: Pipeline) -> None:
+def test_search_tie_keeps_config_repo_order(
+    tmp_path: Path, config: Config, pipeline: Pipeline
+) -> None:
     # The same file in both repos: two hits with identical scores; the
     # stable merge must keep the config repo order.
-    repo2 = tmp_path / "repo2"
-    repo2.mkdir()
-    make_repo(repo2)
-    pipeline.config.add_repo("repo2", path=str(repo2))
+    add_repo(config, tmp_path, "repo2", full=True)
     pipeline.index()
     hits = pipeline.search(PY_TEXT, k=2)
     assert [h.score for h in hits] == [pytest.approx(1.0)] * 2
@@ -149,12 +151,10 @@ def test_search_cuts_to_k_after_merge(pipeline: Pipeline) -> None:
     assert len(pipeline.search(PY_TEXT, k=1)) == 1
 
 
-def test_search_skips_unindexed_repo(tmp_path: Path, pipeline: Pipeline) -> None:
+def test_search_skips_unindexed_repo(tmp_path: Path, config: Config, pipeline: Pipeline) -> None:
     pipeline.index()  # repo1 indexed
-    repo2 = tmp_path / "repo2"
-    repo2.mkdir()
-    (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))  # in the config, never indexed
+    # repo2 is listed but never indexed — search must skip it silently.
+    add_repo(config, tmp_path, "repo2")
     hits = pipeline.search(PY_TEXT, k=5)
     assert hits  # no crash, repo1 still answers
     assert {h.metadata["repo"] for h in hits} == {"repo1"}
@@ -173,11 +173,11 @@ class InvertingReranker(FakeReranker):
 
 
 def test_reranker_replaces_scores_and_reorders(config: Config, store: LanceDBStore) -> None:
-    plain = Pipeline(config=config, store=store)
+    plain = Pipeline(store=store)
     plain.index()
     baseline = [h.native_id for h in plain.search(PY_TEXT, k=3)]
 
-    ranked_pipeline = Pipeline(config=config, store=store, reranker=InvertingReranker())
+    ranked_pipeline = Pipeline(store=store, reranker=InvertingReranker())
     ranked = ranked_pipeline.search(PY_TEXT, k=3)
 
     # Reranker inverts store's cosine order — top-k reverses.
@@ -190,14 +190,14 @@ def test_pipeline_fetches_k_times_multiplier_with_reranker(
     config: Config, store: LanceDBStore
 ) -> None:
     spied = MagicMock(wraps=store)
-    Pipeline(config=config, store=spied).index()
+    Pipeline(store=spied).index()
 
-    Pipeline(config=config, store=spied, reranker=FakeReranker()).search(PY_TEXT, k=3)
+    Pipeline(store=spied, reranker=FakeReranker()).search(PY_TEXT, k=3)
     _, kwargs = spied.search.call_args
     assert kwargs["k"] == 3 * _CANDIDATE_MULTIPLIER
 
     spied.reset_mock()
-    Pipeline(config=config, store=spied).search(PY_TEXT, k=3)
+    Pipeline(store=spied).search(PY_TEXT, k=3)
     _, kwargs_plain = spied.search.call_args
     assert kwargs_plain["k"] == 3
 
@@ -205,11 +205,10 @@ def test_pipeline_fetches_k_times_multiplier_with_reranker(
 # --- step 19g: repo scope + filter passthrough -----------------------------
 
 
-def test_search_with_repo_narrows_dataset_list(tmp_path: Path, pipeline: Pipeline) -> None:
-    repo2 = tmp_path / "repo2"
-    repo2.mkdir()
-    (repo2 / "app.py").write_text("print('two')\n")
-    pipeline.config.add_repo("repo2", path=str(repo2))
+def test_search_with_repo_narrows_dataset_list(
+    tmp_path: Path, config: Config, pipeline: Pipeline
+) -> None:
+    add_repo(config, tmp_path, "repo2")
     pipeline.index()
     # Query text is from repo1's main.py, but --repo repo2 must exclude it.
     hits = pipeline.search(PY_TEXT, k=5, repo="repo2")
@@ -226,26 +225,26 @@ def test_search_with_unknown_repo_raises(pipeline: Pipeline) -> None:
 def test_search_repo_only_asks_that_dataset(config: Config, store: LanceDBStore) -> None:
     # --repo is a pipeline-layer decision: the store must only be asked
     # for the scoped dataset, not for the others.
-    Pipeline(config=config, store=store).index()
+    Pipeline(store=store).index()
     spied = MagicMock(wraps=store)
-    Pipeline(config=config, store=spied).search(PY_TEXT, k=3, repo="repo1")
+    Pipeline(store=spied).search(PY_TEXT, k=3, repo="repo1")
     called_datasets = [call.kwargs["dataset_name"] for call in spied.search.call_args_list]
     assert called_datasets == ["repo1"]
 
 
 def test_search_forwards_filters_to_store(config: Config, store: LanceDBStore) -> None:
-    Pipeline(config=config, store=store).index()
+    Pipeline(store=store).index()
     spied = MagicMock(wraps=store)
     flt = SearchFilter(lang=("python",), kind=(Kind.CODE,))
-    Pipeline(config=config, store=spied).search(PY_TEXT, k=3, filters=flt)
+    Pipeline(store=spied).search(PY_TEXT, k=3, filters=flt)
     _, kwargs = spied.search.call_args
     assert kwargs["filters"] is flt  # exact object, not rebuilt
 
 
 def test_search_no_filters_forwards_none(config: Config, store: LanceDBStore) -> None:
-    Pipeline(config=config, store=store).index()
+    Pipeline(store=store).index()
     spied = MagicMock(wraps=store)
-    Pipeline(config=config, store=spied).search(PY_TEXT, k=3)
+    Pipeline(store=spied).search(PY_TEXT, k=3)
     _, kwargs = spied.search.call_args
     assert kwargs["filters"] is None
 
@@ -253,8 +252,8 @@ def test_search_no_filters_forwards_none(config: Config, store: LanceDBStore) ->
 def test_reranker_respects_filters(config: Config, store: LanceDBStore) -> None:
     # The reranker sees only the filtered candidates: with a filter that
     # excludes the exact-match chunk, the top hit cannot be from src/.
-    Pipeline(config=config, store=store).index()
-    ranked = Pipeline(config=config, store=store, reranker=FakeReranker())
+    Pipeline(store=store).index()
+    ranked = Pipeline(store=store, reranker=FakeReranker())
     hits = ranked.search(PY_TEXT, k=3, filters=SearchFilter(kind=(Kind.DOC,)))
     assert hits  # README yields doc chunks
     assert all(h.metadata["kind"] == "doc" for h in hits)

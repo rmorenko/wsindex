@@ -12,8 +12,24 @@ from pathlib import Path
 
 from wsindex.model import Kind
 
-IGNORED_DIRS: frozenset[str] = frozenset([".git", "node_modules", "target", "__pycache__", ".venv"])
+# Directory-pruning policy in one place: any hidden directory (dot-prefix)
+# is skipped, plus a short list of well-known build/artifact dirs that
+# are not hidden. Hidden ones like `.git`/`.venv`/`.pytest_cache` are
+# caught by the `startswith(".")` rule automatically — do not list them
+# here, the two rules would drift.
+IGNORED_DIRS: frozenset[str] = frozenset(["node_modules", "target", "__pycache__"])
 MAX_FILE_SIZE = 1024 * 1024
+
+
+def _skip_dir(name: str) -> bool:
+    """One place to answer 'should the walker descend into this directory?'.
+
+    Splitting the policy across an inline filter and a constant made the
+    two rules easy to drift apart (an added ignored dir with a dot would
+    duplicate the hidden-dir rule silently). Colocating them is cheap.
+    """
+    return name.startswith(".") or name in IGNORED_DIRS
+
 
 # Decision tables instead of if/elif chains: adding a format is one data row.
 # Only the ARCH §1 corpus is listed on purpose — every extra format is a
@@ -42,12 +58,20 @@ _FILENAME_MAP: dict[str, tuple[str, Kind]] = {
 class WalkedFile:
     """A file selected for indexing.
 
-    rel_path is POSIX-style and relative to the repo root: it becomes
-    Chunk.path and participates in chunk_id, so it must be identical
-    across operating systems.
+    `rel_path` is the file's identity in the index: it enters `chunk_id`,
+    drives dedup, and is what the user sees in search results. POSIX and
+    repo-relative on purpose — the same file cloned into different roots
+    (or different OSes) must yield the same id, otherwise dedup breaks.
+    Runtime absolute paths are the caller's business: they hold `root`
+    already, so `root / rel_path` reconstructs the on-disk location when
+    needed — no reason to duplicate it in this type.
+
+    Attributes:
+        rel_path: POSIX path relative to the repo root; the file's identity.
+        lang: Detected language ("python", "rust", ...).
+        kind: Broad category (CODE / DOC / CONFIG).
     """
 
-    abs_path: Path
     rel_path: str
     lang: str
     kind: Kind
@@ -72,9 +96,7 @@ def walk_repo(root: Path) -> Iterator[WalkedFile]:
         # never descended into (plain `dir_names = ...` would rebind the local
         # name and silently disable the filter). Sorting makes traversal
         # order reproducible across OSes.
-        dir_names[:] = sorted(
-            d for d in dir_names if d not in IGNORED_DIRS and not d.startswith(".")
-        )
+        dir_names[:] = sorted(d for d in dir_names if not _skip_dir(d))
         for f_name in sorted(filenames):
             abs_path = Path(dirpath) / f_name
             # Cheapest check first (name only), then stat, then open+read.
@@ -87,7 +109,6 @@ def walk_repo(root: Path) -> Iterator[WalkedFile]:
                 continue
             lang, kind = found
             yield WalkedFile(
-                abs_path=abs_path,
                 rel_path=abs_path.relative_to(root).as_posix(),
                 lang=lang,
                 kind=kind,

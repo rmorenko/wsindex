@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from wsindex.ingest.ast import configs, java, python, rust, typescript
-from wsindex.ingest.ast.core import HAS_TREE_SITTER, _ast_chunks, _load_parsers, _Span
+from wsindex.ingest.ast.core import HAS_TREE_SITTER, Span, ast_chunks, load_parsers
 from wsindex.model import Chunk, Kind
 
 __all__ = [
@@ -34,7 +34,7 @@ CODE_PARSERS: dict[str, Parser] = {}
 CONFIG_PARSERS: dict[str, Parser] = {}
 
 if HAS_TREE_SITTER:
-    CODE_PARSERS = _load_parsers(
+    CODE_PARSERS = load_parsers(
         (
             ("python", "tree_sitter_python", "language"),
             ("rust", "tree_sitter_rust", "language"),
@@ -43,7 +43,7 @@ if HAS_TREE_SITTER:
         )
     )
 
-    CONFIG_PARSERS = _load_parsers(
+    CONFIG_PARSERS = load_parsers(
         (
             ("toml", "tree_sitter_toml", "language"),
             ("yaml", "tree_sitter_yaml", "language"),
@@ -52,14 +52,14 @@ if HAS_TREE_SITTER:
         )
     )
 
-_CODE_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]] = {
+_CODE_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[Span]]] = {
     "python": python.spans,
     "rust": rust.spans,
     "typescript": typescript.spans,
     "java": java.spans,
 }
 
-_CONFIG_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[_Span]]] = {
+_CONFIG_EXTRACTORS: dict[str, Callable[[Node, list[str], list[bool]], list[Span]]] = {
     "toml": configs.toml_spans,
     "yaml": configs.yaml_spans,
     "json": configs.json_spans,
@@ -71,7 +71,7 @@ def chunk_config(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> l
     """Chunk a config file: one chunk per TOML table, top-level YAML/JSON
     key or Dockerfile stage; comments and leftovers become gap chunks.
     """
-    return _ast_chunks(
+    return ast_chunks(
         parsers=CONFIG_PARSERS,
         extractors=_CONFIG_EXTRACTORS,
         text=text,
@@ -86,7 +86,7 @@ def chunk_code_ast(text: str, *, repo: str, path: str, lang: str, kind: Kind) ->
     """Chunk a source file: one chunk per function, method or type
     definition; the module-level remainder becomes gap chunks.
     """
-    return _ast_chunks(
+    return ast_chunks(
         parsers=CODE_PARSERS,
         extractors=_CODE_EXTRACTORS,
         text=text,

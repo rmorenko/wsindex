@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.ingest.walker import MAX_FILE_SIZE, walk_repo
+from wsindex.ingest.walker import IGNORED_DIRS, MAX_FILE_SIZE, _skip_dir, walk_repo
 from wsindex.model import Kind
 
 
@@ -101,3 +101,38 @@ def test_rel_path_is_posix_relative(repo: Path) -> None:
     rel_paths = {f.rel_path for f in walk_repo(repo)}
     for rel_path in rel_paths:
         assert not rel_path.startswith("/")
+
+
+def test_skips_arbitrary_hidden_directory(tmp_path: Path) -> None:
+    # The dot-prefix rule is a policy, not a list — any hidden dir the
+    # walker has never heard of must still be pruned. This is the case
+    # the refactor targeted: previously the rule lived inline in the
+    # walk loop, far from IGNORED_DIRS; a reader saw the constant and
+    # missed the implicit second policy.
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.py").write_text("x = 1\n")
+    assert list(walk_repo(tmp_path)) == []
+
+
+def test_skip_dir_hides_dot_prefixed_names() -> None:
+    assert _skip_dir(".git")
+    assert _skip_dir(".venv")
+    assert _skip_dir(".anything-new-and-hidden")
+
+
+def test_skip_dir_hides_ignored_names() -> None:
+    for name in IGNORED_DIRS:
+        assert _skip_dir(name)
+
+
+def test_skip_dir_lets_regular_directories_through() -> None:
+    assert not _skip_dir("src")
+    assert not _skip_dir("tests")
+    assert not _skip_dir("docs")
+
+
+def test_ignored_dirs_does_not_repeat_the_hidden_rule() -> None:
+    # A dot-prefixed name in IGNORED_DIRS would be redundant: startswith(".")
+    # catches it first. Keeping the list free of dot-names is the invariant
+    # that made the refactor worth doing.
+    assert not any(name.startswith(".") for name in IGNORED_DIRS)
