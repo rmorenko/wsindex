@@ -86,6 +86,34 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
+    def chunk_ids(self, dataset_name: str, *, paths: Sequence[str] | None = None) -> set[str]:
+        """Ids of the chunks currently stored for the given source paths.
+
+        The read half of incremental indexing. `delete_chunks` can forget
+        chunks by id, but the pipeline only learns *which* ids to forget
+        by comparing what is stored against what re-chunking just
+        produced — this is that comparison's left-hand side.
+
+        `paths=None` means the whole dataset, which is what a full pass
+        needs to reconcile: every stored id the current working tree no
+        longer produces is stale, whatever file it came from.
+
+        Args:
+            dataset_name: Dataset to read from.
+            paths: Restrict to chunks whose `path` is one of these
+                (repo-relative, POSIX). None means every path. An empty
+                sequence means no path, so the result is empty — asking
+                about nothing is not the same as asking about everything.
+
+        Returns:
+            The stored chunk ids; empty when nothing matches.
+
+        Raises:
+            TypeError: `paths` is a bare string instead of a batch.
+            ValueError: The dataset was never created.
+        """
+
+    @abstractmethod
     def delete_chunks(self, dataset_name: str, *, ids: Sequence[str]) -> int:
         """Delete chunks from a dataset.
 

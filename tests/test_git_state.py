@@ -114,18 +114,28 @@ def test_head_commit_is_the_full_sha(repo: Path, git: GitRunner) -> None:
 # --- diff: first run, no-op run, and every status code -------------------
 
 
-def test_first_run_lists_every_tracked_file(repo: Path, git: GitRunner) -> None:
+def test_first_run_lists_every_project_file(repo: Path, git: GitRunner) -> None:
     diff = diff_since(repo, since=None)
     assert sorted(diff.changed) == ["README.md", "a.py"]
     assert diff.deleted == ()
     assert diff.head == git(repo, "rev-parse", "HEAD")
 
 
-def test_untracked_file_is_not_in_the_first_listing(repo: Path, git: GitRunner) -> None:
-    # ls-files reports tracked files only; this is exactly the gap that
-    # has_uncommitted_changes exists to warn the caller about.
-    (repo / "ghost.py").write_text("print('ghost')\n")
-    assert "ghost.py" not in diff_since(repo, since=None).changed
+def test_untracked_file_is_in_the_first_listing(repo: Path, git: GitRunner) -> None:
+    # A module written but not yet committed is the single most likely
+    # thing a developer wants indexed, so the full listing includes it.
+    (repo / "fresh.py").write_text("print('fresh')\n")
+    assert "fresh.py" in diff_since(repo, since=None).changed
+
+
+def test_gitignored_file_is_not_in_the_first_listing(repo: Path, git: GitRunner) -> None:
+    # The other half of --others --exclude-standard: build output and
+    # local scratch files stay out, which a filesystem walk could not do.
+    (repo / ".gitignore").write_text("secret.py\n")
+    (repo / "secret.py").write_text("print('secret')\n")
+    changed = diff_since(repo, since=None).changed
+    assert "secret.py" not in changed
+    assert ".gitignore" in changed
 
 
 def test_same_commit_yields_an_empty_diff(repo: Path, git: GitRunner) -> None:

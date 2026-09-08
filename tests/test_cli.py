@@ -2,8 +2,12 @@
 
 Every command starts from disk state only (fresh-process model), so each
 test chdirs into its own tmp_path and drives the full loop through files.
+
+`repo1` is a real git repository: `index` is incremental against git
+(Этап 8) and treats anything else as a config error.
 """
 
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -22,18 +26,32 @@ PY_TEXT = "def f():\n    return 1"
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Empty CWD of its own for every test + a small repo to register.
+    """Empty CWD of its own for every test + a small git repo to register.
 
     Drops the `$WSINDEX_CONFIG` guard the autouse fixture installs: these
     tests drive the real four-mode resolver, and tmp_path being the CWD is
     what keeps it away from the developer's own config.
     """
     monkeypatch.delenv(ENV_OVERRIDE, raising=False)
+    # A hermetic git identity: these tests must not read the developer's
+    # ~/.gitconfig, nor need one to exist.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "Test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "test@example.invalid")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "Test")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "test@example.invalid")
     monkeypatch.chdir(tmp_path)
     repo = tmp_path / "repo1"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "main.py").write_text(PY_TEXT + "\n")
     (repo / "README.md").write_text("# Title\nalpha body\n")
+    for args in (
+        ["init", "-q", "--initial-branch=main"],
+        ["add", "-A"],
+        ["commit", "-qm", "first"],
+    ):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
     return tmp_path
 
 

@@ -104,10 +104,11 @@ class RepoDiff:
     `WalkedFile.rel_path`, so step 22 can match them against stored
     chunks without translating.
 
-    Note that git reports *tracked* changes only. A file that was never
-    committed is invisible here but is walked by `walk_repo`, which is
-    why `has_uncommitted_changes` exists: the caller checks it before
-    trusting a diff.
+    A commit-to-commit diff sees *committed* changes only: an edit that
+    was never committed, or a brand new file, does not appear in one.
+    That is why `has_uncommitted_changes` exists — the caller checks it
+    before trusting a diff, and asks for the full listing instead when
+    the tree is dirty.
 
     Attributes:
         changed: Files to re-chunk (added, modified, type-changed, and
@@ -116,11 +117,18 @@ class RepoDiff:
             side of a rename).
         head: The commit the diff ends at; what to record as the new
             state once indexing of this diff succeeded.
+        full: True when `changed` is a complete listing of the project
+            rather than a delta. The caller cannot infer this from what
+            it asked for — passing a `since` that no longer resolves also
+            produces a full listing — and the difference matters: after a
+            delta only the listed paths may be reconciled, after a full
+            listing everything not listed is stale.
     """
 
     changed: tuple[str, ...]
     deleted: tuple[str, ...]
     head: str
+    full: bool
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -393,9 +401,9 @@ def _parse_name_status(out: bytes) -> tuple[list[str], list[str]]:
 def diff_since(root: Path, *, since: str | None) -> RepoDiff:
     """What changed in `root` between `since` and HEAD.
 
-    A `since` of None means "never indexed": every tracked file comes
-    back as changed, so the caller has one shape to handle instead of
-    branching on first-run versus incremental.
+    A `since` of None means "never indexed": every file git considers
+    part of the project comes back as changed, so the caller has one
+    shape to handle instead of branching on first-run versus incremental.
 
     An unknown `since` (history was rewritten, the commit was garbage
     collected, the state file outlived a re-clone) is not an error either
@@ -417,15 +425,24 @@ def diff_since(root: Path, *, since: str | None) -> RepoDiff:
     ensure_repo_root(root)
     head = _decode(_run_git(root, "rev-parse", "HEAD")).strip()
     if since is None or not _commit_exists(root, since):
-        tracked = [_decode(f) for f in _run_git(root, "ls-files", "-z").split(b"\x00") if f]
-        return RepoDiff(changed=tuple(tracked), deleted=(), head=head)
+        # `--cached --others --exclude-standard` is "every file git
+        # considers part of this project right now": tracked, plus
+        # untracked ones that .gitignore does not exclude. Not plain
+        # `ls-files`, which would miss a module the user has written but
+        # not yet committed — the single most likely thing they want
+        # indexed. Not a filesystem walk either, which would happily
+        # index build output and local scratch files that .gitignore
+        # exists to hide.
+        listed = _run_git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+        files = [_decode(f) for f in listed.split(b"\x00") if f]
+        return RepoDiff(changed=tuple(files), deleted=(), head=head, full=True)
     if since == head:
-        return RepoDiff(changed=(), deleted=(), head=head)
+        return RepoDiff(changed=(), deleted=(), head=head, full=False)
     # Two explicit revisions, not `a..b`: the range syntax means something
     # different for `git log`, and spelling both out cannot be misread.
     out = _run_git(root, "diff", "--name-status", "-z", since, head)
     changed, deleted = _parse_name_status(out)
-    return RepoDiff(changed=tuple(changed), deleted=tuple(deleted), head=head)
+    return RepoDiff(changed=tuple(changed), deleted=tuple(deleted), head=head, full=False)
 
 
 def _commit_exists(root: Path, commit: str) -> bool:

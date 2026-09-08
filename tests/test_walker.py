@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.ingest.walker import IGNORED_DIRS, MAX_FILE_SIZE, _skip_dir, walk_repo
+from wsindex.ingest.walker import (
+    IGNORED_DIRS,
+    MAX_FILE_SIZE,
+    _skip_dir,
+    inspect_file,
+    walk_repo,
+)
 from wsindex.model import Kind
 
 
@@ -136,3 +142,78 @@ def test_ignored_dirs_does_not_repeat_the_hidden_rule() -> None:
     # catches it first. Keeping the list free of dot-names is the invariant
     # that made the refactor worth doing.
     assert not any(name.startswith(".") for name in IGNORED_DIRS)
+
+
+# --- step 22: the per-file policy, asked about one named path ------------
+
+
+def test_inspect_file_matches_walk_repo_on_the_same_tree(tmp_path: Path) -> None:
+    # The invariant that keeps incremental and full runs consistent: if
+    # these two ever disagreed, whether a file is indexed would depend on
+    # which kind of run happened to touch it.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("print('a')\n")
+    (tmp_path / "notes.md").write_text("# notes\n")
+    (tmp_path / "image.png").write_bytes(b"\x89PNG\x00\x00")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "dep.py").write_text("print('dep')\n")
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "secret.py").write_text("print('s')\n")
+
+    walked = {f.rel_path for f in walk_repo(tmp_path)}
+    every_path = [
+        str(p.relative_to(tmp_path).as_posix()) for p in tmp_path.rglob("*") if p.is_file()
+    ]
+    inspected = {p for p in every_path if inspect_file(tmp_path, p) is not None}
+    assert walked == inspected == {"src/a.py", "notes.md"}
+
+
+def test_inspect_file_skips_a_pruned_directory(tmp_path: Path) -> None:
+    # git reports a tracked file under node_modules/ happily; the walker
+    # never descends there, so inspect_file must reject it by path.
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "dep.py").write_text("print('dep')\n")
+    assert inspect_file(tmp_path, "node_modules/dep.py") is None
+
+
+def test_inspect_file_skips_a_hidden_directory(tmp_path: Path) -> None:
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "mod.py").write_text("print('v')\n")
+    assert inspect_file(tmp_path, ".venv/mod.py") is None
+
+
+def test_inspect_file_on_a_missing_path_is_none(tmp_path: Path) -> None:
+    # A path can vanish between git reporting it and this call.
+    assert inspect_file(tmp_path, "gone.py") is None
+
+
+def test_inspect_file_on_a_directory_is_none(tmp_path: Path) -> None:
+    (tmp_path / "weird.py").mkdir()
+    assert inspect_file(tmp_path, "weird.py") is None
+
+
+def test_inspect_file_skips_an_oversized_file(tmp_path: Path) -> None:
+    (tmp_path / "huge.py").write_text("x" * (MAX_FILE_SIZE + 1))
+    assert inspect_file(tmp_path, "huge.py") is None
+
+
+def test_inspect_file_skips_a_binary_file(tmp_path: Path) -> None:
+    (tmp_path / "blob.py").write_bytes(b"print('a')\x00binary")
+    assert inspect_file(tmp_path, "blob.py") is None
+
+
+def test_inspect_file_skips_an_unreadable_file(tmp_path: Path) -> None:
+    target = tmp_path / "locked.py"
+    target.write_text("print('locked')\n")
+    target.chmod(0o000)
+    try:
+        assert inspect_file(tmp_path, "locked.py") is None
+    finally:
+        target.chmod(0o644)
+
+
+def test_inspect_file_returns_lang_and_kind(tmp_path: Path) -> None:
+    (tmp_path / "mod.py").write_text("print('m')\n")
+    walked = inspect_file(tmp_path, "mod.py")
+    assert walked is not None
+    assert (walked.rel_path, walked.lang, walked.kind) == ("mod.py", "python", Kind.CODE)

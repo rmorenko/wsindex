@@ -30,6 +30,7 @@ import typer
 
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
+from wsindex.ingest import NotAGitRepositoryError
 from wsindex.model import Kind, SearchFilter
 from wsindex.paths import (
     ConfigLocation,
@@ -133,7 +134,9 @@ def _build_pipeline() -> Pipeline:
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
     reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
-    return Pipeline(store=store, reranker=reranker)
+    # index_dir, not store_uri: the incremental state is a local, per-machine
+    # note about how far this host got, even when the vectors live in S3.
+    return Pipeline(store=store, state_dir=config.index_dir, reranker=reranker)
 
 
 @app.command()
@@ -191,10 +194,31 @@ def add_repo(repo_id: str, path: str) -> None:
 
 @app.command()
 def index() -> None:
-    """Walk, chunk and embed every configured repo into the store."""
+    """Chunk and embed what changed in every configured repo.
+
+    Incremental against git: a repo that has been indexed before and has
+    a clean working tree only pays for the files that changed since. A
+    dirty tree costs a full pass, because a commit-to-commit diff cannot
+    see uncommitted work.
+    """
     pipeline = _build_pipeline()
-    report = pipeline.index()
-    typer.echo(f"files: {report.files}  chunks: {report.chunks}  written: {report.written}")
+    try:
+        report = pipeline.index()
+    except NotAGitRepositoryError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(
+        f"files: {report.files}  chunks: {report.chunks}  "
+        f"written: {report.written}  deleted: {report.deleted}"
+    )
+    if report.full_repos:
+        # Told, not hidden: this is why the run took seconds instead of
+        # milliseconds, and the user is the only one who can fix it.
+        typer.echo(
+            "note: full pass for " + ", ".join(report.full_repos) + " (first index, or a dirty "
+            "working tree — commit or stash to go incremental)",
+            err=True,
+        )
     if report.missing_repos:
         typer.echo("warning: missing repos: " + ", ".join(report.missing_repos), err=True)
 

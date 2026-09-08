@@ -8,7 +8,7 @@ small binary-sniff prefix — never whole file contents.
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from wsindex.model import Kind
 
@@ -89,6 +89,54 @@ def is_binary(path: Path) -> bool:
     return b"\x00" in prefix
 
 
+def inspect_file(root: Path, rel_path: str) -> WalkedFile | None:
+    """Apply the indexing policy to one named file; None means "skip it".
+
+    The per-file half of `walk_repo`, split out so an incremental run can
+    ask about the handful of paths git reported as changed without
+    walking the tree. Both callers must agree on what counts as
+    indexable — if they drifted, a file would be indexed by a full pass
+    and ignored by an incremental one (or the reverse), and the index
+    would depend on which run happened to touch it.
+
+    Unlike `walk_repo` this receives a path from the outside, so it
+    cannot assume the file is there: a path may have been deleted between
+    git reporting it and this call, or point at a directory. Both mean
+    "nothing to index", not an error.
+
+    Args:
+        root: Repository root.
+        rel_path: POSIX path relative to `root`.
+
+    Returns:
+        The WalkedFile, or None when the policy excludes it.
+    """
+    # Directory pruning, which walk_repo does by not descending, has to be
+    # re-checked here: git happily reports a tracked file under
+    # `node_modules/`, and the two callers must select the same set.
+    parts = PurePosixPath(rel_path).parts
+    if any(_skip_dir(part) for part in parts[:-1]):
+        return None
+    abs_path = root / rel_path
+    # Cheapest check first (name only), then stat, then open+read.
+    found = detect_lang_kind(abs_path)
+    if found is None:
+        return None
+    try:
+        if not abs_path.is_file():
+            return None
+        if abs_path.stat().st_size > MAX_FILE_SIZE:
+            return None
+        if is_binary(abs_path):
+            return None
+    except OSError:
+        # Unreadable, a broken symlink, a race with a concurrent delete:
+        # all of them mean the same thing to an indexer.
+        return None
+    lang, kind = found
+    return WalkedFile(rel_path=PurePosixPath(rel_path).as_posix(), lang=lang, kind=kind)
+
+
 def walk_repo(root: Path) -> Iterator[WalkedFile]:
     """Lazily yield indexable files under root, in deterministic order."""
     for dirpath, dir_names, filenames in os.walk(root):
@@ -99,17 +147,6 @@ def walk_repo(root: Path) -> Iterator[WalkedFile]:
         dir_names[:] = sorted(d for d in dir_names if not _skip_dir(d))
         for f_name in sorted(filenames):
             abs_path = Path(dirpath) / f_name
-            # Cheapest check first (name only), then stat, then open+read.
-            found = detect_lang_kind(abs_path)
-            if found is None:
-                continue
-            if abs_path.stat().st_size > MAX_FILE_SIZE:
-                continue
-            if is_binary(abs_path):
-                continue
-            lang, kind = found
-            yield WalkedFile(
-                rel_path=abs_path.relative_to(root).as_posix(),
-                lang=lang,
-                kind=kind,
-            )
+            walked = inspect_file(root, abs_path.relative_to(root).as_posix())
+            if walked is not None:
+                yield walked

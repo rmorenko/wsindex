@@ -18,7 +18,7 @@ from wsindex.ingest.git_state import (
     has_uncommitted_changes,
     head_commit,
 )
-from wsindex.ingest.walker import WalkedFile, walk_repo
+from wsindex.ingest.walker import WalkedFile, inspect_file, walk_repo
 
 __all__ = [
     "GitCommandError",
@@ -31,5 +31,6 @@ __all__ = [
     "diff_since",
     "has_uncommitted_changes",
     "head_commit",
+    "inspect_file",
     "walk_repo",
 ]

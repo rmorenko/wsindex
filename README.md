@@ -34,8 +34,34 @@ wsindex/src/wsindex/ingest/text_chunker.py:59-104  0.567  def chunk_markdown(
 _(After this README itself gets indexed, it will match its own example
 query too — semantic search is honest like that.)_
 
-Re-running `index` embeds nothing: chunks are deduplicated by a
-deterministic id before the (expensive) embedding step.
+## Incremental indexing
+
+`index` asks git what changed since the commit it last indexed, so a
+re-run reads only those files — and deletes the chunks they no longer
+produce, which is what keeps an edited file from answering with its old
+contents forever.
+
+Measured on the acceptance corpus (149 files, 3458 chunks, real model):
+
+| Scenario           | Files read | Seconds  |
+| ------------------ | ---------- | -------- |
+| cold (first index) | 149        | 7.6      |
+| no changes         | 0          | **0.18** |
+| one changed file   | 1          | **0.24** |
+
+Two conditions put a repo on that fast path: it must be a git repository
+(a plain directory is a configuration error, not a silent fallback), and
+its working tree must be clean. A dirty tree costs a full pass, because a
+commit-to-commit diff cannot see uncommitted edits or untracked files —
+`index` says so on stderr rather than being quietly slow. The full pass
+is a reconcile, not just an append: chunks the current tree no longer
+produces are removed either way.
+
+The last indexed commit per repo lives in `state.json` inside the index
+directory. It is a cache, so a corrupt or outdated one costs a full
+re-index and nothing more; and it is per-machine even when the vectors
+sit in shared S3, since two hosts on different branches must not share
+one "last indexed commit".
 
 ## Storage
 

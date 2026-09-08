@@ -256,6 +256,45 @@ class LanceDBStore(VectorStore):
             for row in rows
         ]
 
+    def chunk_ids(self, dataset_name: str, *, paths: Sequence[str] | None = None) -> set[str]:
+        """Ids stored for the given paths, scoped to one dataset.
+
+        `IN (...)` rather than OR-joined equalities for the path list:
+        DataFusion turns an `InList` into a hash set at plan time, while
+        a chain of ORs stays a BooleanOr tree evaluated per row (the
+        step-20 probe measured 3.8x on 1000 terms).
+
+        The dataset predicate is required for the same reason as in
+        `delete_chunks`: one physical table holds every repo (ADR-7), and
+        `chunk_id = sha256(text, path)` carries no repo, so two repos
+        with the same file share an id.
+
+        Args:
+            dataset_name: Dataset to read from; must be registered.
+            paths: Repo-relative POSIX paths, or None for the whole dataset.
+
+        Returns:
+            The stored chunk ids.
+
+        Raises:
+            TypeError: `paths` is a bare string instead of a batch.
+            ValueError: The dataset was never created.
+        """
+        if isinstance(paths, str):
+            raise TypeError("expected a batch of paths, got a single str")
+        if self._get_datasets().get(dataset_name) is None:
+            raise ValueError("Dataset is not present in the store")
+        if paths is not None and not paths:
+            # Asking about no paths is not asking about all of them; the
+            # `None` default is the only way to say "everything".
+            return set()
+        predicate = f"dataset = '{_sql_quote(dataset_name)}'"
+        if paths is not None:
+            path_list = ", ".join(f"'{_sql_quote(p)}'" for p in paths)
+            predicate += f" AND path IN ({path_list})"
+        rows = self.tbl.search().where(predicate).select(["id"]).to_list()
+        return {row["id"] for row in rows}
+
     def delete_chunks(self, dataset_name: str, *, ids: Sequence[str]) -> int:
         """Delete chunks by id, scoped to one dataset.
 

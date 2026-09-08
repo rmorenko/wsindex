@@ -421,3 +421,61 @@ def test_delete_scopes_by_dataset(tmp_path: Path) -> None:
     assert store.search("ds1", query="shared", k=10) == []
     hits2 = store.search("ds2", query="shared", k=10)
     assert {h.native_id for h in hits2} == {shared.id, ds2_only.id}
+
+
+# --- step 22: chunk_ids, the read half of incremental indexing -----------
+
+
+def test_chunk_ids_returns_what_was_stored(store: LanceDBStore) -> None:
+    store.create_dataset("repo", metric="cosine")
+    chunks = [make_chunk("a", path="src/a.py"), make_chunk("b", path="src/b.py")]
+    store.add_chunks("repo", chunks=chunks)
+    assert store.chunk_ids(dataset_name="repo", paths=["src/a.py"]) == {chunks[0].id}
+
+
+def test_chunk_ids_without_paths_returns_the_whole_dataset(store: LanceDBStore) -> None:
+    store.create_dataset("repo", metric="cosine")
+    chunks = [make_chunk("a", path="src/a.py"), make_chunk("b", path="src/b.py")]
+    store.add_chunks("repo", chunks=chunks)
+    assert store.chunk_ids(dataset_name="repo") == {c.id for c in chunks}
+
+
+def test_chunk_ids_with_an_empty_path_list_returns_nothing(store: LanceDBStore) -> None:
+    # Asking about no paths is not asking about all of them — the None
+    # default is the only way to say "everything".
+    store.create_dataset("repo", metric="cosine")
+    store.add_chunks("repo", chunks=[make_chunk("a", path="src/a.py")])
+    assert store.chunk_ids(dataset_name="repo", paths=[]) == set()
+
+
+def test_chunk_ids_does_not_leak_across_datasets(store: LanceDBStore) -> None:
+    # chunk_id = sha256(text, path) carries no repo, so the same file in
+    # two datasets shares an id; without the dataset predicate this would
+    # report the other dataset's chunk as ours.
+    store.create_dataset("one", metric="cosine")
+    store.create_dataset("two", metric="cosine")
+    shared = make_chunk("same text", path="src/a.py")
+    store.add_chunks("one", chunks=[shared])
+    assert store.chunk_ids(dataset_name="two", paths=["src/a.py"]) == set()
+
+
+def test_chunk_ids_on_unknown_dataset_raises(store: LanceDBStore) -> None:
+    with pytest.raises(ValueError, match="not present"):
+        store.chunk_ids(dataset_name="nope", paths=["a.py"])
+
+
+def test_chunk_ids_rejects_a_bare_string(store: LanceDBStore) -> None:
+    # No `type: ignore` needed here, and that is the whole point: `str`
+    # IS a `Sequence[str]`, so mypy cannot catch this call. A bare string
+    # would be iterated character by character and query for one-letter
+    # paths, so the guard has to exist at runtime.
+    store.create_dataset("repo", metric="cosine")
+    with pytest.raises(TypeError, match="batch of paths"):
+        store.chunk_ids(dataset_name="repo", paths="src/a.py")
+
+
+def test_chunk_ids_escapes_quotes_in_paths(store: LanceDBStore) -> None:
+    store.create_dataset("repo", metric="cosine")
+    chunk = make_chunk("x", path="it's/a.py")
+    store.add_chunks("repo", chunks=[chunk])
+    assert store.chunk_ids(dataset_name="repo", paths=["it's/a.py"]) == {chunk.id}
