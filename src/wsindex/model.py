@@ -21,6 +21,10 @@ class Kind(StrEnum):
     CODE = "code"
     CONFIG = "config"
     DOC = "doc"
+    COMMIT = "commit"
+    """A commit message. Its own kind rather than a DOC: it is not a file,
+    it has no path on disk, and folding it into DOC would make `--kind doc`
+    mean two different things and leave no way to search without it."""
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -245,7 +245,8 @@ def index() -> None:
         raise typer.Exit(code=1) from exc
     typer.echo(
         f"files: {report.files}  chunks: {report.chunks}  "
-        f"written: {report.written}  deleted: {report.deleted}"
+        f"written: {report.written}  deleted: {report.deleted}  "
+        f"commits: {report.commits}"
     )
     if report.full_repos:
         # Told, not hidden: this is why the run took seconds instead of

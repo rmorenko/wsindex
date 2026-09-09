@@ -238,12 +238,16 @@ class InvertingReranker(FakeReranker):
 def test_reranker_replaces_scores_and_reorders(
     config: Config, store: LanceDBStore, state_dir: Path
 ) -> None:
+    # Scoped to code: since step 27 the corpus holds commit messages too,
+    # and the claim under test is about the reranker's effect on an
+    # ordering, not about which kinds happen to be in it.
+    only_code = SearchFilter(kind=(Kind.CODE,))
     plain = Pipeline(store=store, state_dir=state_dir)
     plain.index()
-    baseline = [h.native_id for h in plain.search(PY_TEXT, k=3)]
+    baseline = [h.native_id for h in plain.search(PY_TEXT, k=3, filters=only_code)]
 
     ranked_pipeline = Pipeline(store=store, state_dir=state_dir, reranker=InvertingReranker())
-    ranked = ranked_pipeline.search(PY_TEXT, k=3)
+    ranked = ranked_pipeline.search(PY_TEXT, k=3, filters=only_code)
 
     # Reranker inverts store's cosine order — top-k reverses.
     assert [h.native_id for h in ranked] == list(reversed(baseline))

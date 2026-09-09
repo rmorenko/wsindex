@@ -92,6 +92,30 @@ Declining costs speed and not correctness: `index` still runs, and a
 dirty tree simply gets the full pass. Use `--no-index` to update working
 copies without indexing.
 
+## Commits are part of the corpus
+
+A repository's reasoning is not in its code. "Why is dedup before
+embedding" is answered in a commit message and nowhere else. So `index`
+reads the history too: each message becomes a searchable chunk, and
+`git blame` becomes edges from a chunk of code to the commits that wrote
+its lines.
+
+```
+$ uv run wsindex index
+files: 85  chunks: 1154  written: 1153  deleted: 0  commits: 92
+
+$ uv run wsindex search "why is dedup done before embedding" --kind commit
+```
+
+Commits are their own `--kind`, not documents: folding them into `doc`
+would make that filter mean two things and leave no way to search the
+code without the history.
+
+Cheap, and proportional to the work. Reading a whole history takes
+milliseconds; blame costs ~28 ms per *indexed* file, which the
+incremental pass already keeps down to what changed. Untracked files have
+no history and simply get no edges.
+
 ## Drift between code and configuration
 
 While indexing, wsindex notes two things: ports that code expects to

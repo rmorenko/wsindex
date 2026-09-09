@@ -66,6 +66,12 @@ class LinkKind(StrEnum):
     DECLARES = "declares"
     """A configuration publishes a value code may name."""
 
+    BLAMED_BY = "blamed_by"
+    """A chunk's lines were last written by a commit. Unlike the pair
+    above this one resolves at write time — `dst_chunk_id` names the
+    commit's own chunk — because both ends are produced by the same
+    indexing run and there is nothing to wait for."""
+
 
 @dataclass(frozen=True, kw_only=True)
 class Link:

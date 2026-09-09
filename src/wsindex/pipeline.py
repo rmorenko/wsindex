@@ -31,6 +31,7 @@ from wsindex.ingest import (
     has_uncommitted_changes,
     inspect_file,
 )
+from wsindex.ingest.commits import blame_links, commit_chunks, read_commits
 from wsindex.ingest.link_extract import links_for
 from wsindex.links import LinkStore
 from wsindex.model import Chunk, Hit, SearchFilter
@@ -48,6 +49,7 @@ class _Totals:
     chunks: int
     written: int
     deleted: int
+    commits: int
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -64,6 +66,10 @@ class IndexReport:
         deleted: How many stored chunks were removed as stale — chunks
             of deleted files, and chunks a changed file no longer
             produces.
+        commits: How many commit messages were newly indexed. Counted
+            apart from `chunks` on purpose: folding them in would make
+            `files: 2  chunks: 4` fail to add up for the reader, since
+            two of those chunks came from no file at all.
         missing_repos: Ids of configured repos whose directory does not
             exist; they were skipped, not failed on.
         full_repos: Ids of repos that could not go incremental this run
@@ -75,6 +81,7 @@ class IndexReport:
     chunks: int
     written: int
     deleted: int
+    commits: int
     missing_repos: tuple[str, ...]
     full_repos: tuple[str, ...]
 
@@ -147,7 +154,7 @@ class Pipeline:
         """
         config = Config()
         state = IndexState.load(self.state_dir)
-        files = chunks_count = written = deleted = 0
+        files = chunks_count = written = deleted = commits = 0
         missing_repos: list[str] = []
         full_repos: list[str] = []
         for repo in config.repos:
@@ -165,6 +172,7 @@ class Pipeline:
                 chunks_count += totals.chunks
                 written += totals.written
                 deleted += totals.deleted
+                commits += totals.commits
             # Nothing moved and nothing to reconcile: no read, no chunking,
             # no store round trip. That is the whole point of the step.
             if not dirty:
@@ -181,6 +189,7 @@ class Pipeline:
             chunks=chunks_count,
             written=written,
             deleted=deleted,
+            commits=commits,
             missing_repos=tuple(missing_repos),
             full_repos=tuple(full_repos),
         )
@@ -246,6 +255,17 @@ class Pipeline:
         scope = None if diff.full else [*(w.rel_path for w in indexable), *forget]
         stored = self.store.chunk_ids(dataset_name=repo.id, paths=scope)
 
+        # Commits first: their chunk ids are what blame edges point at,
+        # and `git log` over a whole history costs milliseconds.
+        commits = read_commits(root, since=diff.since)
+        messages = commit_chunks(commits, repo=repo.id)
+        # Keyed off the chunk's symbol rather than zipping: `commit_chunks`
+        # drops commits with an empty message, so the two lists are not
+        # guaranteed to line up.
+        by_short = {m.symbol: m.id for m in messages}
+        commit_ids = {c.sha: by_short[c.short] for c in commits if c.short in by_short}
+        written_commits = self.store.add_chunks(dataset_name=repo.id, chunks=messages)
+
         files = chunks_count = written = 0
         fresh_ids: set[str] = set()
         for walked in indexable:
@@ -262,6 +282,20 @@ class Pipeline:
             written += self.store.add_chunks(dataset_name=repo.id, chunks=chunks)
             if self.links is not None:
                 self.links.add_links(links_for(chunks), repo=repo.id, path=walked.rel_path)
+                # Blame is the expensive half of step 27 (~28 ms/file), so
+                # it is paid per *indexed* file — which the incremental
+                # path already keeps down to what changed.
+                self.links.add_links(
+                    blame_links(root, rel_path=walked.rel_path, chunks=chunks, known=commit_ids),
+                    repo=repo.id,
+                    path=walked.rel_path,
+                )
+
+        # Commit chunks are never stale: a commit is immutable, so the
+        # chunk it produced can only ever be re-derived identically. They
+        # must still be counted as fresh, or a full pass — whose `stored`
+        # covers the whole dataset — would reap every one of them.
+        fresh_ids.update(m.id for m in messages)
 
         stale = sorted(stored - fresh_ids)
         deleted = self.store.delete_chunks(dataset_name=repo.id, ids=stale) if stale else 0
@@ -271,7 +305,13 @@ class Pipeline:
             # real dangling link, so the drift report would fill with
             # references from code that no longer exists (ADR-9).
             self.links.delete_by_source(stale)
-        return _Totals(files=files, chunks=chunks_count, written=written, deleted=deleted)
+        return _Totals(
+            files=files,
+            chunks=chunks_count,
+            written=written,
+            deleted=deleted,
+            commits=written_commits,
+        )
 
     def search(
         self,

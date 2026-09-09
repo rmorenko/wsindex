@@ -38,7 +38,11 @@ def chunk_file(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> lis
         The file's chunks, in file order.
     """
     match kind:
-        case Kind.DOC:
+        case Kind.DOC | Kind.COMMIT:
+            # COMMIT never reaches here in practice — `ingest.commits`
+            # builds those chunks itself, because a commit message is one
+            # unit and windowing it would scatter the reasoning `why`
+            # exists to surface. Routed anyway so the match stays total.
             return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
         case Kind.CODE | Kind.CONFIG:
             spec = REGISTRY.get(lang)

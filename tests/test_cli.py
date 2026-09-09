@@ -440,4 +440,8 @@ def test_sync_still_indexes_after_a_skip_but_exits_nonzero(workspace: Path, orig
     assert result.exit_code == 1
     assert "uncommitted changes" in result.output
     assert "files:" in result.output  # the index run still happened
-    assert "scratch" in runner.invoke(app, ["search", "scratch", "-k", "1"]).output
+    # `--lang python`, not top-1: since step 27 the corpus holds commit
+    # messages too, and with the fake embedder a commit can outscore the
+    # file being looked for. The claim is that the file was indexed.
+    found = runner.invoke(app, ["search", "scratch", "-k", "5", "--lang", "python"])
+    assert "scratch" in found.output

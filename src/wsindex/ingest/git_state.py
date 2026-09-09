@@ -115,6 +115,10 @@ class RepoDiff:
             the destination side of a rename or copy).
         deleted: Files whose chunks must go (deleted, and the source
             side of a rename).
+        since: The commit the diff began at, or None when it is a full
+            listing. The counterpart to `head`: a caller that wants the
+            commits gained in this range needs both ends, and only
+            `diff_since` knows which `since` was actually usable.
         head: The commit the diff ends at; what to record as the new
             state once indexing of this diff succeeded.
         full: True when `changed` is a complete listing of the project
@@ -127,6 +131,7 @@ class RepoDiff:
 
     changed: tuple[str, ...]
     deleted: tuple[str, ...]
+    since: str | None
     head: str
     full: bool
 
@@ -440,14 +445,16 @@ def diff_since(root: Path, *, since: str | None) -> RepoDiff:
         # exists to hide.
         listed = run_git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
         files = [decode_path(f) for f in listed.split(b"\x00") if f]
-        return RepoDiff(changed=tuple(files), deleted=(), head=head, full=True)
+        return RepoDiff(changed=tuple(files), deleted=(), since=None, head=head, full=True)
     if since == head:
-        return RepoDiff(changed=(), deleted=(), head=head, full=False)
+        return RepoDiff(changed=(), deleted=(), since=since, head=head, full=False)
     # Two explicit revisions, not `a..b`: the range syntax means something
     # different for `git log`, and spelling both out cannot be misread.
     out = run_git(root, "diff", "--name-status", "-z", since, head)
     changed, deleted = _parse_name_status(out)
-    return RepoDiff(changed=tuple(changed), deleted=tuple(deleted), head=head, full=False)
+    return RepoDiff(
+        changed=tuple(changed), deleted=tuple(deleted), since=since, head=head, full=False
+    )
 
 
 def _commit_exists(root: Path, commit: str) -> bool:
