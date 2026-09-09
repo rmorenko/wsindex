@@ -336,6 +336,36 @@ class LanceDBStore(VectorStore):
         # `warn_unused_ignores` when the stubs catch up.
         return cast("int", result.num_deleted_rows)  # type: ignore[attr-defined]
 
+    def chunk_text(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, str]:
+        """Text of the given chunks, scoped to one dataset.
+
+        Same `IN (...)` and same dataset predicate as `chunk_ids`, for
+        the same two reasons: DataFusion turns an `InList` into a hash
+        set at plan time, and one physical table holds every repo, so a
+        bare `id IN (...)` would read across datasets (ADR-7).
+
+        Args:
+            dataset_name: Dataset to read from; must be registered.
+            ids: Chunk ids to fetch.
+
+        Returns:
+            Chunk id -> text, for the ids that were found.
+
+        Raises:
+            TypeError: `ids` is a bare string instead of a batch.
+            ValueError: The dataset was never created.
+        """
+        if isinstance(ids, str):
+            raise TypeError("expected a batch of ids, got a single str")
+        if self._get_datasets().get(dataset_name) is None:
+            raise ValueError("Dataset is not present in the store")
+        if not ids:
+            return {}
+        id_list = ", ".join(f"'{_sql_quote(x)}'" for x in ids)
+        predicate = f"dataset = '{_sql_quote(dataset_name)}' AND id IN ({id_list})"
+        rows = self.tbl.search().where(predicate).select(["id", "text"]).to_list()
+        return {row["id"]: row["text"] for row in rows}
+
     def _tables(self) -> tuple[Table, Table]:
         """Every physical table this store owns; both need housekeeping."""
         return (self.tbl, self.dataset_table)

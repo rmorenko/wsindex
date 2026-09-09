@@ -92,6 +92,39 @@ Declining costs speed and not correctness: `index` still runs, and a
 dirty tree simply gets the full pass. Use `--no-index` to update working
 copies without indexing.
 
+## Asking why, and who
+
+Two commands read what indexing recorded.
+
+`why` walks from a definition to the commits that wrote its lines, and
+prints their reasoning — which is usually the only place it exists:
+
+```
+$ uv run wsindex why add_chunks
+LanceDBStore.add_chunks  self/src/wsindex/store/lancedb.py:171-209
+  written by:
+    3964bb7  feat: LanceDBStore — single-table vector store per ADR-7
+        dedup before embedding (batch-internal included), one Lance commit
+        per add_chunks call.
+        see PROJ-412 -> https://jira.example.com/browse/PROJ-412
+```
+
+`refs` is the inverted index over links: ask about a port, a ticket, a
+commit or a url, and it answers who names it.
+
+```
+$ uv run wsindex refs 8080
+8080
+  read by:
+    svc/client.py:1
+  (nothing declares it — code and configuration have drifted)
+```
+
+Not "who calls this function": code-to-code edges are deferred until they
+can be shown to pay for their noise — 11% of resolvable call names in
+this repository are ambiguous — so a function name has no callers to
+list yet. See [ADR-9](docs/adr/adr-009-links-as-entities.md).
+
 ## Commits are part of the corpus
 
 A repository's reasoning is not in its code. "Why is dedup before

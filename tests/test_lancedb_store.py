@@ -586,3 +586,45 @@ def test_on_disk_bytes_is_none_when_the_directory_is_gone(
     store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
     monkeypatch.setattr(type(store.db), "uri", property(lambda self: str(tmp_path / "vanished")))
     assert store._on_disk_bytes() is None
+
+
+def test_chunk_text_fetches_by_id(store: LanceDBStore) -> None:
+    store.create_dataset("repo", metric="cosine")
+    chunk = make_chunk("the message body", path="commits/x")
+    store.add_chunks("repo", chunks=[chunk])
+    assert store.chunk_text("repo", ids=[chunk.id]) == {chunk.id: "the message body"}
+
+
+def test_chunk_text_omits_ids_that_are_not_stored(store: LanceDBStore) -> None:
+    # Asking about a chunk a later run re-indexed away is normal, not an
+    # error — `why` follows a blame edge that may point at one.
+    store.create_dataset("repo", metric="cosine")
+    assert store.chunk_text("repo", ids=["never-stored"]) == {}
+
+
+def test_chunk_text_with_no_ids_reads_nothing(store: LanceDBStore) -> None:
+    store.create_dataset("repo", metric="cosine")
+    assert store.chunk_text("repo", ids=[]) == {}
+
+
+def test_chunk_text_rejects_a_bare_string(store: LanceDBStore) -> None:
+    # `str` IS a `Sequence[str]`, so the type system cannot catch this:
+    # a bare id would be iterated character by character.
+    store.create_dataset("repo", metric="cosine")
+    with pytest.raises(TypeError, match="batch of ids"):
+        store.chunk_text("repo", ids="some-id")
+
+
+def test_chunk_text_on_unknown_dataset_raises(store: LanceDBStore) -> None:
+    with pytest.raises(ValueError, match="not present"):
+        store.chunk_text("nope", ids=["x"])
+
+
+def test_chunk_text_does_not_read_across_datasets(store: LanceDBStore) -> None:
+    # One physical table holds every repo (ADR-7) and chunk ids carry no
+    # repo, so the dataset predicate is what keeps them apart.
+    store.create_dataset("one", metric="cosine")
+    store.create_dataset("two", metric="cosine")
+    shared = make_chunk("same text", path="a.py")
+    store.add_chunks("one", chunks=[shared])
+    assert store.chunk_text("two", ids=[shared.id]) == {}

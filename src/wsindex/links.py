@@ -51,6 +51,20 @@ from types import TracebackType
 LINKS_FILE = "links.db"
 """Name of the database inside the index directory."""
 
+_COLUMNS = {
+    "src_chunk_id": "TEXT NOT NULL",
+    "kind": "TEXT NOT NULL",
+    "name": "TEXT NOT NULL",
+    "line": "INTEGER NOT NULL",
+    "dst_chunk_id": "TEXT",
+    "url": "TEXT",
+    "repo": "TEXT NOT NULL",
+    "path": "TEXT NOT NULL",
+}
+"""The table's columns, in order, so `_migrate` can tell what an older
+database is missing. Kept beside the CREATE rather than parsed out of it:
+two spellings of the same truth, but the alternative is parsing SQL."""
+
 
 class LinkKind(StrEnum):
     """What one link asserts.
@@ -108,20 +122,31 @@ class Link:
 
 
 @dataclass(frozen=True, kw_only=True)
-class Drift:
-    """A `READS_KEY` that no `DECLARES` answers — code and config apart.
+class Edge:
+    """A stored link, with the file it sits in — what a reader needs.
+
+    `Link` is what an extractor produces: anchored to a chunk id, which
+    is enough to store but not enough to show anyone. An `Edge` is the
+    same thing read back with the repo and path joined on, so a command
+    can point at a place.
 
     Attributes:
-        name: What the code named and nothing declares.
-        chunk_id: Chunk the reference sits in.
-        line: Where in the file.
+        kind: What the link asserts.
+        name: The thing named — a port, a ticket, a commit sha.
+        line: 1-based line in the file.
+        chunk_id: Chunk the link sits in.
+        dst_chunk_id: What it resolves to inside the index, if anything.
+        url: Where it points outside the repository, if anywhere.
         repo: Repo the chunk belongs to.
         path: Repo-relative path of the file.
     """
 
+    kind: LinkKind
     name: str
-    chunk_id: str
     line: int
+    chunk_id: str
+    dst_chunk_id: str | None
+    url: str | None
     repo: str
     path: str
 
@@ -164,7 +189,28 @@ class LinkStore:
             CREATE INDEX IF NOT EXISTS links_by_src ON links (src_chunk_id);
             """
         )
+        self._migrate()
         self._db.commit()
+
+    def _migrate(self) -> None:
+        """Add columns a database from an older wsindex is missing.
+
+        `CREATE TABLE IF NOT EXISTS` does nothing to a table that already
+        exists, so a `links.db` written before a column was introduced
+        keeps its old shape and every read fails with `no such column`.
+        Found the hard way: `url` arrived in step 27b and broke `refs` on
+        any index built before it.
+
+        Additive only, and that is enough by construction: a link is
+        derived data, so a column that changes meaning is answered by
+        re-indexing, not by rewriting rows. Old rows get NULL for the new
+        column, which is the truth — they were written when there was
+        nothing to put there.
+        """
+        present = {row[1] for row in self._db.execute("PRAGMA table_info(links)")}
+        for column, ddl in _COLUMNS.items():
+            if column not in present:
+                self._db.execute(f"ALTER TABLE links ADD COLUMN {column} {ddl}")
 
     def __enter__(self) -> LinkStore:
         return self
@@ -247,7 +293,68 @@ class LinkStore:
         row = self._db.execute("SELECT COUNT(*) FROM links").fetchone()
         return int(row[0])
 
-    def dangling(self) -> list[Drift]:
+    def _rows(self, where: str, params: tuple[object, ...]) -> list[Edge]:
+        """Read edges matching a WHERE clause, ordered for reading."""
+        rows = self._db.execute(
+            "SELECT kind, name, line, src_chunk_id, dst_chunk_id, url, repo, path "
+            f"FROM links WHERE {where} ORDER BY repo, path, line",
+            params,
+        ).fetchall()
+        return [
+            Edge(
+                kind=LinkKind(kind),
+                name=name,
+                line=line,
+                chunk_id=src,
+                dst_chunk_id=dst,
+                url=url,
+                repo=repo,
+                path=path,
+            )
+            for kind, name, line, src, dst, url, repo, path in rows
+        ]
+
+    def by_name(self, name: str) -> list[Edge]:
+        """Every link that names this thing — the inverted index.
+
+        The query the whole store exists to answer: given a port, a
+        ticket or a sha, who mentions it. Equality on an indexed column,
+        which is why links live in SQLite and not beside the vectors.
+
+        Args:
+            name: Exactly as it was recorded — `8080`, `PROJ-412`,
+                `3964bb7`.
+
+        Returns:
+            Every edge with that name, ordered by file then line.
+        """
+        return self._rows("name = ?", (name,))
+
+    def out_of(self, chunk_ids: Sequence[str], *, kind: LinkKind | None = None) -> list[Edge]:
+        """Links found inside the given chunks.
+
+        The other direction from `by_name`: not "who names this" but
+        "what does this point at". `why` walks it to get from a
+        definition to the commits that wrote it.
+
+        Args:
+            chunk_ids: Chunks to read links out of.
+            kind: Restrict to one kind, or None for all.
+
+        Returns:
+            The edges, ordered by file then line.
+        """
+        if not chunk_ids:
+            return []
+        placeholders = ", ".join("?" for _ in chunk_ids)
+        where = f"src_chunk_id IN ({placeholders})"
+        params: tuple[object, ...] = tuple(chunk_ids)
+        if kind is not None:
+            where += " AND kind = ?"
+            params += (kind.value,)
+        return self._rows(where, params)
+
+    def dangling(self) -> list[Edge]:
         """Every `READS_KEY` that no `DECLARES` answers.
 
         The drift detector, and the reason both sides are stored: this is
@@ -259,20 +366,8 @@ class LinkStore:
             One entry per unanswered reference, ordered by file then line
             so a report reads top to bottom.
         """
-        rows = self._db.execute(
-            """
-            SELECT r.name, r.src_chunk_id, r.line, r.repo, r.path
-              FROM links AS r
-             WHERE r.kind = ?
-               AND NOT EXISTS (
-                     SELECT 1 FROM links AS d
-                      WHERE d.kind = ? AND d.name = r.name
-                   )
-             ORDER BY r.repo, r.path, r.line
-            """,
+        return self._rows(
+            "kind = ? AND NOT EXISTS ("
+            "  SELECT 1 FROM links AS d WHERE d.kind = ? AND d.name = links.name)",
             (LinkKind.READS_KEY.value, LinkKind.DECLARES.value),
-        ).fetchall()
-        return [
-            Drift(name=name, chunk_id=chunk_id, line=line, repo=repo, path=path)
-            for name, chunk_id, line, repo, path in rows
-        ]
+        )

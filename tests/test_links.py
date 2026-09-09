@@ -317,3 +317,70 @@ def test_a_port_key_in_a_config_is_a_declaration() -> None:
         text="server:\n  port: 8000\n",
     )
     assert [(link.kind, link.name) for link in links_for([cfg])] == [(LinkKind.DECLARES, "8000")]
+
+
+def test_a_database_from_before_a_column_existed_still_reads(tmp_path: Path) -> None:
+    # `CREATE TABLE IF NOT EXISTS` does nothing to a table that already
+    # exists, so a links.db written before `url` arrived kept its old
+    # shape and every read failed with `no such column`. Found the hard
+    # way, on an index built one step earlier.
+    import sqlite3
+
+    (tmp_path / "idx").mkdir()
+    old = sqlite3.connect(tmp_path / "idx" / "links.db")
+    old.execute(
+        "CREATE TABLE links (src_chunk_id TEXT NOT NULL, kind TEXT NOT NULL, "
+        "name TEXT NOT NULL, line INTEGER NOT NULL, dst_chunk_id TEXT, "
+        "repo TEXT NOT NULL, path TEXT NOT NULL, "
+        "PRIMARY KEY (src_chunk_id, kind, name, line))"
+    )
+    old.execute("INSERT INTO links VALUES ('c1', 'reads_key', '8080', 1, NULL, 'r', 'a.py')")
+    old.commit()
+    old.close()
+
+    with LinkStore(tmp_path / "idx") as store:
+        edges = store.by_name("8080")
+        assert [(edge.name, edge.url) for edge in edges] == [("8080", None)]
+        # And it still accepts rows that use the new column.
+        store.add_links(
+            [
+                Link(
+                    src_chunk_id="c2",
+                    kind=LinkKind.REFERENCES,
+                    name="#7",
+                    line=2,
+                    url="https://x.invalid/7",
+                )
+            ],
+            repo="r",
+            path="b.md",
+        )
+        assert store.by_name("#7")[0].url == "https://x.invalid/7"
+
+
+def test_by_name_is_the_inverted_index(links: LinkStore) -> None:
+    links.add_links([link("code", LinkKind.READS_KEY, "8000")], repo="r", path="a.py")
+    links.add_links([link("cfg", LinkKind.DECLARES, "8000")], repo="r", path="compose.yml")
+    links.add_links([link("other", LinkKind.READS_KEY, "9999")], repo="r", path="b.py")
+
+    found = links.by_name("8000")
+    assert {edge.kind for edge in found} == {LinkKind.READS_KEY, LinkKind.DECLARES}
+    assert {edge.path for edge in found} == {"a.py", "compose.yml"}
+
+
+def test_by_name_on_an_unknown_name_is_empty(links: LinkStore) -> None:
+    assert links.by_name("nothing") == []
+
+
+def test_out_of_reads_links_leaving_a_chunk(links: LinkStore) -> None:
+    links.add_links(
+        [link("c1", LinkKind.READS_KEY, "8000"), link("c1", LinkKind.BLAMED_BY, "abc1234", line=2)],
+        repo="r",
+        path="a.py",
+    )
+    assert len(links.out_of(["c1"])) == 2
+    assert [e.name for e in links.out_of(["c1"], kind=LinkKind.BLAMED_BY)] == ["abc1234"]
+
+
+def test_out_of_nothing_is_empty(links: LinkStore) -> None:
+    assert links.out_of([]) == []

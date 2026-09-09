@@ -169,6 +169,30 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
+    def chunk_text(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, str]:
+        """The stored text of the given chunks, by id.
+
+        The third read the contract needs, after `search` (find by
+        meaning) and `chunk_ids` (what is stored for these paths): fetch
+        exactly these, because something else already decided which. A
+        blame edge names a commit's chunk id, and `wsindex why` has to
+        turn that into the message a person reads.
+
+        Args:
+            dataset_name: Dataset to read from.
+            ids: Chunk ids to fetch. Ids that are not stored are simply
+                absent from the result — asking about a chunk that was
+                re-indexed away is normal, not an error.
+
+        Returns:
+            Chunk id -> text, for the ids that were found.
+
+        Raises:
+            TypeError: `ids` is a bare string instead of a batch.
+            ValueError: The dataset was never created.
+        """
+
+    @abstractmethod
     def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
         """Reclaim the disk that deleted and rewritten chunks still occupy.
 
