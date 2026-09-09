@@ -32,7 +32,7 @@ from wsindex.ingest import (
     has_uncommitted_changes,
     inspect_file,
 )
-from wsindex.ingest.commits import blame_links, commit_chunks, read_commits
+from wsindex.ingest.commits import blame_links, blame_map, commit_chunks, read_commits
 from wsindex.ingest.link_extract import links_for
 from wsindex.links import LinkStore
 from wsindex.model import Chunk, Hit, SearchFilter, SourceFile
@@ -409,6 +409,12 @@ class Pipeline:
         """
         totals = _Written()
         batch: list[Chunk] = []
+        # Every blame at once rather than one per file in turn: they are
+        # independent processes, and waiting for them one after another
+        # was 83% of an indexing run.
+        blames = (
+            blame_map(root, [entry.rel_path for entry in walked]) if self.links is not None else {}
+        )
         for entry in walked:
             source = SourceFile(repo=repo.id, path=entry.rel_path, lang=entry.lang, kind=entry.kind)
             text = (root / entry.rel_path).read_text(encoding="utf-8", errors="replace")
@@ -419,10 +425,10 @@ class Pipeline:
             # when its chunks happen to reach the store.
             self._link(
                 chunks,
-                root=root,
                 source=source,
                 history=history,
                 references=config.references,
+                by_line=blames.get(entry.rel_path, {}),
             )
             batch += chunks
             if len(batch) >= _WRITE_BATCH:
@@ -436,10 +442,10 @@ class Pipeline:
         self,
         chunks: list[Chunk],
         *,
-        root: Path,
         source: SourceFile,
         history: _History,
         references: dict[str, str],
+        by_line: dict[int, str],
     ) -> None:
         """Record what one file's chunks name, and who wrote their lines.
 
@@ -452,11 +458,10 @@ class Pipeline:
         self.links.add_links(
             links_for(chunks, references=references), repo=source.repo, path=source.path
         )
-        # Blame is the expensive half (~28 ms/file), so it is paid per
-        # *indexed* file — which the incremental path already keeps down
-        # to what changed.
+        # Blame is the expensive half, so it is paid per *indexed* file —
+        # which the incremental path already keeps down to what changed.
         self.links.add_links(
-            blame_links(root, rel_path=source.path, chunks=chunks, known=history.by_sha),
+            blame_links(chunks=chunks, known=history.by_sha, by_line=by_line),
             repo=source.repo,
             path=source.path,
         )

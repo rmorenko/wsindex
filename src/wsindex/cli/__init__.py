@@ -54,4 +54,25 @@ for command in (
 ):
     app.command()(command)
 
-__all__ = ["app", "build_pipeline", "build_store"]
+
+def run() -> None:
+    """Console-script entry point: a library error is a message, not a trace.
+
+    Commands catch what they expect — an unknown repo id, a directory
+    that is not a checkout. What is left are the failures the engine
+    raises from wherever it happens to notice them: a missing optional
+    dependency, a model whose vectors are the wrong width. Those used to
+    reach the terminal as a traceback, which this CLI has always called a
+    bug in itself.
+
+    `typer.Exit` and `click`'s own exits are `SystemExit`, so they pass
+    through untouched.
+    """
+    try:
+        app()
+    except RuntimeError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise SystemExit(1) from exc
+
+
+__all__ = ["app", "build_pipeline", "build_store", "run"]

@@ -19,7 +19,13 @@ import pytest
 
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
-from wsindex.ingest.commits import COMMIT_LANG, blame_links, commit_chunks, read_commits
+from wsindex.ingest.commits import (
+    COMMIT_LANG,
+    blame_links,
+    blame_map,
+    commit_chunks,
+    read_commits,
+)
 from wsindex.links import LinkKind, LinkStore
 from wsindex.model import Kind, SearchFilter, SourceFile
 from wsindex.pipeline import Pipeline
@@ -157,7 +163,8 @@ def test_blame_links_a_chunk_to_the_commit_that_wrote_it(repo: Path) -> None:
         SourceFile(repo="r", path="a.py", lang="python", kind=Kind.CODE),
     )
 
-    links = blame_links(repo, rel_path="a.py", chunks=chunks, known=known)
+    blamed = blame_map(repo, ["a.py"])
+    links = blame_links(chunks=chunks, known=known, by_line=blamed["a.py"])
     assert links
     assert {link.kind for link in links} == {LinkKind.BLAMED_BY}
     assert links[0].name == commits[0].short
@@ -178,7 +185,9 @@ def test_an_untracked_file_yields_no_blame_and_no_crash(repo: Path) -> None:
         "def g():\n    return 2\n",
         SourceFile(repo="r", path="fresh.py", lang="python", kind=Kind.CODE),
     )
-    assert blame_links(repo, rel_path="fresh.py", chunks=chunks, known={}) == []
+    blamed = blame_map(repo, ["fresh.py"])
+    assert blamed["fresh.py"] == {}
+    assert blame_links(chunks=chunks, known={}, by_line=blamed["fresh.py"]) == []
 
 
 def test_a_commit_outside_this_run_still_gets_an_edge(repo: Path) -> None:
@@ -190,13 +199,29 @@ def test_a_commit_outside_this_run_still_gets_an_edge(repo: Path) -> None:
         (repo / "a.py").read_text(),
         SourceFile(repo="r", path="a.py", lang="python", kind=Kind.CODE),
     )
-    links = blame_links(repo, rel_path="a.py", chunks=chunks, known={})
+    links = blame_links(chunks=chunks, known={}, by_line=blame_map(repo, ["a.py"])["a.py"])
     assert links
     assert links[0].dst_chunk_id is None
 
 
-def test_no_chunks_means_no_blame_call(repo: Path) -> None:
-    assert blame_links(repo, rel_path="a.py", chunks=[], known={}) == []
+def test_no_chunks_means_no_links(repo: Path) -> None:
+    assert blame_links(chunks=[], known={}, by_line={}) == []
+
+
+def test_nothing_to_blame_forks_nothing(repo: Path) -> None:
+    # The pool is opened per index run, including runs where the
+    # incremental path found no changed file.
+    assert blame_map(repo, []) == {}
+
+
+def test_every_file_is_blamed_once_and_kept_apart(repo: Path, commit: Committer) -> None:
+    # The point of the pool: many files in flight at once, each answer
+    # still landing under its own path.
+    (repo / "b.py").write_text("def h():\n    return 3\n")
+    commit(repo, "feat: add h")
+    blamed = blame_map(repo, ["a.py", "b.py"])
+    assert set(blamed) == {"a.py", "b.py"}
+    assert len(set(blamed["a.py"].values()) | set(blamed["b.py"].values())) == 2
 
 
 # --- through a real index run --------------------------------------------

@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.scripts]
-wsindex = "wsindex.cli:app"
+wsindex = "wsindex.cli:run"
 
 [project.optional-dependencies]
 ml = ["sentence-transformers>=5.7,<6"]

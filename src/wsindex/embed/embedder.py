@@ -10,7 +10,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 
@@ -91,50 +91,98 @@ class SentenceTransformerEmbedder(Embedder):
     Vectors are L2-normalized, so cosine similarity equals dot product.
     """
 
-    def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
-        """Load the model; `dim` is taken from the model itself.
+    def __init__(
+        self, model_name: str, cache_folder: Path | None = None, dim: int | None = None
+    ) -> None:
+        """Prepare an embedder; the model itself loads on first use.
+
+        Lazily, because loading is 6 seconds and not every command that
+        opens a store goes on to embed anything — `wsindex compact` took
+        9.7 s on an empty index, all of it a neural network it never
+        called.
 
         The model is named by the caller rather than read from the
-        workspace config. An embedder is the bottom of the stack: it
-        should not know that an application configuration exists, and
-        the composition root has the name in hand anyway.
+        workspace config: an embedder is the bottom of the stack and
+        should not know that an application configuration exists.
 
         Args:
             model_name: sentence-transformers model id, e.g.
                 "sentence-transformers/all-MiniLM-L6-v2".
-            cache_folder: Where sentence-transformers stores downloaded
-                model files. When None, the library uses its own default
-                (typically `~/.cache/huggingface/hub/`); the wsindex CLI
-                passes an explicit path under `$XDG_CACHE_HOME/wsindex/`
-                (see `wsindex.paths.resolve_cache_dir`) so wsindex-owned
+            cache_folder: Where sentence-transformers keeps downloaded
+                models. None lets the library use its own default; the
+                CLI passes a path under `$XDG_CACHE_HOME/wsindex/` so the
                 cache is namespaced and safe to `rm -rf`.
+            dim: What the workspace says this model's vectors are. Given,
+                `dim` answers without loading anything — which is what
+                keeps a command that never embeds from paying for a
+                model. The claim is checked against the real model the
+                first time it loads.
+
+        Nothing is imported here either. Checking for the `ml` extra
+        meant importing torch, which is 1.9 s — paid by `compact`, which
+        needs no model, and by every other command that opens a store.
+        A missing extra is now reported when something asks to embed,
+        which is the moment it actually matters.
+        """
+        self._model_name = model_name
+        self._cache_folder = cache_folder
+        self._declared_dim = dim
+        self._loaded: Any = None
+
+    def _model(self) -> Any:
+        """The loaded model, loading it the first time it is wanted.
+
+        Tries the on-disk cache alone before letting the library reach
+        the network. That check costs 4 of the 6 seconds a load takes —
+        the model is already local and the request only confirms its
+        revision — and it is paid on every command that embeds anything.
+        A machine that has never downloaded the model falls through to
+        the ordinary path and downloads it, once.
 
         Raises:
-            RuntimeError: The `ml` extra is not installed, or the model
-                does not report an embedding dimension.
+            RuntimeError: The `ml` extra is not installed, the model
+                reports no dimension, or its width is not the one this
+                workspace was built for.
         """
+        if self._loaded is not None:
+            return self._loaded
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise RuntimeError(
                 "sentence-transformers is not installed — run `uv sync --extra ml`"
             ) from exc
-        st_kwargs: dict[str, str] = {}
-        if cache_folder is not None:
-            cache_folder.mkdir(parents=True, exist_ok=True)
-            st_kwargs["cache_folder"] = str(cache_folder)
-        self._model = SentenceTransformer(model_name, **st_kwargs)
-        dim: int | None = self._model.get_embedding_dimension()
-        if dim is None:
-            raise RuntimeError(f"model {model_name!r} does not report an embedding dimension")
-        self._dim = dim
+
+        kwargs: dict[str, Any] = {}
+        if self._cache_folder is not None:
+            self._cache_folder.mkdir(parents=True, exist_ok=True)
+            kwargs["cache_folder"] = str(self._cache_folder)
+        try:
+            self._loaded = SentenceTransformer(self._model_name, local_files_only=True, **kwargs)
+        except Exception:
+            self._loaded = SentenceTransformer(self._model_name, **kwargs)
+
+        actual: int | None = self._loaded.get_embedding_dimension()
+        if actual is None:
+            raise RuntimeError(f"model {self._model_name!r} does not report an embedding dimension")
+        if self._declared_dim is not None and actual != self._declared_dim:
+            raise RuntimeError(
+                f"model {self._model_name!r} produces {actual}-dimensional vectors, "
+                f"but this workspace was built for {self._declared_dim}"
+            )
+        self._declared_dim = actual
+        return self._loaded
 
     @property
     def dim(self) -> int:
-        return self._dim
+        """Vector width, from the workspace when it said, else the model."""
+        if self._declared_dim is None:
+            self._model()
+        assert self._declared_dim is not None
+        return self._declared_dim
 
     def _embed(self, texts: Sequence[str]) -> list[list[float]]:
-        vectors = self._model.encode(
+        vectors = self._model().encode(
             list(texts), normalize_embeddings=True, show_progress_bar=False
         )
         return cast("list[list[float]]", vectors.tolist())

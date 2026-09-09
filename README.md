@@ -235,9 +235,11 @@ would make that filter mean two things and leave no way to search the
 code without the history.
 
 Cheap, and proportional to the work. Reading a whole history takes
-milliseconds; blame costs ~28 ms per *indexed* file, which the
-incremental pass already keeps down to what changed. Untracked files have
-no history and simply get no edges.
+milliseconds. Blame is per file, so it forks once per *indexed* file —
+which the incremental pass already keeps down to what changed — and those
+forks run eight at a time, since each one waits on a process rather than
+on Python: 122 files cost 1.9 s one after another and 0.7 s in the pool.
+Untracked files have no history and simply get no edges.
 
 ## References out of the repository
 

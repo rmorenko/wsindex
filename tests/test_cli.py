@@ -163,10 +163,13 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     class StubST(FakeEmbedder):
         # Same constructor signature as the real class; dim must match
         # config.dim (384) or the composition-root guard rejects it.
-        def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
-            super().__init__(dim=384)
+        def __init__(
+            self, model_name: str, cache_folder: Path | None = None, dim: int | None = None
+        ) -> None:
+            super().__init__(dim=dim or 384)
             captured["model"] = model_name
             captured["cache_folder"] = cache_folder
+            captured["dim"] = dim
 
     # Patch where the name is looked up: cli.py imported its own reference.
     monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", StubST)
@@ -186,19 +189,29 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     assert cache_folder.parent.name == "wsindex"
 
 
-def test_embedder_dim_mismatch_is_rejected(
+def test_the_workspace_width_reaches_the_embedder(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    class WrongDimST(FakeEmbedder):
-        def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
-            super().__init__(dim=8)
+    # The store's vector column is as wide as the config says, so the
+    # embedder is told that width and checks it against the real model
+    # the first time it loads one. Opening a store no longer asks a
+    # neural network anything.
+    captured: dict[str, object] = {}
 
-    monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", WrongDimST)
+    class StubST(FakeEmbedder):
+        def __init__(
+            self, model_name: str, cache_folder: Path | None = None, dim: int | None = None
+        ) -> None:
+            super().__init__(dim=dim or 384)
+            captured["dim"] = dim
+
+    monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", StubST)
     runner.invoke(app, ["init", "ws"])
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])
-    assert result.exit_code == 1
-    assert "dim" in result.output
+
+    assert result.exit_code == 0
+    assert captured["dim"] == 384
 
 
 # --- scope and filter flags on `search` -----------------------------------

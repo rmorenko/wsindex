@@ -123,11 +123,15 @@ def require_extra(name: str, packages: str) -> None:
 def build_store(config: Config) -> VectorStore:
     """Open the workspace store described by the config.
 
-    Split out of `_build_pipeline` because `compact` needs a store and
-    nothing else. It still pays for the embedder: the vector column's
-    width comes from `embedder.dim`, so opening the table without one
-    would mean a second, subtly different way to describe the same
-    schema — the kind of duplication that goes wrong quietly.
+    Split out of `build_pipeline` because `compact` needs a store and
+    nothing else — and, now that the embedder loads its model lazily,
+    gets one without paying six seconds for a network it never uses.
+
+    The vector column's width comes from the config rather than from the
+    model, so opening a store asks nothing of it. The two must agree, and
+    the embedder checks that the first time it actually loads: a model
+    swapped without changing `dim` fails then, with a sentence naming
+    both numbers.
     """
     store: VectorStore
     embedder: Embedder
@@ -138,15 +142,10 @@ def build_store(config: Config) -> VectorStore:
                     # cache_folder is a paths concern, not a config field:
                     # the model cache is shared by every workspace.
                     embedder = SentenceTransformerEmbedder(
-                        config.model, cache_folder=resolve_cache_dir() / "models"
+                        config.model,
+                        cache_folder=resolve_cache_dir() / "models",
+                        dim=config.dim,
                     )
-                    if embedder.dim != config.dim:
-                        typer.echo(
-                            f"error: embedder dim mismatch — config expects {config.dim}, "
-                            f"model '{config.model}' produces {embedder.dim}",
-                            err=True,
-                        )
-                        raise typer.Exit(code=1)
                 case Provider.FAKE:
                     embedder = FakeEmbedder(dim=config.dim)
                 case _:  # pragma: no cover - mypy proves this branch unreachable
