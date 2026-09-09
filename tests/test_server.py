@@ -361,13 +361,19 @@ def test_the_page_shows_what_a_sync_did_and_what_failed(client: TestClient, app:
     assert "a: updated" in page
 
 
-def test_adding_a_repo_needs_a_config_file(pipeline: Pipeline) -> None:
+def test_adding_a_repo_needs_a_config_file(tmp_path: Path) -> None:
     # A server on built-in defaults has nowhere to save; better a clear
-    # 400 than a write that silently goes nowhere.
+    # 400 than a write that silently goes nowhere. The pipeline is built
+    # against that same file-less config on purpose: the server writes to
+    # the workspace it is serving, not to whatever the singleton holds.
     Config.reset()
-    Config.default("nofile", provider=Provider.FAKE)
+    fileless = Config.default("nofile", provider=Provider.FAKE)
+    store = LanceDBStore(uri=str(tmp_path / "db"), embedder=FakeEmbedder())
+    pipeline = Pipeline(store=store, state_dir=tmp_path / "state", config=fileless)
+
     with TestClient(create_app(pipeline_factory=lambda: pipeline)) as client:
         response = client.post("/admin/add-repo", data={"repo_id": "x", "path": "/p", "remote": ""})
+
     assert response.status_code == 400
     assert "no config file" in response.json()["detail"]
 

@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 
-from wsindex.config import Config
 from wsindex.ingest import NotAGitRepositoryError
 from wsindex.model import Kind, SearchFilter
 from wsindex.server.admin import mount_admin
@@ -145,6 +144,10 @@ def create_app(
         version="0.1.0",
     )
     app.state.pipeline = pipeline_factory()
+    # One workspace per server, and one object for it: the pipeline was
+    # built against a config, and every reader here uses that same one
+    # rather than asking the singleton again.
+    app.state.config = app.state.pipeline.config
     app.state.writer = Writer()
     app.state.runs = RunLog()
     app.state.token = token
@@ -234,7 +237,7 @@ def create_app(
     @app.get("/status", dependencies=guarded)
     def status() -> dict[str, Any]:
         """What this server is serving: workspace, repos, recent runs."""
-        config = Config()
+        config = app.state.config
         return {
             "workspace": config.name,
             "backend": config.backend.value,

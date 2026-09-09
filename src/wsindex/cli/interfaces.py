@@ -9,7 +9,12 @@ from typing import Annotated
 
 import typer
 
-from wsindex.cli.composition import build_pipeline, config_or_default, require_config_file
+from wsindex.cli.composition import (
+    build_pipeline,
+    config_or_default,
+    require_config_file,
+    require_extra,
+)
 
 
 def shell() -> None:
@@ -25,12 +30,8 @@ def shell() -> None:
     require_config_file(config)
     try:
         from wsindex import shell as shell_module
-    except ImportError as exc:  # pragma: no cover - depends on the install
-        typer.echo(
-            "error: the shell needs the `shell` extra — `uv sync --extra shell` (prompt-toolkit)",
-            err=True,
-        )
-        raise typer.Exit(code=1) from exc
+    except ImportError:  # pragma: no cover - depends on the install
+        require_extra("shell", "prompt-toolkit")
     shell_module.run(build_pipeline(), history_dir=config.index_dir)
 
 
@@ -50,12 +51,8 @@ def mcp() -> None:
     require_config_file(config)
     try:
         from wsindex.mcp_server import build
-    except ImportError as exc:  # pragma: no cover - depends on the install
-        typer.echo(
-            "error: MCP needs the `mcp` extra — `uv sync --extra mcp`",
-            err=True,
-        )
-        raise typer.Exit(code=1) from exc
+    except ImportError:  # pragma: no cover - depends on the install
+        require_extra("mcp", "the official MCP SDK")
     # Nothing on stdout before this: the transport owns that stream, and
     # a friendly banner would be a protocol error.
     build(build_pipeline()).run(transport="stdio")
@@ -83,13 +80,8 @@ def serve(
         import uvicorn
 
         from wsindex.server import create_app
-    except ImportError as exc:  # pragma: no cover - depends on the install
-        typer.echo(
-            "error: the server needs the `server` extra — "
-            "`uv sync --extra server` (fastapi, uvicorn)",
-            err=True,
-        )
-        raise typer.Exit(code=1) from exc
+    except ImportError:  # pragma: no cover - depends on the install
+        require_extra("server", "fastapi, uvicorn")
 
     token: str | None = None
     name = config.server_token_env

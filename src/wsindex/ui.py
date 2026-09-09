@@ -56,28 +56,22 @@ def wants_rich(target: Console | None = None) -> bool:
 
 def plain_hit(hit: Hit) -> str:
     """One hit as one greppable line — the format this CLI has always had."""
-    meta = hit.metadata
-    first_line = str(meta["text"]).splitlines()[0]
-    return (
-        f"{meta['repo']}/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
-        f"  {hit.score:.3f}  {first_line}"
-    )
+    return f"{hit.location}  {hit.score:.3f}  {hit.text.splitlines()[0]}"
 
 
 def _snippet(hit: Hit) -> Any:
     """The chunk's opening lines, highlighted as its own language."""
     from rich.syntax import Syntax
 
-    meta = hit.metadata
-    lines = str(meta["text"]).splitlines()[:_SNIPPET_LINES]
+    lines = hit.text.splitlines()[:_SNIPPET_LINES]
     return Syntax(
         "\n".join(lines),
-        str(meta.get("lang") or "text"),
+        hit.lang or "text",
         theme="ansi_dark",
         # The real line numbers, not 1..n: a snippet whose numbers do not
         # match the file is worse than one with no numbers at all.
         line_numbers=True,
-        start_line=int(meta["start_line"]),
+        start_line=hit.start_line,
         word_wrap=True,
         background_color="default",
     )
@@ -104,11 +98,10 @@ def render_hits(hits: Sequence[Hit], *, target: Console | None = None) -> None:
     table.add_column("where", overflow="fold")
     table.add_column("what", overflow="fold")
     for position, hit in enumerate(hits, start=1):
-        meta = hit.metadata
         where = (
-            f"[bold]{meta['repo']}[/]/{meta['path']}\n"
-            f"[dim]{meta['start_line']}-{meta['end_line']}"
-            f"{'  ' + str(meta['symbol']) if meta.get('symbol') else ''}[/]"
+            f"[bold]{hit.repo}[/]/{hit.path}\n"
+            f"[dim]{hit.start_line}-{hit.end_line}"
+            f"{'  ' + hit.symbol if hit.symbol else ''}[/]"
         )
         table.add_row(str(position), f"{hit.score:.3f}", where, _snippet(hit))
     out.print(table)

@@ -19,7 +19,7 @@ left its old chunks in the index forever.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from wsindex.config import Config, Repository
@@ -157,14 +157,18 @@ class Pipeline:
     """The wired system: a store, plus whatever the current Config says.
 
     Frozen on purpose: a Pipeline is a bundle of dependencies, not state —
-    nothing may accumulate between calls. The repo list and the metric are
-    read from `Config()` inside the methods rather than captured at
-    construction, so a config that changed (a repo added, say) is picked
-    up by the next call instead of going stale in a field.
+    nothing may accumulate between calls.
 
     Attributes:
         store: Any VectorStore backend; the pipeline never looks behind
             the contract.
+        config: The workspace this pipeline indexes. A parameter rather
+            than a `Config()` call inside the methods: the dependency is
+            real either way, and a constructor that does not mention it
+            is a constructor that lies. `Config` is a singleton, so the
+            default is the same object the rest of the process sees — and
+            a repo added at runtime is still picked up, because it is
+            added to that object.
         state_dir: Where `index` keeps the per-repo "last indexed commit"
             file. Supplied by the composition root because it is a
             location, not a policy — the same reason the store gets its
@@ -180,6 +184,7 @@ class Pipeline:
 
     store: VectorStore
     state_dir: Path
+    config: Config = field(default_factory=Config)
     reranker: Reranker | None = None
     links: LinkStore | None = None
 
@@ -224,7 +229,7 @@ class Pipeline:
                 fallback to plain walking would mean two models of
                 state, so this is a config error with a message.
         """
-        config = Config()
+        config = self.config
         state = IndexState.load(self.state_dir)
         files = chunks_count = written = deleted = commits = 0
         missing_repos: list[str] = []
@@ -480,7 +485,7 @@ class Pipeline:
         Raises:
             ValueError: `repo` is set but not present in the config.
         """
-        repos = Config().repos
+        repos = self.config.repos
         if repo is not None:
             repos = [r for r in repos if r.id == repo]
             if not repos:
@@ -499,6 +504,6 @@ class Pipeline:
                 continue
             all_hits.extend(hits)
         if self.reranker:
-            scores = self.reranker.rank(query, [h.metadata["text"] for h in all_hits])
+            scores = self.reranker.rank(query, [hit.text for hit in all_hits])
             all_hits = [replace(h, score=s) for h, s in zip(all_hits, scores, strict=True)]
         return sorted(all_hits, key=lambda h: h.score, reverse=True)[:k]

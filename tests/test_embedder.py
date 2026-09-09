@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.config import Config
 from wsindex.embed import FakeEmbedder, SentenceTransformerEmbedder
 
 
@@ -133,9 +132,10 @@ def test_cache_folder_none_leaves_library_default(monkeypatch: pytest.MonkeyPatc
     assert captured["kwargs"] == {}
 
 
-def test_model_name_defaults_to_the_workspace_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The composition root no longer forwards config.model: there is one
-    # workspace model per process and the embedder reads it itself.
+def test_the_model_name_is_the_callers_business(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The embedder is the bottom of the stack: it takes the name it is
+    # given and knows nothing about a workspace configuration. The
+    # composition root is what reads `config.model`.
     import types
 
     captured: dict[str, object] = {}
@@ -152,9 +152,9 @@ def test_model_name_defaults_to_the_workspace_model(monkeypatch: pytest.MonkeyPa
     fake.SentenceTransformer = CapturingST  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
 
-    Config.default("demo")
-    SentenceTransformerEmbedder()
-    assert captured["model_name"] == Config().model
+    SentenceTransformerEmbedder("some/model")
+
+    assert captured["model_name"] == "some/model"
 
 
 def cos(a: list[float], b: list[float]) -> float:

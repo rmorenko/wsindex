@@ -26,7 +26,6 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from wsindex.config import Config
 from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
 from wsindex.snapshot import materialize
 
@@ -59,7 +58,7 @@ def sync_and_index(app: FastAPI) -> dict[str, Any]:
     clock = time.monotonic()
     synced: dict[str, str] = {}
     with app.state.writer.held():
-        config = Config()
+        config = app.state.config
         for repo in config.repos:
             if repo.is_snapshot:
                 try:
@@ -165,7 +164,7 @@ def mount_scheduler(app: FastAPI, guarded: list[Any]) -> None:
             # caller's to fix, not a server fault.
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    interval = Config().server_interval
+    interval = app.state.config.server_interval
     app.state.ticker = Ticker(app, interval=interval) if interval else None
     if app.state.ticker is not None:
         app.state.ticker.start()

@@ -216,6 +216,57 @@ class Hit:
     metadata: dict[str, Any]
     native_id: str | None = None
 
+    # The chunk's own fields, named. `metadata` stays the whole stored
+    # payload — a store may keep more than the contract promises — but a
+    # reader asking where a hit is should not have to know the spelling
+    # of a dict key, in six modules, with a cast at every site.
+
+    @property
+    def repo(self) -> str:
+        """Repo id the chunk belongs to."""
+        return str(self.metadata["repo"])
+
+    @property
+    def path(self) -> str:
+        """Repo-relative POSIX path of the file."""
+        return str(self.metadata["path"])
+
+    @property
+    def start_line(self) -> int:
+        """First line of the chunk, 1-based inclusive."""
+        return int(self.metadata["start_line"])
+
+    @property
+    def end_line(self) -> int:
+        """Last line of the chunk, 1-based inclusive."""
+        return int(self.metadata["end_line"])
+
+    @property
+    def lang(self) -> str:
+        """Language the chunker identified, or empty when it had none."""
+        return str(self.metadata.get("lang", ""))
+
+    @property
+    def kind(self) -> str:
+        """Artifact category as a plain string: code, config, doc, commit."""
+        return str(self.metadata.get("kind", ""))
+
+    @property
+    def symbol(self) -> str | None:
+        """What the chunk is called, when it is called anything."""
+        found = self.metadata.get("symbol")
+        return str(found) if found else None
+
+    @property
+    def text(self) -> str:
+        """The chunk itself, verbatim."""
+        return str(self.metadata["text"])
+
+    @property
+    def location(self) -> str:
+        """`repo/path:start-end` — how every interface cites a hit."""
+        return f"{self.repo}/{self.path}:{self.start_line}-{self.end_line}"
+
     def to_json(self) -> dict[str, Any]:
         """The fields an outside caller needs, flat and JSON-ready.
 
@@ -224,15 +275,14 @@ class Hit:
         seen one recognizes the other. `metadata` holds whatever the
         store kept; this is the part that is promised.
         """
-        meta = self.metadata
         return {
-            "repo": str(meta["repo"]),
-            "path": str(meta["path"]),
-            "start_line": int(meta["start_line"]),
-            "end_line": int(meta["end_line"]),
-            "lang": str(meta.get("lang", "")),
-            "kind": str(meta.get("kind", "")),
-            "symbol": meta.get("symbol"),
-            "score": round(float(self.score), 4),
-            "text": str(meta["text"]),
+            "repo": self.repo,
+            "path": self.path,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "lang": self.lang,
+            "kind": self.kind,
+            "symbol": self.symbol,
+            "score": round(self.score, 4),
+            "text": self.text,
         }

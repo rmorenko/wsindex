@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import Field
 
-from wsindex.config import Config
 from wsindex.links import KIND_LABELS, LinkKind, LinkStore
 from wsindex.model import Kind, SearchFilter
 
@@ -90,7 +89,7 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
         name: Annotated[str, Field(description="A port, ticket, commit sha or url")],
     ) -> dict[str, Any]:
         """Everything that names this: who reads a port, which commits mention a ticket."""
-        with LinkStore(Config().index_dir) as links:
+        with LinkStore(engine.config.index_dir) as links:
             edges = links.by_name(name)
         found = [
             {
@@ -116,9 +115,8 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
         if not found:
             return {"symbol": symbol, "definitions": []}
         definitions = []
-        with LinkStore(Config().index_dir) as links:
+        with LinkStore(engine.config.index_dir) as links:
             for hit in found:
-                meta = hit.metadata
                 commits = []
                 for edge in links.out_of([str(hit.native_id)], kind=LinkKind.BLAMED_BY):
                     message = None
@@ -129,11 +127,11 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
                     commits.append({"commit": edge.name, "message": message})
                 definitions.append(
                     {
-                        "symbol": meta.get("symbol"),
-                        "repo": str(meta["repo"]),
-                        "path": str(meta["path"]),
-                        "start_line": int(meta["start_line"]),
-                        "end_line": int(meta["end_line"]),
+                        "symbol": hit.symbol,
+                        "repo": hit.repo,
+                        "path": hit.path,
+                        "start_line": hit.start_line,
+                        "end_line": hit.end_line,
                         "commits": commits,
                     }
                 )

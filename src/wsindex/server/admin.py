@@ -25,7 +25,7 @@ from typing import Any
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from wsindex.config import Config, Repository
+from wsindex.config import Repository
 from wsindex.server.scheduler import sync_and_index
 
 _STYLE = """
@@ -83,7 +83,7 @@ def _run_row(entry: dict[str, Any]) -> list[str]:
 
 def render(app: FastAPI) -> str:
     """The whole page for the current state of the workspace."""
-    config = Config()
+    config = app.state.config
     busy = app.state.writer.busy
     repos = [
         [
@@ -167,7 +167,7 @@ def mount_admin(app: FastAPI, guarded: list[Any]) -> None:
         the file the CLI reads next is the file this wrote — including
         the array-of-tables shape that keeps it hand-editable.
         """
-        config = Config()
+        config = app.state.config
         location = config.location
         if location is None:
             raise HTTPException(status_code=400, detail="this server has no config file to write")

@@ -15,7 +15,7 @@ import pytest
 from typer.testing import CliRunner
 
 from wsindex.cli import app
-from wsindex.config import Provider
+from wsindex.config import Config, Provider
 from wsindex.connectors import BUILTIN, Connector, Document, DocumentNotFound
 from wsindex.embed import FakeEmbedder
 from wsindex.paths import CONFIG_FILE, ENV_OVERRIDE
@@ -163,7 +163,7 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     class StubST(FakeEmbedder):
         # Same constructor signature as the real class; dim must match
         # config.dim (384) or the composition-root guard rejects it.
-        def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
+        def __init__(self, model_name: str, cache_folder: Path | None = None) -> None:
             super().__init__(dim=384)
             captured["model"] = model_name
             captured["cache_folder"] = cache_folder
@@ -174,10 +174,10 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])
     assert result.exit_code == 0
-    # The model name is not forwarded any more — the embedder reads it from
-    # Config (test_embedder.py). The cache dir still is: it is a paths
-    # concern, shared by every workspace, and not a config field at all.
-    assert captured["model"] is None
+    # Both come from the composition root: the model from the config, the
+    # cache dir from `wsindex.paths` — a shared location, not a config
+    # field. The embedder itself knows about neither.
+    assert captured["model"] == Config().model
     # cli passes an explicit models subdir under $XDG_CACHE_HOME/wsindex/
     # so the wsindex-owned cache is namespaced (see ADR-8 amendment).
     cache_folder = captured["cache_folder"]

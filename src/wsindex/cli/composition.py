@@ -99,6 +99,27 @@ def build_pipeline() -> Pipeline:
     )
 
 
+def require_extra(name: str, packages: str) -> None:
+    """Turn a missing optional dependency into a sentence, not a traceback.
+
+    Called after the failed import rather than before it: asking whether a
+    package is installed and then importing it are two chances to
+    disagree, and the import is the one that decides.
+
+    Args:
+        name: The extra as it is spelled in `pyproject.toml`.
+        packages: What it brings, so the message names what is missing.
+
+    Raises:
+        typer.Exit: Always — this is the end of the command.
+    """
+    typer.echo(
+        f"error: this needs the `{name}` extra — `uv sync --extra {name}` ({packages})",
+        err=True,
+    )
+    raise typer.Exit(code=1)
+
+
 def build_store(config: Config) -> VectorStore:
     """Open the workspace store described by the config.
 
@@ -117,7 +138,7 @@ def build_store(config: Config) -> VectorStore:
                     # cache_folder is a paths concern, not a config field:
                     # the model cache is shared by every workspace.
                     embedder = SentenceTransformerEmbedder(
-                        cache_folder=resolve_cache_dir() / "models"
+                        config.model, cache_folder=resolve_cache_dir() / "models"
                     )
                     if embedder.dim != config.dim:
                         typer.echo(

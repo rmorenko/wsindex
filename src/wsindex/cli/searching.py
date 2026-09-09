@@ -125,11 +125,7 @@ def why(symbol: str) -> None:
         raise typer.Exit(code=1)
     with LinkStore(config.index_dir) as links:
         for hit in found[:3]:
-            meta = hit.metadata
-            typer.echo(
-                f"{meta['symbol']}  {meta['repo']}/{meta['path']}:"
-                f"{meta['start_line']}-{meta['end_line']}"
-            )
+            typer.echo(f"{hit.symbol}  {hit.location}")
             blame = links.out_of([str(hit.native_id)], kind=LinkKind.BLAMED_BY)
             if not blame:
                 typer.echo("  (no commit recorded — run `wsindex index` to build blame edges)")

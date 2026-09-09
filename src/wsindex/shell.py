@@ -157,13 +157,12 @@ def open_in_editor(hit: Hit) -> list[str]:
         caller decides whether to run it.
     """
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
-    meta = hit.metadata
-    # The store keeps a repo id and a repo-relative path — that pairing is
-    # the chunk's identity (ARCH §4). Where that repo sits on this machine
-    # is the config's business, so that is where the root comes from.
+    # A hit knows its repo id and its repo-relative path. Where that repo
+    # sits on this machine is the config's business, so that is where the
+    # root comes from.
     roots = {repo.id: repo.path for repo in Config().repos}
-    path = str(Path(roots.get(str(meta["repo"]), ".")) / str(meta["path"]))
-    line = int(meta["start_line"])
+    path = str(Path(roots.get(hit.repo, ".")) / hit.path)
+    line = hit.start_line
     argv = shlex.split(editor)
     name = Path(argv[0]).name
     if name in ("vi", "vim", "nvim", "nano", "kak"):
@@ -294,17 +293,14 @@ class _Session:
         """Print one hit whole, highlighted as its own language."""
         from rich.syntax import Syntax
 
-        meta = hit.metadata
-        self.out.print(
-            f"[bold]{meta['repo']}[/]/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
-        )
+        self.out.print(f"[bold]{hit.repo}[/]/{hit.path}:{hit.start_line}-{hit.end_line}")
         self.out.print(
             Syntax(
-                str(meta["text"]),
-                str(meta.get("lang") or "text"),
+                hit.text,
+                hit.lang or "text",
                 theme="ansi_dark",
                 line_numbers=True,
-                start_line=int(meta["start_line"]),
+                start_line=hit.start_line,
                 word_wrap=True,
                 background_color="default",
             )
