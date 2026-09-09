@@ -328,11 +328,12 @@ def head_commit(root: Path) -> str:
 def has_uncommitted_changes(root: Path) -> bool:
     """True when the working tree differs from HEAD in any way.
 
-    Untracked files count. That is the whole point: `walk_repo` indexes
-    what is on disk, but `diff_since` can only see what git tracks, so a
-    new file that was never committed is invisible to the diff and would
-    be missed by an incremental run. The caller checks this first and
-    falls back to a full pass when it is True.
+    Untracked files count. That is the whole point: the full listing
+    includes them (`ls-files --others`), but a commit-to-commit diff can
+    only see what git tracks, so a new file that was never committed is
+    invisible to the diff and would be missed by an incremental run.
+    The caller checks this first and falls back to a full pass when it
+    is True.
 
     `status --porcelain` rather than a plumbing command because it is the
     one documented-stable format that reports tracked *and* untracked

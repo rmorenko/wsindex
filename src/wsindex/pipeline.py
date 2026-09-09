@@ -128,10 +128,11 @@ class Pipeline:
         A dirty working tree forces a full pass, and the run records no
         new commit for that repo. This is not pessimism, it is the only
         honest answer: a diff between two commits cannot see an
-        uncommitted edit or an untracked file, but `walk_repo` indexes
-        both, so trusting the diff would leave the index describing a
-        tree that never existed. Recording HEAD anyway would make the
-        *next* run skip those same invisible changes forever.
+        uncommitted edit or an untracked file, but the full pass lists
+        them (`ls-files --others`) and indexes both, so trusting the diff
+        would leave the index describing a tree that never existed.
+        Recording HEAD anyway would make the *next* run skip those same
+        invisible changes forever.
 
         Decisions fixed here: files are read with errors="replace" so a
         stray non-UTF-8 file cannot abort the run; a repo whose directory

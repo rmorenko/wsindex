@@ -40,7 +40,7 @@ from wsindex.ingest.languages import (
     SpanExtractor,
 )
 from wsindex.ingest.plugins import ENTRY_POINT_GROUP, PluginLoadWarning, load_plugins
-from wsindex.ingest.walker import WalkedFile, inspect_file, walk_repo
+from wsindex.ingest.walker import WalkedFile, inspect_file
 
 __all__ = [
     "ENTRY_POINT_GROUP",
@@ -64,7 +64,6 @@ __all__ = [
     "inspect_file",
     "load_plugins",
     "sync_repo",
-    "walk_repo",
 ]
 
 

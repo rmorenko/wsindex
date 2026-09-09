@@ -1,4 +1,10 @@
-"""Tests for repository walking, filtering and lang/kind detection."""
+"""Tests for the indexing policy: which files count, and as what.
+
+`selected` below is how the pipeline actually decides — it lists paths
+and asks `inspect_file` about each. A `walk_repo` generator used to
+answer the same question by traversing the tree itself; it went away with
+step 29, having outlived the pipeline's use of it by four steps.
+"""
 
 from pathlib import Path
 
@@ -7,11 +13,24 @@ import pytest
 from wsindex.ingest.walker import (
     IGNORED_DIRS,
     MAX_FILE_SIZE,
+    WalkedFile,
     _skip_dir,
     inspect_file,
-    walk_repo,
 )
 from wsindex.model import Kind
+
+
+def selected(root: Path) -> list[WalkedFile]:
+    """Every file under `root` the policy accepts, as the pipeline asks it.
+
+    Paths first, then one `inspect_file` each — the same shape as an
+    index run, which lists with git and inspects what it gets back.
+    """
+    return [
+        walked
+        for path in sorted(root.rglob("*"))
+        if (walked := inspect_file(root, path.relative_to(root).as_posix())) is not None
+    ]
 
 
 def make_repo(root: Path) -> None:
@@ -57,7 +76,7 @@ def repo(tmp_path: Path) -> Path:
 
 
 def test_walks_expected_files(repo: Path) -> None:
-    rel_paths = {f.rel_path for f in walk_repo(repo)}
+    rel_paths = {f.rel_path for f in selected(repo)}
     assert rel_paths == {
         "src/main.py",
         "app.ts",
@@ -69,12 +88,12 @@ def test_walks_expected_files(repo: Path) -> None:
 
 
 def test_skips_ignored_dirs(repo: Path) -> None:
-    rel_paths = {f.rel_path for f in walk_repo(repo)}
+    rel_paths = {f.rel_path for f in selected(repo)}
     assert not {p for p in rel_paths if p.startswith((".git", "node_modules", "__pycache__"))}
 
 
 def test_skips_binary_and_large_files(repo: Path) -> None:
-    rel_paths = {f.rel_path for f in walk_repo(repo)}
+    rel_paths = {f.rel_path for f in selected(repo)}
     # logo.png is rejected by extension before the binary sniff even runs;
     # fake.txt is the case that actually exercises is_binary.
     assert "logo.png" not in rel_paths
@@ -83,7 +102,7 @@ def test_skips_binary_and_large_files(repo: Path) -> None:
 
 
 def test_skips_unknown_extensions(repo: Path) -> None:
-    rel_paths = {f.rel_path for f in walk_repo(repo)}
+    rel_paths = {f.rel_path for f in selected(repo)}
     assert "data.xyz" not in rel_paths
 
 
@@ -98,13 +117,13 @@ def test_skips_unknown_extensions(repo: Path) -> None:
     ],
 )
 def test_detects_lang_and_kind(repo: Path, rel_path: str, lang: str, kind: Kind) -> None:
-    by_path = {f.rel_path: (f.lang, f.kind) for f in walk_repo(repo)}
+    by_path = {f.rel_path: (f.lang, f.kind) for f in selected(repo)}
     assert by_path[rel_path] == (lang, kind)
 
 
 def test_rel_path_is_posix_relative(repo: Path) -> None:
     # rel_path feeds chunk_id, so it must never leak the absolute tmp root.
-    rel_paths = {f.rel_path for f in walk_repo(repo)}
+    rel_paths = {f.rel_path for f in selected(repo)}
     for rel_path in rel_paths:
         assert not rel_path.startswith("/")
 
@@ -117,7 +136,7 @@ def test_skips_arbitrary_hidden_directory(tmp_path: Path) -> None:
     # missed the implicit second policy.
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / "settings.py").write_text("x = 1\n")
-    assert list(walk_repo(tmp_path)) == []
+    assert selected(tmp_path) == []
 
 
 def test_skip_dir_hides_dot_prefixed_names() -> None:
@@ -147,10 +166,11 @@ def test_ignored_dirs_does_not_repeat_the_hidden_rule() -> None:
 # --- step 22: the per-file policy, asked about one named path ------------
 
 
-def test_inspect_file_matches_walk_repo_on_the_same_tree(tmp_path: Path) -> None:
-    # The invariant that keeps incremental and full runs consistent: if
-    # these two ever disagreed, whether a file is indexed would depend on
-    # which kind of run happened to touch it.
+def test_the_policy_is_the_same_however_a_path_arrives(tmp_path: Path) -> None:
+    # Incremental runs ask about the handful of paths git reported as
+    # changed; full runs ask about every path git lists. Both go through
+    # `inspect_file`, and this pins that the answer depends on the file
+    # rather than on how the run found it.
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.py").write_text("print('a')\n")
     (tmp_path / "notes.md").write_text("# notes\n")
@@ -160,12 +180,12 @@ def test_inspect_file_matches_walk_repo_on_the_same_tree(tmp_path: Path) -> None
     (tmp_path / ".hidden").mkdir()
     (tmp_path / ".hidden" / "secret.py").write_text("print('s')\n")
 
-    walked = {f.rel_path for f in walk_repo(tmp_path)}
     every_path = [
         str(p.relative_to(tmp_path).as_posix()) for p in tmp_path.rglob("*") if p.is_file()
     ]
-    inspected = {p for p in every_path if inspect_file(tmp_path, p) is not None}
-    assert walked == inspected == {"src/a.py", "notes.md"}
+    one_at_a_time = {p for p in every_path if inspect_file(tmp_path, p) is not None}
+    all_at_once = {f.rel_path for f in selected(tmp_path)}
+    assert one_at_a_time == all_at_once == {"src/a.py", "notes.md"}
 
 
 def test_inspect_file_skips_a_pruned_directory(tmp_path: Path) -> None:

@@ -27,7 +27,7 @@ from wsindex.ingest.languages import (
     LanguageRegistry,
     LanguageSpec,
 )
-from wsindex.ingest.walker import walk_repo
+from wsindex.ingest.walker import inspect_file
 from wsindex.model import Kind
 
 
@@ -295,10 +295,9 @@ def test_a_registered_language_is_walked_and_chunked(
     register_globally(LanguageSpec(name="invented", kind=Kind.CODE, suffixes=(".invented",)))
     (tmp_path / "main.invented").write_text("greet()\n")
 
-    walked = list(walk_repo(tmp_path))
-    assert [(f.rel_path, f.lang, f.kind) for f in walked] == [
-        ("main.invented", "invented", Kind.CODE)
-    ]
+    walked = inspect_file(tmp_path, "main.invented")
+    assert walked is not None
+    assert (walked.rel_path, walked.lang, walked.kind) == ("main.invented", "invented", Kind.CODE)
 
     chunks = chunk_file(
         (tmp_path / "main.invented").read_text(),
@@ -318,4 +317,4 @@ def test_an_unregistered_suffix_is_still_skipped(tmp_path: Path) -> None:
     # everything when its table moved into the registry.
     (tmp_path / "main.invented").write_text("x = 1\n")
     assert REGISTRY.match(Path("main.invented")) is None
-    assert list(walk_repo(tmp_path)) == []
+    assert inspect_file(tmp_path, "main.invented") is None

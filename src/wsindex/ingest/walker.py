@@ -1,8 +1,15 @@
-"""Repository walking: find indexable files, skip junk, detect lang/kind.
+"""Which files are worth indexing, one file at a time.
 
-First stage of the indexing pipeline (ARCH §4): yields WalkedFile entries
-that the chunker dispatcher consumes. Reads only file names, sizes and a
-small binary-sniff prefix — never whole file contents.
+First stage of the indexing pipeline (ARCH §4): produces the WalkedFile
+entries the chunker dispatcher consumes. Reads only file names, sizes and
+a small binary-sniff prefix — never whole file contents.
+
+No traversal lives here any more. Since step 25b the pipeline gets its
+file list from git (`ls-files --cached --others --exclude-standard`)
+rather than from a filesystem walk, so what is left is the *policy*: does
+this one path deserve indexing. A `walk_repo` generator survived that
+change for a while as a tested primitive nobody called, which is how a
+second definition of the policy starts to drift from the first.
 
 Which files count as indexable is not decided here. Suffixes and exact
 names come from the language registry, so registering a `LanguageSpec`
@@ -12,8 +19,6 @@ nothing to do with language: pruned directories, the size ceiling, the
 binary sniff.
 """
 
-import os
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -127,18 +132,3 @@ def inspect_file(root: Path, rel_path: str) -> WalkedFile | None:
         return None
     lang, kind = found
     return WalkedFile(rel_path=PurePosixPath(rel_path).as_posix(), lang=lang, kind=kind)
-
-
-def walk_repo(root: Path) -> Iterator[WalkedFile]:
-    """Lazily yield indexable files under root, in deterministic order."""
-    for dirpath, dir_names, filenames in os.walk(root):
-        # Slice assignment mutates the list os.walk holds, so pruned dirs are
-        # never descended into (plain `dir_names = ...` would rebind the local
-        # name and silently disable the filter). Sorting makes traversal
-        # order reproducible across OSes.
-        dir_names[:] = sorted(d for d in dir_names if not _skip_dir(d))
-        for f_name in sorted(filenames):
-            abs_path = Path(dirpath) / f_name
-            walked = inspect_file(root, abs_path.relative_to(root).as_posix())
-            if walked is not None:
-                yield walked

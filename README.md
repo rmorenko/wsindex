@@ -19,18 +19,20 @@ uv run wsindex init myws         # writes wsindex.toml in the current directory
 uv run wsindex add-repo wsindex ~/wsindex
 uv run wsindex index             # first run downloads the embedding model (~90 MB)
 uv run wsindex search "how are markdown files split into chunks"
+uv run wsindex why chunk_markdown        # the commits that wrote it, and why
+uv run wsindex refs 8080                 # everything that names this port
 ```
 
 Real output on this very repository:
 
 ```
 $ uv run wsindex index
-files: 48  chunks: 467  written: 466
+files: 87  chunks: 1228  written: 1227  deleted: 0  commits: 95
 
 $ uv run wsindex search "how are markdown files split into chunks" -k 3
-wsindex/tests/test_chunker.py:25-29  0.632  def test_doc_markdown_produces_sections() -> None:
+wsindex/README.md:14-38  0.707  ## Quickstart
+wsindex/tests/test_chunker.py:41-45  0.632  def test_doc_markdown_produces_sections() -> None:
 wsindex/src/wsindex/ingest/text_chunker.py:107-111  0.598  def chunk_text(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
-wsindex/src/wsindex/ingest/text_chunker.py:59-104  0.567  def chunk_markdown(
 ```
 
 _(After this README itself gets indexed, it will match its own example
@@ -78,7 +80,7 @@ uv run wsindex sync
 
 ```
 app: updated
-files: 2  chunks: 2  written: 2  deleted: 1
+files: 2  chunks: 2  written: 2  deleted: 1  commits: 1
 ```
 
 Repos without a `remote` are checkouts you maintain yourself, and sync
@@ -135,7 +137,7 @@ its lines.
 
 ```
 $ uv run wsindex index
-files: 85  chunks: 1154  written: 1153  deleted: 0  commits: 92
+files: 87  chunks: 1228  written: 1227  deleted: 0  commits: 95
 
 $ uv run wsindex search "why is dedup done before embedding" --kind commit
 ```
@@ -179,7 +181,7 @@ have grown apart:
 
 ```
 $ uv run wsindex index
-files: 2  chunks: 3  written: 3  deleted: 0
+files: 2  chunks: 3  written: 3  deleted: 0  commits: 1
 drift: 1 unresolved config reference(s), first at svc/client.py:1 -> 8080
 ```
 
