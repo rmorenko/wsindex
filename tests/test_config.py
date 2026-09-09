@@ -12,7 +12,14 @@ from pathlib import Path
 import pytest
 import tomli_w
 
-from wsindex.config import DEFAULT_RANK_MODEL, Backend, Config, Provider, Repository
+from wsindex.config import (
+    DEFAULT_RANK_MODEL,
+    Backend,
+    Config,
+    Provider,
+    Repository,
+    RepoSource,
+)
 from wsindex.paths import Mode
 
 
@@ -332,3 +339,61 @@ def test_empty_remote_string_reads_as_no_remote(tmp_path: Path) -> None:
     path.write_text(tomli_w.dumps(data), encoding="utf-8")
     Config.reset()
     assert Config(path).repos[0].remote is None
+
+
+# --- snapshot repos ------------------------------------------------------
+
+
+def write(tmp_path: Path, repos: list[dict[str, object]]) -> Path:
+    data = Config.default("demo").to_dict()
+    data["repos"] = repos
+    path = tmp_path / "wsindex.toml"
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    Config.reset()
+    return path
+
+
+def test_a_snapshot_repo_round_trips(tmp_path: Path) -> None:
+    config = Config.default("demo")
+    config.add_repo("docs", path="snap", source=RepoSource.CONNECTOR, urls=["https://x/a"])
+    path = config.save(tmp_path / "wsindex.toml")
+
+    Config.reset()
+    repo = Config(path).repos[0]
+    assert repo.is_snapshot
+    assert repo.urls == ("https://x/a",)
+
+
+def test_an_ordinary_repo_is_not_a_snapshot() -> None:
+    config = Config.default("demo")
+    config.add_repo("r", path="/p")
+    assert not config.repos[0].is_snapshot
+
+
+def test_a_repo_with_two_owners_is_rejected(tmp_path: Path) -> None:
+    # A working copy is either pulled or materialized. Both would mean
+    # sync fast-forwards the files it just wrote, or the reverse.
+    path = write(tmp_path, [{"id": "r", "path": "p", "source": "connector", "remote": "u"}])
+    with pytest.raises(ValueError, match="not both"):
+        Config(path)
+
+
+def test_urls_without_a_source_are_a_typo_worth_naming(tmp_path: Path) -> None:
+    path = write(tmp_path, [{"id": "r", "path": "p", "urls": ["https://x/a"]}])
+    with pytest.raises(ValueError, match="no 'source'"):
+        Config(path)
+
+
+def test_an_unknown_source_is_rejected_at_load(tmp_path: Path) -> None:
+    # Strict, unlike `connectors`: a repo that fails to load is a repo
+    # that silently stops being indexed.
+    path = write(tmp_path, [{"id": "r", "path": "p", "source": "telepathy"}])
+    with pytest.raises(ValueError, match="telepathy"):
+        Config(path)
+
+
+def test_add_repo_refuses_the_same_contradiction() -> None:
+    config = Config.default("demo")
+    with pytest.raises(ValueError, match="not both"):
+        config.add_repo("r", path="p", source=RepoSource.CONNECTOR, remote="u")
+    assert not config.repos

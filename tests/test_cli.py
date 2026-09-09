@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 
 from wsindex.cli import app
 from wsindex.config import Provider
+from wsindex.connectors import BUILTIN, Connector, Document, DocumentNotFound
 from wsindex.embed import FakeEmbedder
 from wsindex.paths import CONFIG_FILE, ENV_OVERRIDE
 
@@ -410,7 +411,7 @@ def test_sync_without_any_remote_says_so(workspace: Path) -> None:
     result = runner.invoke(app, ["sync"])
 
     assert result.exit_code == 0
-    assert "no repos have a remote" in result.output
+    assert "nothing to sync" in result.output
 
 
 def test_sync_skips_repos_without_a_remote(workspace: Path, origin: Path) -> None:
@@ -528,3 +529,186 @@ def test_fetch_needs_a_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     result = runner.invoke(app, ["fetch", "https://example.invalid/a"])
     assert result.exit_code == 1
     assert "wsindex init" in result.output
+
+
+# --- snapshot repos: sync materializes, index reads them unchanged --------
+
+
+class _StubConnector(Connector):
+    """One document, so the CLI loop can be driven without the network."""
+
+    def matches(self, url: str) -> bool:
+        return url.startswith("https://")
+
+    def fetch(self, url: str) -> Document:
+        if url.endswith("/missing"):
+            raise DocumentNotFound(f"{url} is not there, or not visible")
+        return Document(
+            url=url,
+            title="Retention policy",
+            text="Snapshots are pruned after ninety days.",
+            metadata={"source": "stub"},
+        )
+
+
+@pytest.fixture
+def stub_connector(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(BUILTIN, "stub", _StubConnector)
+
+
+def declare_connector(workspace: Path) -> None:
+    """Append a `[[connectors]]` entry — the syntax the README documents."""
+    config = workspace / CONFIG_FILE
+    config.write_text(
+        config.read_text() + '\n[[connectors]]\ntype = "stub"\nurl_pattern = "https://*"\n'
+    )
+
+
+def test_add_repo_registers_a_snapshot(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+
+    result = runner.invoke(
+        app,
+        ["add-repo", "docs", "snap", "--source", "connector", "--url", "https://example.com/a"],
+    )
+
+    assert result.exit_code == 0
+    entry = tomllib.loads((workspace / CONFIG_FILE).read_text())["repos"][0]
+    assert entry["source"] == "connector"
+    assert entry["urls"] == ["https://example.com/a"]
+
+
+def test_a_repo_cannot_be_both_pulled_and_materialized(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+
+    result = runner.invoke(
+        app,
+        [
+            "add-repo",
+            "docs",
+            "snap",
+            "--source",
+            "connector",
+            "--remote",
+            "https://x.invalid/r.git",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not both" in result.output
+    assert not tomllib.loads((workspace / CONFIG_FILE).read_text())["repos"]
+
+
+def test_sync_materializes_a_snapshot_and_index_reads_it(
+    workspace: Path, stub_connector: None
+) -> None:
+    # The point of the whole step: nothing in `index` or `search` knows
+    # that this repo was fetched rather than checked out.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    declare_connector(workspace)
+    runner.invoke(
+        app,
+        [
+            "add-repo",
+            "docs",
+            "snap",
+            "--source",
+            "connector",
+            "--url",
+            "https://wiki.example.com/retention",
+        ],
+    )
+
+    synced = runner.invoke(app, ["sync"])
+
+    assert synced.exit_code == 0
+    assert "docs: 1 added" in synced.output
+    assert (workspace / "snap" / "wiki.example.com" / "retention.md").exists()
+    found = runner.invoke(app, ["search", "how long are snapshots kept"])
+    assert "wiki.example.com/retention.md" in found.output
+
+
+def test_a_second_sync_of_unchanged_documents_commits_nothing(
+    workspace: Path, stub_connector: None
+) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    declare_connector(workspace)
+    runner.invoke(
+        app,
+        [
+            "add-repo",
+            "docs",
+            "snap",
+            "--source",
+            "connector",
+            "--url",
+            "https://wiki.example.com/a",
+        ],
+    )
+    runner.invoke(app, ["sync"])
+
+    result = runner.invoke(app, ["sync"])
+
+    assert "docs: up to date (1 documents)" in result.output
+    log = subprocess.run(
+        ["git", "log", "--oneline"],
+        cwd=workspace / "snap",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert len(log.stdout.splitlines()) == 1
+
+
+def test_sync_names_the_document_it_could_not_fetch(workspace: Path, stub_connector: None) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    declare_connector(workspace)
+    runner.invoke(
+        app,
+        [
+            "add-repo",
+            "docs",
+            "snap",
+            "--source",
+            "connector",
+            "--url",
+            "https://wiki.example.com/a",
+            "--url",
+            "https://wiki.example.com/missing",
+        ],
+    )
+
+    result = runner.invoke(app, ["sync"])
+
+    assert result.exit_code == 1
+    assert "1 failed" in result.output
+    assert "https://wiki.example.com/missing" in result.output
+    # The one that worked still landed: a failure is per document.
+    assert (workspace / "snap" / "wiki.example.com" / "a.md").exists()
+
+
+def test_sync_reports_a_snapshot_it_could_not_write(workspace: Path, stub_connector: None) -> None:
+    # The directory exists and holds something that is not ours, so
+    # materialization refuses it — per repo, like an unusable remote.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    declare_connector(workspace)
+    (workspace / "snap").mkdir()
+    (workspace / "snap" / "notes.txt").write_text("mine")
+    runner.invoke(
+        app,
+        [
+            "add-repo",
+            "docs",
+            "snap",
+            "--source",
+            "connector",
+            "--url",
+            "https://wiki.example.com/a",
+        ],
+    )
+
+    result = runner.invoke(app, ["sync"])
+
+    assert result.exit_code == 1
+    assert "docs: failed" in result.output
+    assert (workspace / "snap" / "notes.txt").exists()

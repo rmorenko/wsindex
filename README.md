@@ -216,6 +216,51 @@ than falling back to an anonymous request: GitHub answers 404 for a
 private repository, which would otherwise read as "no such issue" and
 send you looking in the wrong place.
 
+## Keeping a snapshot of what you fetch
+
+A fetched document does not go into the index directly. It is written to
+disk as markdown, in a directory that is itself a git repository, and
+`index` reads that repository like any checkout:
+
+```toml
+[[repos]]
+id = "docs"
+path = "snapshots/docs"
+source = "connector"
+urls = [
+  "https://github.com/myorg/handbook/issues/42",
+  "https://wiki.example.com/retention-policy",
+]
+```
+
+```console
+$ wsindex sync
+docs: 4 added
+files: 4  chunks: 25  written: 25  deleted: 0  commits: 1
+
+$ wsindex sync
+docs: up to date (4 documents)
+files: 0  chunks: 0  written: 0  deleted: 0  commits: 0
+```
+
+The second run costs nothing, and that is the design rather than an
+optimization. Every sync is a commit, so the snapshot's `git log` is the
+history of the source — a wiki that keeps none, or a tracker whose
+history is a list of field changes, becomes `git log -p`. Nothing about
+the fetch is recorded in the file, only what the source said about the
+document: a timestamp would make every sync a diff and turn that log
+into a heartbeat.
+
+Because the snapshot is a git repository, incremental indexing applies to
+it unchanged, and a search hit points at a line of a file that exists.
+The url lives in the frontmatter, so the live page is one hop away, but
+the citation is not a claim about a page that may have changed since.
+
+Each pass reconciles rather than accumulates: drop a url from the config
+and the file is deleted, with the deletion in the log. A document that
+*fails* to fetch keeps its file — a timeout is not a deletion, and a
+history whose job is to say when things changed must not claim one.
+
 ## Drift between code and configuration
 
 While indexing, wsindex notes two things: ports that code expects to

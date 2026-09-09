@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import copy
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -69,6 +70,18 @@ class Provider(StrEnum):
     SENTENCE_TRANSFORMERS = "sentence-transformers"
 
 
+class RepoSource(StrEnum):
+    """Who fills a repository's working copy.
+
+    Absent means the user does — a checkout they maintain, which sync
+    leaves alone unless it has a `remote`. An enum with one member for
+    the same reason `Backend` has one: a second kind of generated repo
+    should be a data change.
+    """
+
+    CONNECTOR = "connector"
+
+
 @dataclass(frozen=True, kw_only=True)
 class Repository:
     """One indexed repository.
@@ -84,11 +97,25 @@ class Repository:
             because the two cases are both normal: a repo you already have
             checked out needs no url, a repo the workspace should fetch
             for itself does.
+        source: Set to `connector` for a snapshot repository — one whose
+            files `wsindex sync` writes by fetching `urls` and
+            committing them (step 29b). Mutually exclusive with `remote`:
+            a working copy has exactly one owner.
+        urls: The documents a snapshot repository holds. Meaningless
+            without `source`, and rejected there — a url list on a git
+            repo is a typo, not a preference.
     """
 
     id: str
     path: str
     remote: str | None = None
+    source: RepoSource | None = None
+    urls: tuple[str, ...] = ()
+
+    @property
+    def is_snapshot(self) -> bool:
+        """True when sync materializes this repo instead of pulling it."""
+        return self.source is RepoSource.CONNECTOR
 
 
 class Config:
@@ -245,6 +272,40 @@ class Config:
         for repo in data.get("repos", []):
             if "id" not in repo or "path" not in repo:
                 raise ValueError(f"repo entry needs both 'id' and 'path': {repo!r}")
+            cls._validate_repo(repo)
+
+    @staticmethod
+    def _validate_repo(repo: dict[str, Any]) -> None:
+        """Check one `[[repos]]` entry beyond its required keys.
+
+        Strict, unlike `connectors`, which skips a broken entry. The
+        asymmetry is deliberate: a connector that fails to load routes
+        nothing, while a repo that fails to load is a repo that silently
+        stops being indexed — and the user would go looking for the
+        missing search results, not for the typo.
+
+        Args:
+            repo: One parsed repo table.
+
+        Raises:
+            ValueError: `source` names no known kind, a snapshot also has
+                a `remote` (two owners for one working copy), or `urls`
+                appear on a repo that is not a snapshot.
+        """
+        source = repo.get("source")
+        if source is not None:
+            # Constructing the enum is the check, as it is for `backend`.
+            RepoSource(source)
+            if repo.get("remote"):
+                raise ValueError(
+                    f"repo {repo['id']!r} has both 'source' and 'remote' — a working copy "
+                    "is either pulled from a remote or materialized by connectors, not both"
+                )
+        elif repo.get("urls"):
+            raise ValueError(
+                f"repo {repo['id']!r} lists 'urls' but has no 'source' — add "
+                'source = "connector" to materialize them'
+            )
 
     @classmethod
     def default(
@@ -464,11 +525,21 @@ class Config:
                 # `or None`: an empty string in a hand-edited file means
                 # "no remote", not a url that will fail at clone time.
                 remote=str(repo["remote"]) if repo.get("remote") else None,
+                source=RepoSource(repo["source"]) if repo.get("source") else None,
+                urls=tuple(str(url) for url in repo.get("urls", [])),
             )
             for repo in self._data["repos"]
         ]
 
-    def add_repo(self, repo_id: str, *, path: str, remote: str | None = None) -> None:
+    def add_repo(
+        self,
+        repo_id: str,
+        *,
+        path: str,
+        remote: str | None = None,
+        source: RepoSource | None = None,
+        urls: Sequence[str] = (),
+    ) -> None:
         """Register a repository in the document (in memory; `save` is separate).
 
         Args:
@@ -476,10 +547,16 @@ class Config:
             path: Repository root directory.
             remote: Clone url for `wsindex sync`; omitted for a working
                 copy the user maintains themselves.
+            source: `connector` for a snapshot repo whose files sync
+                materializes; omitted for an ordinary git checkout.
+            urls: Documents a snapshot repo holds.
 
         Raises:
             ValueError: The id is already registered — ids name datasets,
-                so a duplicate would silently merge two repos into one.
+                so a duplicate would silently merge two repos into one —
+                or the entry breaks a rule `_validate_repo` enforces on
+                load, checked here so a bad `add-repo` fails now rather
+                than on the next command.
         """
         if any(repo.id == repo_id for repo in self.repos):
             raise ValueError(f"repo id already exists: {repo_id}")
@@ -488,6 +565,11 @@ class Config:
         # tomli_w would refuse to write one.
         if remote is not None:
             entry["remote"] = remote
+        if source is not None:
+            entry["source"] = source.value
+        if urls:
+            entry["urls"] = list(urls)
+        self._validate_repo(entry)
         self._data["repos"].append(entry)
 
     def to_dict(self) -> dict[str, Any]:

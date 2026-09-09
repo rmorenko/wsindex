@@ -31,8 +31,8 @@ from typing import Annotated, assert_never
 
 import typer
 
-from wsindex.config import Backend, Config, Provider
-from wsindex.connectors import ConnectorError, route
+from wsindex.config import Backend, Config, Provider, Repository, RepoSource
+from wsindex.connectors import ConnectorError, ConnectorSpec, route
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
 from wsindex.links import Edge, LinkKind, LinkStore
@@ -46,6 +46,7 @@ from wsindex.paths import (
 )
 from wsindex.pipeline import Pipeline
 from wsindex.rank.reranker import CrossEncoderReranker
+from wsindex.snapshot import materialize
 from wsindex.store import LanceDBStore, VectorStore
 
 app = typer.Typer(no_args_is_help=True)
@@ -219,6 +220,14 @@ def add_repo(
         str | None,
         typer.Option("--remote", help="Clone url; `wsindex sync` keeps <path> up to date from it"),
     ] = None,
+    source: Annotated[
+        RepoSource | None,
+        typer.Option("--source", help="`connector` for a snapshot repo built from --url documents"),
+    ] = None,
+    url: Annotated[
+        list[str] | None,
+        typer.Option("--url", help="Document to materialize (repeat); needs --source connector"),
+    ] = None,
 ) -> None:
     """Register a repository; its id becomes the dataset name.
 
@@ -226,16 +235,24 @@ def add_repo(
     `wsindex sync` clones it if `path` does not exist yet and
     fast-forwards it afterwards. Without one, `path` is a checkout you
     maintain yourself and sync leaves it alone.
+
+    With `--source connector` the repo is a snapshot instead: sync
+    fetches each `--url` through the configured connectors, writes it as
+    markdown and commits. The two are mutually exclusive — a working copy
+    has one owner.
     """
     config = _config()
     location = _require_config_file(config)
     try:
-        config.add_repo(repo_id, path=path, remote=remote)
+        config.add_repo(repo_id, path=path, remote=remote, source=source, urls=url or ())
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     config.save(location.path)
-    suffix = f" (remote: {remote})" if remote else ""
+    if source is RepoSource.CONNECTOR:
+        suffix = f" (snapshot of {len(url or ())} document(s))"
+    else:
+        suffix = f" (remote: {remote})" if remote else ""
     typer.echo(f"added repo '{repo_id}' -> {path}{suffix}")
 
 
@@ -353,15 +370,23 @@ def sync(
     or local commits make it decline and say so, rather than choosing for
     you. That costs nothing but speed — `index` handles a dirty tree by
     re-reading the whole repo.
+
+    A repo with `source = "connector"` is filled the other way: its
+    documents are fetched and committed into a snapshot repository, which
+    `index` then reads like any other checkout.
     """
     config = _config()
     _require_config_file(config)
-    remotes = [repo for repo in config.repos if repo.remote is not None]
-    if not remotes:
-        typer.echo("no repos have a remote — add one with `wsindex add-repo <id> <path> --remote`")
+    pulled = [repo for repo in config.repos if repo.remote is not None]
+    snapshots = [repo for repo in config.repos if repo.is_snapshot]
+    if not pulled and not snapshots:
+        typer.echo(
+            "nothing to sync — give a repo a remote (`wsindex add-repo <id> <path> --remote "
+            "<url>`) or make one a snapshot (`--source connector --url <url>`)"
+        )
         return
     skipped = False
-    for repo in remotes:
+    for repo in pulled:
         try:
             outcome = sync_repo(Path(repo.path), remote=str(repo.remote))
         except (NotAGitRepositoryError, GitCommandError) as exc:
@@ -373,12 +398,36 @@ def sync(
         stream_err = outcome.is_skip
         typer.echo(f"{repo.id}: {outcome.value}", err=stream_err)
         skipped = skipped or stream_err
+    for repo in snapshots:
+        skipped = _sync_snapshot(repo, config.connectors) or skipped
     if no_index:
         # Exit code reflects the syncing, which is all this run did.
         raise typer.Exit(code=1 if skipped else 0)
     index()
     if skipped:
         raise typer.Exit(code=1)
+
+
+def _sync_snapshot(repo: Repository, specs: list[ConnectorSpec]) -> bool:
+    """Materialize one snapshot repo, reporting per document.
+
+    Returns:
+        True when something needs the user's attention — a document that
+        could not be fetched, or a snapshot that could not be written.
+        Sync's exit code is built from these, so a scheduled run fails
+        loudly rather than leaving a silently stale snapshot.
+    """
+    try:
+        report = materialize(Path(repo.path), urls=list(repo.urls), specs=specs)
+    except (ValueError, GitCommandError) as exc:
+        typer.echo(f"{repo.id}: failed — {exc}", err=True)
+        return True
+    typer.echo(f"{repo.id}: {report.summary()}", err=bool(report.failed))
+    for url, reason in report.failed:
+        # Listed, not counted: which document is missing decides whether
+        # this is a typo in the config or a source that is down.
+        typer.echo(f"  {url}: {reason}", err=True)
+    return bool(report.failed)
 
 
 _KIND_LABELS = {
