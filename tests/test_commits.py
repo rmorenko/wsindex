@@ -17,11 +17,11 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.config import Config
+from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest.commits import COMMIT_LANG, blame_links, commit_chunks, read_commits
 from wsindex.links import LinkKind, LinkStore
-from wsindex.model import Kind, SearchFilter
+from wsindex.model import Kind, SearchFilter, SourceFile
 from wsindex.pipeline import Pipeline
 from wsindex.store import LanceDBStore
 
@@ -153,7 +153,8 @@ def test_blame_links_a_chunk_to_the_commit_that_wrote_it(repo: Path) -> None:
     messages = commit_chunks(commits, repo="r")
     known = {commits[0].sha: messages[0].id}
     chunks = chunk_file(
-        (repo / "a.py").read_text(), repo="r", path="a.py", lang="python", kind=Kind.CODE
+        (repo / "a.py").read_text(),
+        SourceFile(repo="r", path="a.py", lang="python", kind=Kind.CODE),
     )
 
     links = blame_links(repo, rel_path="a.py", chunks=chunks, known=known)
@@ -174,7 +175,8 @@ def test_an_untracked_file_yields_no_blame_and_no_crash(repo: Path) -> None:
 
     (repo / "fresh.py").write_text("def g():\n    return 2\n")
     chunks = chunk_file(
-        "def g():\n    return 2\n", repo="r", path="fresh.py", lang="python", kind=Kind.CODE
+        "def g():\n    return 2\n",
+        SourceFile(repo="r", path="fresh.py", lang="python", kind=Kind.CODE),
     )
     assert blame_links(repo, rel_path="fresh.py", chunks=chunks, known={}) == []
 
@@ -185,7 +187,8 @@ def test_a_commit_outside_this_run_still_gets_an_edge(repo: Path) -> None:
     from wsindex.ingest import chunk_file
 
     chunks = chunk_file(
-        (repo / "a.py").read_text(), repo="r", path="a.py", lang="python", kind=Kind.CODE
+        (repo / "a.py").read_text(),
+        SourceFile(repo="r", path="a.py", lang="python", kind=Kind.CODE),
     )
     links = blame_links(repo, rel_path="a.py", chunks=chunks, known={})
     assert links
@@ -202,7 +205,7 @@ def test_no_chunks_means_no_blame_call(repo: Path) -> None:
 @pytest.fixture
 def indexed(tmp_path: Path, repo: Path) -> tuple[Pipeline, LinkStore]:
     config = Config.default("test")
-    config.add_repo("r", path=str(repo))
+    config.add_repo(Repository(id="r", path=str(repo)))
     links = LinkStore(tmp_path / "idx")
     pipeline = Pipeline(
         store=LanceDBStore(uri=str(tmp_path / "db"), embedder=FakeEmbedder()),

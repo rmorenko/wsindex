@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from wsindex.config import Config
+from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.links import Link, LinkKind, LinkStore
 from wsindex.pipeline import Pipeline
@@ -170,7 +170,7 @@ def workspace(tmp_path: Path, commit: Committer) -> tuple[Pipeline, LinkStore, P
     (repo / "docker-compose.yml").write_text('services:\n  app:\n    ports:\n      - "8000:7860"\n')
     commit(repo)
     config = Config.default("test")
-    config.add_repo("r", path=str(repo))
+    config.add_repo(Repository(id="r", path=str(repo)))
     store = LinkStore(tmp_path / "idx")
     pipeline = Pipeline(
         store=LanceDBStore(uri=str(tmp_path / "db"), embedder=FakeEmbedder()),
@@ -244,7 +244,7 @@ def test_a_pipeline_without_a_link_store_still_indexes(tmp_path: Path, commit: C
     (repo / "a.py").write_text('X = "http://localhost:8080"\n')
     commit(repo)
     config = Config.default("test")
-    config.add_repo("r", path=str(repo))
+    config.add_repo(Repository(id="r", path=str(repo)))
     pipeline = Pipeline(
         store=LanceDBStore(uri=str(tmp_path / "db"), embedder=FakeEmbedder()),
         state_dir=tmp_path / "state",

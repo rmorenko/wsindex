@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, SourceFile
 
 try:
     from tree_sitter import Node, Parser
@@ -126,21 +126,15 @@ def gap_spans(
     return spans
 
 
-def _assemble(
-    spans: list[Span], *, lines: list[str], repo: str, path: str, lang: str, kind: Kind
-) -> list[Chunk]:
+def _assemble(spans: list[Span], *, lines: list[str], source: SourceFile) -> list[Chunk]:
     """Turn spans into Chunks in file order; text is a verbatim line slice."""
     return [
-        Chunk(
-            repo=repo,
-            path=path,
-            lang=lang,
-            kind=kind,
-            symbol=span.symbol,
-            node_type=span.node_type,
+        source.chunk(
+            text="\n".join(lines[span.start_line - 1 : span.end_line]),
             start_line=span.start_line,
             end_line=span.end_line,
-            text="\n".join(lines[span.start_line - 1 : span.end_line]),
+            symbol=span.symbol,
+            node_type=span.node_type,
         )
         for span in sorted(spans, key=lambda span: span.start_line)
     ]
@@ -175,14 +169,11 @@ def def_span(outer: Node, *, covered: list[bool], symbol: str, node_type: str) -
 
 
 def ast_chunks(
+    text: str,
+    source: SourceFile,
     *,
     parser: Parser,
     extractor: Callable[[Node, list[str], list[bool]], list[Span]],
-    text: str,
-    repo: str,
-    path: str,
-    lang: str,
-    kind: Kind,
 ) -> list[Chunk]:
     """Shared skeleton: parse, run the per-language extractor, fill the gaps.
 
@@ -192,13 +183,10 @@ def ast_chunks(
     the two to disagree.
 
     Args:
-        parser: Grammar-backed parser for `lang`.
-        extractor: That language's span policy.
         text: File contents.
-        repo: Repo id for the produced chunks.
-        path: Repo-relative path for the produced chunks.
-        lang: Language name recorded on every chunk.
-        kind: Artifact category recorded on every chunk.
+        source: The file these chunks belong to.
+        parser: Grammar-backed parser for the file's language.
+        extractor: That language's span policy.
 
     Returns:
         Chunks in file order, covering every non-blank line exactly once.
@@ -208,4 +196,4 @@ def ast_chunks(
     root = parser.parse(text.encode()).root_node
     spans = extractor(root, lines, covered)
     spans += gap_spans(lines, covered=covered, start=1, end=len(lines), symbol=None, node_type=None)
-    return _assemble(spans, lines=lines, repo=repo, path=path, lang=lang, kind=kind)
+    return _assemble(spans, lines=lines, source=source)

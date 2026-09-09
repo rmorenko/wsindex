@@ -15,7 +15,7 @@ from wsindex.ingest.ast import HAS_TREE_SITTER
 from wsindex.ingest.ast.rust import _extend_back
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.languages import REGISTRY
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, Kind, SourceFile
 
 if TYPE_CHECKING:
     from tree_sitter import Node
@@ -64,7 +64,7 @@ def _installed() -> set[str]:
 def _chunk(text: str, lang: str = "python") -> list[Chunk]:
     if REGISTRY.parser(lang) is None:
         pytest.skip(f"no {lang} grammar installed")
-    return chunk_file(text, repo="r", path=f"sample.{lang}", lang=lang, kind=Kind.CODE)
+    return chunk_file(text, SourceFile(repo="r", path=f"sample.{lang}", lang=lang, kind=Kind.CODE))
 
 
 @requires_tree_sitter

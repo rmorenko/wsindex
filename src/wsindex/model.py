@@ -138,6 +138,65 @@ class SearchFilter:
 
 
 @dataclass(frozen=True, kw_only=True)
+class SourceFile:
+    """The file being chunked: what identifies it, and what it is.
+
+    These four values always travel together — every chunker takes them,
+    every `Chunk` carries them — so they are one thing rather than four
+    parameters repeated across seven signatures. Grouping them also
+    closes a class of mistake: `lang` and `kind` are both string-like,
+    and separate parameters can be swapped without a word from the type
+    checker.
+
+    Attributes:
+        repo: Repo id; also the dataset name in the store.
+        path: POSIX path relative to the repo root. With `repo` it is the
+            chunk's identity, so the same file cloned elsewhere still
+            yields the same ids.
+        lang: Language, as the walker identified it.
+        kind: Artifact category (code, config, doc, commit).
+    """
+
+    repo: str
+    path: str
+    lang: str
+    kind: Kind
+
+    def chunk(
+        self,
+        *,
+        text: str,
+        start_line: int,
+        end_line: int,
+        symbol: str | None = None,
+        node_type: str | None = None,
+    ) -> "Chunk":
+        """One chunk of this file, with the file's own fields filled in.
+
+        Args:
+            text: The chunk's text, a verbatim slice of the file.
+            start_line: First line, 1-based inclusive.
+            end_line: Last line, 1-based inclusive.
+            symbol: Name of what this chunk is, when it has one.
+            node_type: Grammar node the chunk came from, when it has one.
+
+        Returns:
+            The chunk.
+        """
+        return Chunk(
+            repo=self.repo,
+            path=self.path,
+            lang=self.lang,
+            kind=self.kind,
+            symbol=symbol,
+            node_type=node_type,
+            start_line=start_line,
+            end_line=end_line,
+            text=text,
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
 class Hit:
     """Backend-independent search result (ARCH §6.4).
 
@@ -156,3 +215,24 @@ class Hit:
     score: float
     metadata: dict[str, Any]
     native_id: str | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        """The fields an outside caller needs, flat and JSON-ready.
+
+        One definition for every interface that answers with a hit — the
+        HTTP API and the MCP tools both return this, so a caller that has
+        seen one recognizes the other. `metadata` holds whatever the
+        store kept; this is the part that is promised.
+        """
+        meta = self.metadata
+        return {
+            "repo": str(meta["repo"]),
+            "path": str(meta["path"]),
+            "start_line": int(meta["start_line"]),
+            "end_line": int(meta["end_line"]),
+            "lang": str(meta.get("lang", "")),
+            "kind": str(meta.get("kind", "")),
+            "symbol": meta.get("symbol"),
+            "score": round(float(self.score), 4),
+            "text": str(meta["text"]),
+        }

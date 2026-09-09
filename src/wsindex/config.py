@@ -40,7 +40,6 @@ from __future__ import annotations
 import copy
 import json
 import tomllib
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from hashlib import blake2b
@@ -153,6 +152,29 @@ class Repository:
             sort_keys=True,
         )
         return blake2b(payload.encode(), digest_size=8).hexdigest()
+
+
+def _repo_entry(repo: Repository) -> dict[str, Any]:
+    """A repo as the TOML document holds it.
+
+    Empty values are left out rather than written as null: TOML has no
+    null, and `tomli_w` refuses to write one.
+    """
+    entry: dict[str, Any] = {"id": repo.id, "path": repo.path}
+    if repo.remote is not None:
+        entry["remote"] = repo.remote
+    if repo.source is not None:
+        entry["source"] = repo.source.value
+    if repo.urls:
+        entry["urls"] = list(repo.urls)
+    if repo.ignore:
+        entry["ignore"] = list(repo.ignore)
+    if repo.formats:
+        entry["formats"] = {
+            suffix: {"lang": lang, "kind": kind.value}
+            for suffix, (lang, kind) in repo.formats.items()
+        }
+    return entry
 
 
 class Config:
@@ -648,29 +670,16 @@ class Config:
             for repo in self._data["repos"]
         ]
 
-    def add_repo(
-        self,
-        repo_id: str,
-        *,
-        path: str,
-        remote: str | None = None,
-        source: RepoSource | None = None,
-        urls: Sequence[str] = (),
-        ignore: Sequence[str] = (),
-    ) -> None:
+    def add_repo(self, repo: Repository) -> None:
         """Register a repository in the document (in memory; `save` is separate).
 
+        Takes the whole `Repository` rather than its fields one by one.
+        Two parallel lists of the same six things drift: `formats` was
+        added to the dataclass and forgotten here, so the only way to set
+        it through this class was to reach into the parsed document.
+
         Args:
-            repo_id: Unique repo id; becomes the dataset name.
-            path: Repository root directory.
-            remote: Clone url for `wsindex sync`; omitted for a working
-                copy the user maintains themselves.
-            source: `connector` for a snapshot repo whose files sync
-                materializes; omitted for an ordinary git checkout.
-            urls: Documents a snapshot repo holds.
-            ignore: Path globs this repo excludes. `formats` is not here
-                on purpose: a suffix table is a nested mapping nobody
-                types at a shell, and `wsindex.toml` is where it belongs.
+            repo: The entry to add.
 
         Raises:
             ValueError: The id is already registered — ids name datasets,
@@ -679,19 +688,9 @@ class Config:
                 load, checked here so a bad `add-repo` fails now rather
                 than on the next command.
         """
-        if any(repo.id == repo_id for repo in self.repos):
-            raise ValueError(f"repo id already exists: {repo_id}")
-        entry: dict[str, Any] = {"id": repo_id, "path": path}
-        # Absent rather than null when unset: TOML has no null, and
-        # tomli_w would refuse to write one.
-        if remote is not None:
-            entry["remote"] = remote
-        if source is not None:
-            entry["source"] = source.value
-        if urls:
-            entry["urls"] = list(urls)
-        if ignore:
-            entry["ignore"] = list(ignore)
+        if any(existing.id == repo.id for existing in self.repos):
+            raise ValueError(f"repo id already exists: {repo.id}")
+        entry = _repo_entry(repo)
         self._validate_repo(entry)
         self._data["repos"].append(entry)
 

@@ -25,7 +25,7 @@ from typing import Any
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from wsindex.config import Config
+from wsindex.config import Config, Repository
 from wsindex.server.scheduler import sync_and_index
 
 _STYLE = """
@@ -172,7 +172,7 @@ def mount_admin(app: FastAPI, guarded: list[Any]) -> None:
         if location is None:
             raise HTTPException(status_code=400, detail="this server has no config file to write")
         try:
-            config.add_repo(repo_id, path=path, remote=remote or None)
+            config.add_repo(Repository(id=repo_id, path=path, remote=remote or None))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         config.save(location.path)

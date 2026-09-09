@@ -129,27 +129,6 @@ class Writer:
         return self._lock.locked()
 
 
-def _hit_json(hit: Any) -> dict[str, Any]:
-    """One hit as the CLI prints it, plus what a machine needs.
-
-    The same fields `wsindex search` shows, because two interfaces that
-    describe one result differently are two results as far as a reader is
-    concerned.
-    """
-    meta = hit.metadata
-    return {
-        "repo": str(meta["repo"]),
-        "path": str(meta["path"]),
-        "start_line": int(meta["start_line"]),
-        "end_line": int(meta["end_line"]),
-        "lang": str(meta.get("lang", "")),
-        "kind": str(meta.get("kind", "")),
-        "symbol": meta.get("symbol"),
-        "score": round(float(hit.score), 4),
-        "text": str(meta["text"]),
-    }
-
-
 def create_app(
     *,
     pipeline_factory: Callable[[], Pipeline] | None = None,
@@ -238,7 +217,7 @@ def create_app(
             # server's — the CLI exits 1 on it, and 400 is the same
             # sentence in HTTP.
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"query": q, "count": len(hits), "hits": [_hit_json(hit) for hit in hits]}
+        return {"query": q, "count": len(hits), "hits": [hit.to_json() for hit in hits]}
 
     @app.post("/index", dependencies=guarded)
     def index() -> dict[str, Any]:

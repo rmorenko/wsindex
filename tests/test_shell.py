@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from wsindex.config import Config
+from wsindex.config import Config, Repository
 from wsindex.model import Hit, Kind
 from wsindex.shell import ShellError, open_in_editor, parse, run
 
@@ -107,7 +107,7 @@ def test_the_editor_is_told_the_line_the_way_it_expects(
     monkeypatch.setenv("EDITOR", editor)
     Config.reset()
     config = Config.default("ws")
-    config.add_repo("app", path="/checkouts/app")
+    config.add_repo(Repository(id="app", path="/checkouts/app"))
 
     assert open_in_editor(hit())[1:] == expected_tail
 
@@ -115,7 +115,7 @@ def test_the_editor_is_told_the_line_the_way_it_expects(
 def test_an_editor_with_arguments_survives(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EDITOR", "code --wait")
     Config.reset()
-    Config.default("ws").add_repo("app", path="/checkouts/app")
+    Config.default("ws").add_repo(Repository(id="app", path="/checkouts/app"))
 
     assert open_in_editor(hit())[:3] == ["code", "--wait", "--goto"]
 
@@ -226,7 +226,7 @@ def test_help_and_repos_answer_without_searching(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     Config.reset()
-    Config.default("ws").add_repo("app", path="/checkouts/app")
+    Config.default("ws").add_repo(Repository(id="app", path="/checkouts/app"))
     out = drive([":help", ":repos"], monkeypatch, tmp_path)
     assert ":open <number>" in out
     assert "/checkouts/app" in out
@@ -299,7 +299,7 @@ def test_an_unknown_repo_is_a_sentence_not_a_crash(
 def test_open_runs_the_editor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("EDITOR", "vi")
     Config.reset()
-    Config.default("ws").add_repo("app", path="/checkouts/app")
+    Config.default("ws").add_repo(Repository(id="app", path="/checkouts/app"))
     ran: list[list[str]] = []
     monkeypatch.setattr("subprocess.run", lambda argv, **_: ran.append(argv))
 
@@ -314,7 +314,7 @@ def test_an_editor_that_will_not_run_says_so(
 ) -> None:
     monkeypatch.setenv("EDITOR", "no-such-editor")
     Config.reset()
-    Config.default("ws").add_repo("app", path="/checkouts/app")
+    Config.default("ws").add_repo(Repository(id="app", path="/checkouts/app"))
 
     def explode(argv: list[str], **_: Any) -> None:
         raise OSError("No such file or directory")

@@ -8,7 +8,7 @@ verbatim slice of the file — `text` corresponds exactly to lines
 
 import itertools
 
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, SourceFile
 
 WINDOW_LINES = 40
 OVERLAP_LINES = 10
@@ -16,11 +16,8 @@ OVERLAP_LINES = 10
 
 def chunk_plain(
     text: str,
+    source: SourceFile,
     *,
-    repo: str,
-    path: str,
-    lang: str,
-    kind: Kind,
     window: int = WINDOW_LINES,
     overlap: int = OVERLAP_LINES,
 ) -> list[Chunk]:
@@ -39,31 +36,19 @@ def chunk_plain(
         window_text = "\n".join(window_lines)
         if not window_text.strip():
             continue
-        chunk = Chunk(
-            repo=repo,
-            path=path,
-            lang=lang,
-            start_line=i + 1,
-            end_line=min(i + window, len(lines)),
-            text=window_text,
-            kind=kind,
-            symbol=None,
-            node_type=None,
+        result.append(
+            source.chunk(
+                text=window_text,
+                start_line=i + 1,
+                end_line=min(i + window, len(lines)),
+            )
         )
-        result.append(chunk)
         if i + window >= len(lines):
             break
     return result
 
 
-def chunk_markdown(
-    text: str,
-    *,
-    repo: str,
-    path: str,
-    lang: str,
-    kind: Kind,
-) -> list[Chunk]:
+def chunk_markdown(text: str, source: SourceFile) -> list[Chunk]:
     """Split Markdown into sections: one chunk per header, plus the preamble.
 
     A `#` line inside a fenced code block does not start a section. The header
@@ -89,23 +74,19 @@ def chunk_markdown(
         first = lines[s]
         symbol = first.lstrip("#").strip() if first.startswith("#") else None
         chunks.append(
-            Chunk(
-                repo=repo,
-                path=path,
-                lang=lang,
-                kind=kind,
+            source.chunk(
+                text=section_text,
                 start_line=start_line,
                 end_line=end_line,
                 symbol=symbol,
                 node_type="section",
-                text=section_text,
             )
         )
     return chunks
 
 
-def chunk_text(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
+def chunk_text(text: str, source: SourceFile) -> list[Chunk]:
     """Dispatch by lang: Markdown gets section chunking, the rest sliding windows."""
-    if lang == "markdown":
-        return chunk_markdown(text, repo=repo, path=path, lang=lang, kind=kind)
-    return chunk_plain(text, repo=repo, path=path, lang=lang, kind=kind)
+    if source.lang == "markdown":
+        return chunk_markdown(text, source)
+    return chunk_plain(text, source)

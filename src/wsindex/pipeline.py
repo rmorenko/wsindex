@@ -35,7 +35,7 @@ from wsindex.ingest import (
 from wsindex.ingest.commits import blame_links, commit_chunks, read_commits
 from wsindex.ingest.link_extract import links_for
 from wsindex.links import LinkStore
-from wsindex.model import Chunk, Hit, SearchFilter
+from wsindex.model import Chunk, Hit, SearchFilter, SourceFile
 from wsindex.rank.reranker import Reranker
 from wsindex.store import VectorStore
 
@@ -299,11 +299,13 @@ class Pipeline:
         fresh_ids: set[str] = set()
         for walked in indexable:
             chunks: list[Chunk] = chunk_file(
-                text=(root / walked.rel_path).read_text(encoding="utf-8", errors="replace"),
-                path=walked.rel_path,
-                repo=repo.id,
-                lang=walked.lang,
-                kind=walked.kind,
+                (root / walked.rel_path).read_text(encoding="utf-8", errors="replace"),
+                SourceFile(
+                    repo=repo.id,
+                    path=walked.rel_path,
+                    lang=walked.lang,
+                    kind=walked.kind,
+                ),
             )
             fresh_ids.update(chunk.id for chunk in chunks)
             files += 1

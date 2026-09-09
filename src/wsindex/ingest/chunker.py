@@ -6,10 +6,10 @@ from typing import assert_never
 from wsindex.ingest.ast import ast_chunks, gap_spans, mark_covered
 from wsindex.ingest.languages import REGISTRY, Section
 from wsindex.ingest.text_chunker import chunk_text
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, Kind, SourceFile
 
 
-def chunk_file(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
+def chunk_file(text: str, source: SourceFile) -> list[Chunk]:
     """Route a file to a chunker by its kind — the pipeline's single entry point.
 
     DOC uses the text chunker. CODE and CONFIG go through the AST path
@@ -29,52 +29,38 @@ def chunk_file(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> lis
 
     Args:
         text: File contents.
-        repo: Repo id recorded on every chunk.
-        path: Repo-relative path recorded on every chunk.
-        lang: Language name, as the walker identified it.
-        kind: Artifact category, as the walker identified it.
+        source: The file being chunked — its identity and its kind.
 
     Returns:
         The file's chunks, in file order.
     """
-    match kind:
+    match source.kind:
         case Kind.DOC | Kind.COMMIT:
             # COMMIT never reaches here in practice — `ingest.commits`
             # builds those chunks itself, because a commit message is one
             # unit and windowing it would scatter the reasoning `why`
             # exists to surface. Routed anyway so the match stays total.
-            return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
+            return chunk_text(text, source)
         case Kind.CODE | Kind.CONFIG:
-            spec = REGISTRY.get(lang)
-            parser = REGISTRY.parser(lang)
+            spec = REGISTRY.get(source.lang)
+            parser = REGISTRY.parser(source.lang)
             if spec is not None and spec.sections is not None and parser is not None:
                 lines = text.splitlines()
                 return _chunk_container(
                     spec.sections(parser.parse(text.encode()).root_node, lines),
                     lines=lines,
-                    repo=repo,
-                    path=path,
-                    lang=lang,
-                    kind=kind,
+                    source=source,
                 )
-            extractor = REGISTRY.extractor(lang)
+            extractor = REGISTRY.extractor(source.lang)
             if parser is None or extractor is None:
-                return chunk_text(text, repo=repo, path=path, lang=lang, kind=kind)
-            return ast_chunks(
-                parser=parser,
-                extractor=extractor,
-                text=text,
-                repo=repo,
-                path=path,
-                lang=lang,
-                kind=kind,
-            )
+                return chunk_text(text, source)
+            return ast_chunks(text, source, parser=parser, extractor=extractor)
         case _:  # pragma: no cover - mypy proves this branch unreachable
-            assert_never(kind)
+            assert_never(source.kind)
 
 
 def _chunk_container(
-    sections: list[Section], *, lines: list[str], repo: str, path: str, lang: str, kind: Kind
+    sections: list[Section], *, lines: list[str], source: SourceFile
 ) -> list[Chunk]:
     """Chunk each section as its own language, back in file coordinates.
 
@@ -106,10 +92,7 @@ def _chunk_container(
     Args:
         sections: What the container's splitter returned.
         lines: The container's lines, for the gap pass.
-        repo: Repo id recorded on every chunk.
-        path: Repo-relative path recorded on every chunk.
-        lang: The *container's* language name.
-        kind: Artifact category; sections inherit the container's.
+        source: The container file; sections inherit its name and kind.
 
     Returns:
         Every section's chunks plus the leftovers, in file order.
@@ -117,7 +100,8 @@ def _chunk_container(
     chunks: list[Chunk] = []
     covered = [False] * (len(lines) + 1)
     for section in sections:
-        for chunk in chunk_file(section.text, repo=repo, path=path, lang=section.lang, kind=kind):
+        inner = replace(source, lang=section.lang)
+        for chunk in chunk_file(section.text, inner):
             offset = section.start_line - 1
             start, end = chunk.start_line + offset, chunk.end_line + offset
             mark_covered(covered, start=start, end=end)
@@ -125,18 +109,12 @@ def _chunk_container(
             # (text, path) in __post_init__ and neither changes here, so
             # the id a section's chunk gets is the id it keeps — dedup
             # and incremental deletes still work on it.
-            chunks.append(replace(chunk, lang=lang, start_line=start, end_line=end))
+            chunks.append(replace(chunk, lang=source.lang, start_line=start, end_line=end))
     chunks += [
-        Chunk(
-            repo=repo,
-            path=path,
-            lang=lang,
-            kind=kind,
-            symbol=None,
-            node_type=None,
+        source.chunk(
+            text="\n".join(lines[span.start_line - 1 : span.end_line]),
             start_line=span.start_line,
             end_line=span.end_line,
-            text="\n".join(lines[span.start_line - 1 : span.end_line]),
         )
         for span in gap_spans(
             lines, covered=covered, start=1, end=len(lines), symbol=None, node_type=None

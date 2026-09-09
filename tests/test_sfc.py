@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from wsindex.ingest import REGISTRY, chunk_file
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, Kind, SourceFile
 
 if TYPE_CHECKING:
     from tree_sitter import Node
@@ -76,7 +76,7 @@ def has(lang: str) -> bool:
 
 
 def chunks(text: str, *, lang: str, path: str) -> list[Chunk]:
-    return chunk_file(text, repo="r", path=path, lang=lang, kind=Kind.CODE)
+    return chunk_file(text, SourceFile(repo="r", path=path, lang=lang, kind=Kind.CODE))
 
 
 # --- HTML, which is also what Angular templates are ----------------------

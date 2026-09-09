@@ -36,7 +36,7 @@ from wsindex.config import Backend, Config, Provider, Repository, RepoSource
 from wsindex.connectors import ConnectorError, ConnectorSpec, route
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
-from wsindex.links import Edge, LinkKind, LinkStore
+from wsindex.links import KIND_LABELS, Edge, LinkKind, LinkStore
 from wsindex.model import Hit, Kind, SearchFilter
 from wsindex.paths import (
     ConfigLocation,
@@ -257,12 +257,14 @@ def add_repo(
     location = _require_config_file(config)
     try:
         config.add_repo(
-            repo_id,
-            path=path,
-            remote=remote,
-            source=source,
-            urls=url or (),
-            ignore=ignore or (),
+            Repository(
+                id=repo_id,
+                path=path,
+                remote=remote,
+                source=source,
+                urls=tuple(url or ()),
+                ignore=tuple(ignore or ()),
+            )
         )
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -446,18 +448,6 @@ def _sync_snapshot(repo: Repository, specs: list[ConnectorSpec]) -> bool:
     return bool(report.failed)
 
 
-_KIND_LABELS = {
-    LinkKind.READS_KEY: "read by",
-    LinkKind.DECLARES: "declared by",
-    LinkKind.REFERENCES: "mentioned in",
-    LinkKind.BLAMED_BY: "wrote",
-}
-"""How each edge kind reads in a report. Phrased from the *named thing's*
-point of view, since that is what the user asked about — so `BLAMED_BY`
-reads "wrote" here, not "written by": ask `refs` about a commit and the
-answer is what that commit wrote."""
-
-
 def _definitions(pipeline: Pipeline, symbol: str, *, limit: int = 20) -> list[Hit]:
     """Chunks whose symbol contains `symbol`, nearest match first.
 
@@ -494,7 +484,7 @@ def refs(name: str) -> None:
         typer.echo(f"no links named {name!r}")
         return
     typer.echo(name)
-    for kind, label in _KIND_LABELS.items():
+    for kind, label in KIND_LABELS.items():
         group = [edge for edge in edges if edge.kind is kind]
         if not group:
             continue

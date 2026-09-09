@@ -91,6 +91,21 @@ class LinkKind(StrEnum):
     indexing run and there is nothing to wait for."""
 
 
+KIND_LABELS: dict[LinkKind, str] = {
+    LinkKind.READS_KEY: "read by",
+    LinkKind.DECLARES: "declared by",
+    LinkKind.REFERENCES: "mentioned in",
+    LinkKind.BLAMED_BY: "wrote",
+}
+"""How each kind reads in a report, from the *named thing's* point of
+view — so `BLAMED_BY` reads "wrote", not "written by": ask about a commit
+and the answer is what that commit wrote. Here rather than in each
+reader, so the CLI and an agent see one vocabulary.
+
+Ordered as a report reads best, which `dict` preserves.
+"""
+
+
 @dataclass(frozen=True, kw_only=True)
 class Link:
     """One edge, anchored to the chunk it was found in.

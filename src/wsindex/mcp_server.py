@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from pydantic import Field
 
 from wsindex.config import Config
-from wsindex.links import LinkKind, LinkStore
+from wsindex.links import KIND_LABELS, LinkKind, LinkStore
 from wsindex.model import Kind, SearchFilter
 
 if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
@@ -56,36 +56,6 @@ to find everything that names a port, a ticket or a commit, and `why` to
 find the commits that wrote a definition — that is usually where the
 reasoning behind a design lives.
 """
-
-_KIND_LABELS = {
-    LinkKind.READS_KEY: "read by",
-    LinkKind.DECLARES: "declared by",
-    LinkKind.REFERENCES: "mentioned in",
-    LinkKind.BLAMED_BY: "wrote",
-}
-"""How each edge kind reads, from the named thing's point of view — the
-same phrasing `wsindex refs` prints, so an agent and a person reading
-over its shoulder see one vocabulary."""
-
-
-def _hit(hit: Any) -> dict[str, Any]:
-    """One hit, in the shape the HTTP API returns it.
-
-    Shared shape rather than a second one: an agent that has seen
-    `GET /search` should recognise this without being told.
-    """
-    meta = hit.metadata
-    return {
-        "repo": str(meta["repo"]),
-        "path": str(meta["path"]),
-        "start_line": int(meta["start_line"]),
-        "end_line": int(meta["end_line"]),
-        "lang": str(meta.get("lang", "")),
-        "kind": str(meta.get("kind", "")),
-        "symbol": meta.get("symbol"),
-        "score": round(float(hit.score), 4),
-        "text": str(meta["text"]),
-    }
 
 
 def build(pipeline: Pipeline | None = None) -> FastMCP:
@@ -131,7 +101,7 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
         hits = engine.search(
             query, k=k, repo=repo, filters=None if candidate.is_empty else candidate
         )
-        return {"count": len(hits), "hits": [_hit(hit) for hit in hits]}
+        return {"count": len(hits), "hits": [hit.to_json() for hit in hits]}
 
     @server.tool()
     def refs(
@@ -142,7 +112,7 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
             edges = links.by_name(name)
         found = [
             {
-                "relation": _KIND_LABELS[edge.kind],
+                "relation": KIND_LABELS[edge.kind],
                 "repo": edge.repo,
                 "path": edge.path,
                 "line": edge.line,

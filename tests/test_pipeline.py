@@ -22,7 +22,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from wsindex.config import Config
+from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest import IndexState, NotAGitRepositoryError
 from wsindex.model import Kind, SearchFilter
@@ -81,7 +81,7 @@ def config(tmp_path: Path, commit: Committer) -> Config:
     make_repo(repo_dir)
     commit(repo_dir)
     config = Config.default("test")
-    config.add_repo("repo1", path=str(repo_dir))
+    config.add_repo(Repository(id="repo1", path=str(repo_dir)))
     return config
 
 
@@ -102,7 +102,7 @@ def add_repo(
         (repo_dir / "app.py").write_text("print('two')\n")
     if commit is not None:
         commit(repo_dir)
-    config.add_repo(name, path=str(repo_dir))
+    config.add_repo(Repository(id=name, path=str(repo_dir)))
     return repo_dir
 
 
@@ -171,7 +171,7 @@ def test_two_repos_get_isolated_datasets(
 def test_missing_repo_is_reported_not_fatal(
     tmp_path: Path, config: Config, pipeline: Pipeline
 ) -> None:
-    config.add_repo("ghost", path=str(tmp_path / "does-not-exist"))
+    config.add_repo(Repository(id="ghost", path=str(tmp_path / "does-not-exist")))
     report = pipeline.index()
     assert report.missing_repos == ("ghost",)
     assert report.written == EXPECTED_CHUNKS  # repo1 still indexed
@@ -506,7 +506,7 @@ def test_non_git_repo_is_a_config_error(tmp_path: Path, config: Config, pipeline
     plain = tmp_path / "plain"
     plain.mkdir()
     (plain / "a.py").write_text("print('a')\n")
-    config.add_repo("plain", path=str(plain))
+    config.add_repo(Repository(id="plain", path=str(plain)))
     with pytest.raises(NotAGitRepositoryError, match="not a git repository"):
         pipeline.index()
 

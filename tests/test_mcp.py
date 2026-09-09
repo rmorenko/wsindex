@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from wsindex.config import Config, Provider
+from wsindex.config import Config, Provider, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.links import LinkStore
 from wsindex.mcp_server import build
@@ -43,7 +43,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     Config.reset()
     config = Config.default("agents", provider=Provider.FAKE)
-    config.add_repo("repo1", path=str(repo))
+    config.add_repo(Repository(id="repo1", path=str(repo)))
     config.save(tmp_path / "wsindex.toml")
     Config.reset()
     Config(tmp_path / "wsindex.toml")

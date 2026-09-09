@@ -28,8 +28,8 @@ def test_roundtrip(tmp_path: Path) -> None:
     # Non-default provider, so the roundtrip proves the field really travels
     # through the file instead of passing on a hardcoded default.
     config = Config.default("demo", provider=Provider.FAKE)
-    config.add_repo("test1", path="path1/test1")
-    config.add_repo("test2", path="path2/test2")
+    config.add_repo(Repository(id="test1", path="path1/test1"))
+    config.add_repo(Repository(id="test2", path="path2/test2"))
     saved = config.to_dict()
     path = config.save(tmp_path / "wsindex.toml")
 
@@ -112,9 +112,9 @@ def test_missing_store_and_rank_sections_still_load(tmp_path: Path) -> None:
 
 def test_add_repo_duplicate_raises() -> None:
     config = Config.default("demo")
-    config.add_repo("test1", path="path1/test1")
+    config.add_repo(Repository(id="test1", path="path1/test1"))
     with pytest.raises(ValueError, match="already exists"):
-        config.add_repo("test1", path="path1/test1")
+        config.add_repo(Repository(id="test1", path="path1/test1"))
 
 
 def test_repos_property_is_a_copy() -> None:
@@ -175,8 +175,8 @@ def test_file_without_repos_section_loads_as_empty(tmp_path: Path) -> None:
 
 def test_saved_file_is_valid_toml(tmp_path: Path) -> None:
     config = Config.default("demo")
-    config.add_repo("test1", path="path1/test1")
-    config.add_repo("test2", path="path2/test2")
+    config.add_repo(Repository(id="test1", path="path1/test1"))
+    config.add_repo(Repository(id="test2", path="path2/test2"))
     config.save(tmp_path / "wsindex.toml")
     data = tomllib.loads((tmp_path / "wsindex.toml").read_text())
     assert data["workspace"]["backend"] == "local"
@@ -191,7 +191,7 @@ def test_save_without_a_path_needs_a_source_file(tmp_path: Path) -> None:
     path = config.save(tmp_path / "wsindex.toml")
     Config.reset()
     loaded = Config(path)
-    loaded.add_repo("late", path="somewhere")
+    loaded.add_repo(Repository(id="late", path="somewhere"))
     assert loaded.save() == path
     assert "late" in path.read_text()
 
@@ -280,7 +280,7 @@ def test_store_uri_without_a_config_file_raises() -> None:
 
 def test_default_constant_is_never_mutated() -> None:
     first = Config.default("first")
-    first.add_repo("leak", path="somewhere")
+    first.add_repo(Repository(id="leak", path="somewhere"))
     Config.reset()
     # Without the deepcopy in `default`, add_repo above would have appended
     # straight into Config.DEFAULT and every later config would carry it.
@@ -310,13 +310,15 @@ def test_subclass_gets_its_own_instance() -> None:
 
 def test_repo_without_a_remote_has_none() -> None:
     config = Config.default("demo")
-    config.add_repo("local", path="/checkouts/local")
+    config.add_repo(Repository(id="local", path="/checkouts/local"))
     assert config.repos[0].remote is None
 
 
 def test_remote_round_trips_through_the_file(tmp_path: Path) -> None:
     config = Config.default("demo")
-    config.add_repo("upstream", path="/checkouts/up", remote="https://example.invalid/r.git")
+    config.add_repo(
+        Repository(id="upstream", path="/checkouts/up", remote="https://example.invalid/r.git")
+    )
     path = config.save(tmp_path / "wsindex.toml")
 
     Config.reset()
@@ -327,7 +329,7 @@ def test_omitted_remote_is_absent_from_the_document() -> None:
     # TOML has no null and tomli_w refuses to write one, so "no remote"
     # has to mean "no key" rather than an explicit None.
     config = Config.default("demo")
-    config.add_repo("local", path="/checkouts/local")
+    config.add_repo(Repository(id="local", path="/checkouts/local"))
     assert "remote" not in config.to_dict()["repos"][0]
 
 
@@ -356,7 +358,9 @@ def write(tmp_path: Path, repos: list[dict[str, object]]) -> Path:
 
 def test_a_snapshot_repo_round_trips(tmp_path: Path) -> None:
     config = Config.default("demo")
-    config.add_repo("docs", path="snap", source=RepoSource.CONNECTOR, urls=["https://x/a"])
+    config.add_repo(
+        Repository(id="docs", path="snap", source=RepoSource.CONNECTOR, urls=("https://x/a",))
+    )
     path = config.save(tmp_path / "wsindex.toml")
 
     Config.reset()
@@ -367,7 +371,7 @@ def test_a_snapshot_repo_round_trips(tmp_path: Path) -> None:
 
 def test_an_ordinary_repo_is_not_a_snapshot() -> None:
     config = Config.default("demo")
-    config.add_repo("r", path="/p")
+    config.add_repo(Repository(id="r", path="/p"))
     assert not config.repos[0].is_snapshot
 
 
@@ -396,7 +400,7 @@ def test_an_unknown_source_is_rejected_at_load(tmp_path: Path) -> None:
 def test_add_repo_refuses_the_same_contradiction() -> None:
     config = Config.default("demo")
     with pytest.raises(ValueError, match="not both"):
-        config.add_repo("r", path="p", source=RepoSource.CONNECTOR, remote="u")
+        config.add_repo(Repository(id="r", path="p", source=RepoSource.CONNECTOR, remote="u"))
     assert not config.repos
 
 
@@ -463,7 +467,7 @@ def test_an_unknown_kind_is_refused(tmp_path: Path) -> None:
 
 def test_add_repo_records_ignore_globs() -> None:
     config = Config.default("demo")
-    config.add_repo("app", path="p", ignore=["dist/*"])
+    config.add_repo(Repository(id="app", path="p", ignore=("dist/*",)))
     assert config.repos[0].ignore == ("dist/*",)
     assert config.to_dict()["repos"][0]["ignore"] == ["dist/*"]
 
@@ -475,7 +479,7 @@ def test_a_saved_config_can_be_hand_edited(tmp_path: Path) -> None:
     # `[repos.formats]` to a static array. Whatever a person is told to
     # hand-edit has to be a shape they can hand-edit.
     config = Config.default("demo")
-    config.add_repo("app", path="p", ignore=["dist/*"])
+    config.add_repo(Repository(id="app", path="p", ignore=("dist/*",)))
     config._data["repos"][0]["formats"] = {".sql": {"lang": "sql", "kind": "code"}}
     path = config.save(tmp_path / "wsindex.toml")
 

@@ -28,7 +28,7 @@ from wsindex.ingest.languages import (
     LanguageSpec,
 )
 from wsindex.ingest.walker import inspect_file
-from wsindex.model import Kind
+from wsindex.model import Kind, SourceFile
 
 
 def fake_spans(root: object, lines: list[str], covered: list[bool]) -> list[Span]:
@@ -301,10 +301,7 @@ def test_a_registered_language_is_walked_and_chunked(
 
     chunks = chunk_file(
         (tmp_path / "main.invented").read_text(),
-        repo="r",
-        path="main.invented",
-        lang="invented",
-        kind=Kind.CODE,
+        SourceFile(repo="r", path="main.invented", lang="invented", kind=Kind.CODE),
     )
     # No grammar declared, so it lands on the text chunker — which is the
     # documented fallback, not a failure.

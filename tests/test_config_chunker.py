@@ -8,7 +8,7 @@ import pytest
 
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.languages import REGISTRY
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, Kind, SourceFile
 
 TOML = """\
 root_key = "top-level pair"  # inline comment
@@ -101,7 +101,7 @@ SAMPLES = [
 def _chunk(text: str, lang: str) -> list[Chunk]:
     if REGISTRY.parser(lang) is None:
         pytest.skip(f"no {lang} grammar installed")
-    return chunk_file(text, repo="r", path=f"cfg.{lang}", lang=lang, kind=Kind.CONFIG)
+    return chunk_file(text, SourceFile(repo="r", path=f"cfg.{lang}", lang=lang, kind=Kind.CONFIG))
 
 
 def _shape(chunks: list[Chunk]) -> list[tuple[int, int, str | None, str | None]]:
@@ -182,7 +182,9 @@ def test_unregistered_lang_falls_back_to_text_chunks() -> None:
     # and no extractor, and the dispatcher windows the file instead.
     # This used to raise; the registry made the raise unreachable, since
     # `ast_chunks` now takes a parser rather than looking one up.
-    chunks = chunk_file("key = 1\n", repo="r", path="s.ini", lang="ini", kind=Kind.CONFIG)
+    chunks = chunk_file(
+        "key = 1\n", SourceFile(repo="r", path="s.ini", lang="ini", kind=Kind.CONFIG)
+    )
     assert len(chunks) == 1
     assert chunks[0].node_type is None
 

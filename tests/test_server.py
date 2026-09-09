@@ -21,7 +21,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from wsindex.config import Config, Provider
+from wsindex.config import Config, Provider, Repository
 from wsindex.connectors import BUILTIN, Connector, Document
 from wsindex.embed import FakeEmbedder
 from wsindex.pipeline import Pipeline
@@ -59,7 +59,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     Config.reset()
     config = Config.default("srv", provider=Provider.FAKE)
-    config.add_repo("repo1", path=str(repo))
+    config.add_repo(Repository(id="repo1", path=str(repo)))
     config.save(tmp_path / "wsindex.toml")
     Config.reset()
     Config(tmp_path / "wsindex.toml")
@@ -224,7 +224,7 @@ def test_the_admin_page_escapes_what_it_shows(pipeline: Pipeline, workspace: Pat
     # A repo id reaches the page from a config file, and a config file is
     # something a person edits — the page renders it, so it escapes it.
     config = Config()
-    config.add_repo("<script>alert(1)</script>", path="/x")
+    config.add_repo(Repository(id="<script>alert(1)</script>", path="/x"))
     with TestClient(create_app(pipeline_factory=lambda: pipeline)) as client:
         page = client.get("/admin").text
     assert "<script>alert(1)</script>" not in page
