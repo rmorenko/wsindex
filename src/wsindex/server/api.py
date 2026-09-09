@@ -154,9 +154,9 @@ def create_app(
         `state.runs` and `state.token` attached for the routers.
     """
     if pipeline_factory is None:
-        from wsindex.cli import _build_pipeline
+        from wsindex.cli import build_pipeline
 
-        pipeline_factory = _build_pipeline
+        pipeline_factory = build_pipeline
 
     app = FastAPI(
         title="wsindex",

@@ -168,7 +168,7 @@ class Pipeline:
         state_dir: Where `index` keeps the per-repo "last indexed commit"
             file. Supplied by the composition root because it is a
             location, not a policy — the same reason the store gets its
-            uri from there (see `wsindex.cli._build_pipeline`).
+            uri from there (see `wsindex.cli.build_pipeline`).
         reranker: Optional second stage of the search funnel. Present
             means `search` over-fetches candidates and re-scores them;
             None means the store's own ranking is the answer.

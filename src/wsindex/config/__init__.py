@@ -1,180 +1,58 @@
-"""Workspace configuration: the `wsindex.toml` file (defaults, load, save).
+"""Workspace configuration: the `wsindex.toml` file, as one live object.
 
-The config is the single source of truth for a workspace: which vector-store
-backend to use, which embedding model, and which repositories to index. The
-TOML layout (sections `workspace`, `embeddings`, `store`, `rank`, `repos`) is
-also the in-memory form — `Config` keeps the parsed document as a dict and
-exposes one read-only property per field, so the file format has a single
-definition and every reader still goes through a typed accessor.
+The config is the single source of truth for a workspace: which
+vector-store backend to use, which embedding model, and which
+repositories to index. The TOML layout is also the in-memory form —
+`Config` keeps the parsed document as a dict and exposes one read-only
+property per field, so the file format has a single definition and every
+reader still goes through a typed accessor.
 
-`Config` is a singleton class: `__new__` caches the one instance on the class,
-so `Config()` anywhere in the process returns the same object and no subsystem
-needs the config threaded through its constructor. The first construction
-decides where the document comes from — `Config(path)` reads that file,
-`Config()` discovers one (see `wsindex.paths.find_config`). Nothing on disk is
-not an error: it means the built-in `Config.DEFAULT` and `is_default` set.
-Saying so out loud belongs to whoever has a user to say it to — the CLI warns
-in `wsindex.cli._config`; this module never writes to a stream. No file is
-ever written as a side effect either; only `wsindex init` creates one.
+`Config` is a singleton class: `__new__` caches the one instance on the
+class, so `Config()` anywhere in the process returns the same object and
+no subsystem needs the config threaded through its constructor. The first
+construction decides where the document comes from — `Config(path)` reads
+that file, `Config()` discovers one (see `wsindex.paths.find_config`).
+Nothing on disk is not an error: it means the built-in `Config.DEFAULT`
+and `is_default` set. Saying so out loud belongs to whoever has a user to
+say it to — the CLI warns; this module never writes to a stream. No file
+is ever written as a side effect either; only `wsindex init` creates one.
 
-`workspace` and `embeddings` are strict: a missing key there is a typo, and a
-silent default would index the whole workspace with the wrong model. `store`
-and `rank` are the defaulted exceptions — they arrived after the first configs
-were written, and defaulting them is what lets the format evolve without a
-migrator.
+What a document is made of lives in `.schema`, what makes one valid in
+`.validate`, and how one is written back out in `.document`. They change
+for different reasons, which is why they are apart.
 
-Tests drop the cached instance between cases via `Config.reset()` — pytest
-never reimports modules, so an instance cached on the class outlives a test
-exactly like module-level state would.
+Tests drop the cached instance between cases via `Config.reset()` —
+pytest never reimports modules, so an instance cached on the class
+outlives a test exactly like module-level state would.
 
 Deliberately not a dataclass. A dataclass is a value object: `__eq__` by
-fields, one instance per distinct value. A singleton is an identity object:
-one instance, period. Generating value semantics for a type that has exactly
-one instance is a contradiction, and `__init__` has to be hand-written anyway
-because it must be idempotent — Python calls it on every `Config(...)`,
-including the calls `__new__` answered from the cache.
+fields, one instance per distinct value. A singleton is an identity
+object: one instance, period. Generating value semantics for a type that
+has exactly one instance is a contradiction, and `__init__` has to be
+hand-written anyway because it must be idempotent — Python calls it on
+every `Config(...)`, including the calls `__new__` answered from the
+cache.
 """
 
 from __future__ import annotations
 
 import copy
-import json
 import tomllib
-from dataclasses import dataclass, field
-from enum import StrEnum
-from hashlib import blake2b
 from pathlib import Path
 from typing import Any, ClassVar
 
-import tomli_w
-
+from wsindex.config.document import render, repo_entry
+from wsindex.config.schema import (
+    DEFAULT_RANK_MODEL,
+    Backend,
+    Provider,
+    Repository,
+    RepoSource,
+)
+from wsindex.config.validate import validate, validate_repo
 from wsindex.connectors import ConnectorSpec
 from wsindex.model import Kind
 from wsindex.paths import ConfigLocation, Mode, find_config, resolve_index_dir
-
-DEFAULT_RANK_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
-
-
-class Backend(StrEnum):
-    """Vector store selector; StrEnum so the value round-trips through TOML as-is.
-
-    A single member since ADR-7 removed Tensorus — kept as an enum so a
-    future backend is a data change, not an API change.
-    """
-
-    LOCAL = "local"
-
-
-class Provider(StrEnum):
-    """Embedder selector: deterministic fake for tests, real model for work."""
-
-    FAKE = "fake"
-    SENTENCE_TRANSFORMERS = "sentence-transformers"
-
-
-class RepoSource(StrEnum):
-    """Who fills a repository's working copy.
-
-    Absent means the user does — a checkout they maintain, which sync
-    leaves alone unless it has a `remote`. An enum with one member for
-    the same reason `Backend` has one: a second kind of generated repo
-    should be a data change.
-    """
-
-    CONNECTOR = "connector"
-
-
-@dataclass(frozen=True, kw_only=True)
-class Repository:
-    """One indexed repository.
-
-    A value object, unlike `Config`: repositories are compared and passed
-    around by value, and there are many of them.
-
-    Attributes:
-        id: Stable unique name; doubles as the dataset name in the store.
-        path: Repository root directory, absolute or workspace-relative.
-        remote: Clone url `wsindex sync` keeps `path` up to date from, or
-            None for a working copy the user manages themselves. Optional
-            because the two cases are both normal: a repo you already have
-            checked out needs no url, a repo the workspace should fetch
-            for itself does.
-        source: Set to `connector` for a snapshot repository — one whose
-            files `wsindex sync` writes by fetching `urls` and
-            committing them (see `wsindex.snapshot`). Mutually exclusive
-            with `remote`:
-            a working copy has exactly one owner.
-        urls: The documents a snapshot repository holds. Meaningless
-            without `source`, and rejected there — a url list on a git
-            repo is a typo, not a preference.
-        ignore: Path globs this repo excludes, on top of the walker's
-            own pruning. Narrows only — there is no way to widen, by
-            design (see `wsindex.ingest.walker._skip_dir`).
-        formats: Suffix -> (lang, kind) for this repo, overriding the
-            language registry. What to index is a property of a
-            repository: `.component.html` is source in an Angular repo
-            and generated noise in a Python one, and a global table
-            cannot be right for both.
-    """
-
-    id: str
-    path: str
-    remote: str | None = None
-    source: RepoSource | None = None
-    urls: tuple[str, ...] = ()
-    ignore: tuple[str, ...] = ()
-    formats: dict[str, tuple[str, Kind]] = field(default_factory=dict)
-
-    @property
-    def is_snapshot(self) -> bool:
-        """True when sync materializes this repo instead of pulling it."""
-        return self.source is RepoSource.CONNECTOR
-
-    @property
-    def markup_key(self) -> str:
-        """A fingerprint of what this repo indexes, for the index state.
-
-        The commit alone cannot answer "is the index still right": edit
-        `formats` and the same tree yields a different set of files,
-        while git reports nothing changed at all. Incremental indexing
-        would then skip the repo forever — which it did, until a live run
-        caught it.
-
-        A hash rather than the values, because `state.json` is a cache
-        and a repo may carry fifty globs. Sorted before hashing so
-        reordering the config is not a change.
-        """
-        payload = json.dumps(
-            {
-                "ignore": sorted(self.ignore),
-                "formats": {k: list(v) for k, v in sorted(self.formats.items())},
-            },
-            sort_keys=True,
-        )
-        return blake2b(payload.encode(), digest_size=8).hexdigest()
-
-
-def _repo_entry(repo: Repository) -> dict[str, Any]:
-    """A repo as the TOML document holds it.
-
-    Empty values are left out rather than written as null: TOML has no
-    null, and `tomli_w` refuses to write one.
-    """
-    entry: dict[str, Any] = {"id": repo.id, "path": repo.path}
-    if repo.remote is not None:
-        entry["remote"] = repo.remote
-    if repo.source is not None:
-        entry["source"] = repo.source.value
-    if repo.urls:
-        entry["urls"] = list(repo.urls)
-    if repo.ignore:
-        entry["ignore"] = list(repo.ignore)
-    if repo.formats:
-        entry["formats"] = {
-            suffix: {"lang": lang, "kind": kind.value}
-            for suffix, (lang, kind) in repo.formats.items()
-        }
-    return entry
 
 
 class Config:
@@ -215,13 +93,6 @@ class Config:
     """Project defaults, in the on-disk layout. Never handed out directly:
     it is a mutable dict shared by the whole process, and `add_repo` would
     otherwise append to the constant itself — every user takes a deepcopy."""
-
-    REQUIRED: ClassVar[dict[str, tuple[str, ...]]] = {
-        "workspace": ("name", "backend"),
-        "embeddings": ("model", "dim", "provider"),
-    }
-    """Sections and keys a config file must contain; `store`, `rank` and
-    `repos` are optional and default per-key."""
 
     _instance: ClassVar[Config | None] = None
 
@@ -287,133 +158,10 @@ class Config:
             self._data = copy.deepcopy(self.DEFAULT)
         else:
             data: dict[str, Any] = tomllib.loads(location.path.read_text(encoding="utf-8"))
-            self._validate(data)
+            validate(data)
             data.setdefault("repos", [])
             self._data = data
         self._location = location
-
-    @classmethod
-    def _validate(cls, data: dict[str, Any]) -> None:
-        """Reject a half-read document before it becomes the live config.
-
-        Strict on purpose: a silent default would mask a typo in the file,
-        and the whole workspace would quietly index with the wrong model.
-
-        Args:
-            data: Freshly parsed TOML.
-
-        Raises:
-            KeyError: A required section or key is missing.
-            ValueError: The document is from the removed tensorus era,
-                `backend` or `provider` names no enum member, or a `repos`
-                entry lacks `id`/`path`.
-        """
-        # Before the schema check, not after: a pre-ADR-7 file is complete
-        # and valid on its own terms, so every other check would pass and
-        # the user would get `ValueError: 'tensorus'` from the enum instead
-        # of a sentence telling them what to do.
-        if "tensorus" in data or data.get("workspace", {}).get("backend") == "tensorus":
-            raise ValueError(
-                "this wsindex.toml is from the tensorus era, which ADR-7 removed — "
-                "recreate it with `wsindex init` and re-index (ids are deterministic, "
-                "re-indexing is cheap)"
-            )
-        for section, keys in cls.REQUIRED.items():
-            if section not in data:
-                raise KeyError(section)
-            for key in keys:
-                if key not in data[section]:
-                    raise KeyError(f"{section}.{key}")
-        # Constructing the enums is the check; the properties do it again on
-        # access, but a bad value must fail at load, not at first read.
-        Backend(data["workspace"]["backend"])
-        Provider(data["embeddings"]["provider"])
-        for repo in data.get("repos", []):
-            if "id" not in repo or "path" not in repo:
-                raise ValueError(f"repo entry needs both 'id' and 'path': {repo!r}")
-            cls._validate_repo(repo)
-
-    REPO_KEYS: ClassVar[frozenset[str]] = frozenset(
-        {"id", "path", "remote", "source", "urls", "ignore", "formats"}
-    )
-    """Every key a `[[repos]]` entry may carry. Closed on purpose: a
-    misspelled `ignores` that silently indexed everything is the failure
-    this format is most likely to produce, and the only cheap way to catch
-    it is to refuse what we do not recognize."""
-
-    @staticmethod
-    def _validate_repo(repo: dict[str, Any]) -> None:
-        """Check one `[[repos]]` entry beyond its required keys.
-
-        Strict, unlike `connectors`, which skips a broken entry. The
-        asymmetry is deliberate: a connector that fails to load routes
-        nothing, while a repo that fails to load is a repo that silently
-        stops being indexed — and the user would go looking for the
-        missing search results, not for the typo.
-
-        Args:
-            repo: One parsed repo table.
-
-        Raises:
-            ValueError: An unknown key, `source` names no known kind, a
-                snapshot also has a `remote` (two owners for one working
-                copy), `urls` appear on a repo that is not a snapshot, or
-                a `formats` entry is malformed.
-        """
-        unknown = sorted(set(repo) - Config.REPO_KEYS)
-        if unknown:
-            raise ValueError(
-                f"repo {repo.get('id', '?')!r} has unknown key(s) {', '.join(unknown)} — "
-                f"a repo entry may hold: {', '.join(sorted(Config.REPO_KEYS))}"
-            )
-        Config._validate_formats(repo)
-        source = repo.get("source")
-        if source is not None:
-            # Constructing the enum is the check, as it is for `backend`.
-            RepoSource(source)
-            if repo.get("remote"):
-                raise ValueError(
-                    f"repo {repo['id']!r} has both 'source' and 'remote' — a working copy "
-                    "is either pulled from a remote or materialized by connectors, not both"
-                )
-        elif repo.get("urls"):
-            raise ValueError(
-                f"repo {repo['id']!r} lists 'urls' but has no 'source' — add "
-                'source = "connector" to materialize them'
-            )
-
-    @staticmethod
-    def _validate_formats(repo: dict[str, Any]) -> None:
-        """Check the per-repo suffix table, which is all hand-written.
-
-        Every rule below describes a mapping that would otherwise fail
-        silently — a suffix without its dot matches nothing, a `kind` the
-        model does not have selects nothing — and silence here surfaces
-        later as "why is my file not indexed?", the hardest question this
-        tool can be asked.
-
-        Args:
-            repo: One parsed repo table.
-
-        Raises:
-            ValueError: A malformed suffix, a missing `lang`/`kind`, an
-                unknown `kind`, or `commit`, which no file may claim.
-        """
-        for suffix, entry in (repo.get("formats") or {}).items():
-            where = f"repo {repo.get('id', '?')!r}, formats[{suffix!r}]"
-            if not suffix.startswith(".") or len(suffix) < 2:
-                raise ValueError(f"{where}: a suffix must start with a dot, like '.sql'")
-            if not isinstance(entry, dict) or not entry.get("lang") or not entry.get("kind"):
-                raise ValueError(
-                    f"{where}: needs both 'lang' and 'kind', e.g. "
-                    '{ lang = "sql", kind = "code" }'
-                )
-            kind = Kind(entry["kind"])
-            if kind is Kind.COMMIT:
-                # Commit chunks are synthesized from git history and have
-                # no path on disk; a file claiming to be one would collide
-                # with that corpus in every filter that mentions it.
-                raise ValueError(f"{where}: 'commit' is not a file kind — use code, config or doc")
 
     @classmethod
     def default(
@@ -690,8 +438,8 @@ class Config:
         """
         if any(existing.id == repo.id for existing in self.repos):
             raise ValueError(f"repo id already exists: {repo.id}")
-        entry = _repo_entry(repo)
-        self._validate_repo(entry)
+        entry = repo_entry(repo)
+        validate_repo(entry)
         self._data["repos"].append(entry)
 
     def to_dict(self) -> dict[str, Any]:
@@ -723,33 +471,15 @@ class Config:
         target = path or self.path
         if target is None:
             raise ValueError("no path to save to: this config was built from defaults")
-        target.write_text(self._render(), encoding="utf-8")
+        target.write_text(render(self._data), encoding="utf-8")
         return target
 
-    def _render(self) -> str:
-        """The document as TOML, with repos as `[[repos]]` sections.
 
-        tomli_w decides that per entry by line length: a repo of just an
-        id and a path fits on one line, so it writes `repos = [{...}]` —
-        and a static array cannot take a sub-table. `[repos.formats]`,
-        the documented way to mark up a repository, is then a syntax
-        error on the very file `wsindex add-repo` just wrote.
-
-        The same trap `connectors` fell into, and the same
-        rule: whatever a person is told to hand-edit must be a shape they
-        can hand-edit. So the array of tables is written here rather than
-        left to a heuristic, while every value still goes through
-        tomli_w — quoting a key like `".sql"` is not something to
-        reimplement.
-        """
-        parts = [tomli_w.dumps({key: value for key, value in self._data.items() if key != "repos"})]
-        for repo in self._data.get("repos", []):
-            flat = {key: value for key, value in repo.items() if not isinstance(value, dict)}
-            nested = {key: value for key, value in repo.items() if isinstance(value, dict)}
-            parts.append("[[repos]]\n" + tomli_w.dumps(flat))
-            if nested:
-                # Rendered under the `repos` name so the headers come out
-                # as `[repos.formats...]`, which TOML attaches to the
-                # last `[[repos]]` — the entry just written above.
-                parts.append(tomli_w.dumps({"repos": nested}))
-        return "\n".join(parts)
+__all__ = [
+    "DEFAULT_RANK_MODEL",
+    "Backend",
+    "Config",
+    "Provider",
+    "RepoSource",
+    "Repository",
+]

@@ -169,7 +169,7 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
             captured["cache_folder"] = cache_folder
 
     # Patch where the name is looked up: cli.py imported its own reference.
-    monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", StubST)
+    monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", StubST)
     runner.invoke(app, ["init", "ws"])  # default provider is sentence-transformers
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])
@@ -193,7 +193,7 @@ def test_embedder_dim_mismatch_is_rejected(
         def __init__(self, model_name: str | None = None, cache_folder: Path | None = None) -> None:
             super().__init__(dim=8)
 
-    monkeypatch.setattr("wsindex.cli.SentenceTransformerEmbedder", WrongDimST)
+    monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", WrongDimST)
     runner.invoke(app, ["init", "ws"])
     runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
     result = runner.invoke(app, ["index"])

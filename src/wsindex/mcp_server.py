@@ -72,9 +72,9 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
     from mcp.server.fastmcp import FastMCP
 
     if pipeline is None:
-        from wsindex.cli import _build_pipeline
+        from wsindex.cli import build_pipeline
 
-        pipeline = _build_pipeline()
+        pipeline = build_pipeline()
     engine = pipeline
     server: FastMCP = FastMCP(name="wsindex", instructions=INSTRUCTIONS)
 
