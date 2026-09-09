@@ -186,120 +186,163 @@ def _completer() -> Completer:
     )
 
 
+class _Session:
+    """One shell session: the console, the pipeline, and the last answer.
+
+    A class rather than a closure over locals because the loop *has*
+    state — which hits were shown last — and `:open 2` is a question
+    about it. Naming that state is cheaper than threading it through.
+    """
+
+    def __init__(self, pipeline: Pipeline, out: Console) -> None:
+        """Bind a session to its engine and its output.
+
+        Args:
+            pipeline: Already built — that is the point of this command.
+            out: Where answers go.
+        """
+        self.pipeline = pipeline
+        self.out = out
+        self.hits: list[Hit] = []
+
+    def handle(self, line: str) -> bool:
+        """Answer one line. False means the session should end.
+
+        The dispatcher, and nothing else: each branch is one word and one
+        call, so what the shell understands can be read in one place.
+        """
+        if line in (":quit", ":q", ":exit"):
+            return False
+        if line in (":help", ":h", "?"):
+            self.out.print(_HELP)
+        elif line == ":repos":
+            self.show_repos()
+        elif not self.pick(line):
+            self.search(line)
+        return True
+
+    def show_repos(self) -> None:
+        """The workspace's repositories, id and path."""
+        for repo in Config().repos:
+            self.out.print(f"  [bold]{repo.id}[/]  [dim]{repo.path}[/]")
+
+    def search(self, line: str) -> None:
+        """Parse a line as a query, run it, show what came back."""
+        try:
+            query = parse(line)
+            self.hits = list(
+                self.pipeline.search(query.text, k=query.k, repo=query.repo, filters=query.filters)
+            )
+        except (ShellError, ValueError) as exc:
+            # A bad line is a sentence, not an exit: the loop's whole job
+            # is to keep going.
+            self.out.print(f"[red]{exc}[/]")
+            return
+        if not self.hits:
+            self.out.print("[dim]no results[/]")
+            return
+        render_hits(self.hits, target=self.out)
+
+    def pick(self, line: str) -> bool:
+        """Handle a line that names a hit; False when it names none.
+
+        The only stateful reading in the shell — it answers about the
+        previous result — and where every "which hit did you mean"
+        mistake lives.
+        """
+        words = line.split()
+        verb, argument = words[0], (words[1] if len(words) > 1 else "")
+        if verb.isdigit():
+            verb, argument = ":show", verb
+        elif verb not in (":open", ":show"):
+            return False
+
+        chosen = self._chosen(argument)
+        if chosen is None:
+            return True
+        if verb == ":open":
+            self.open(chosen)
+        else:
+            self.show(chosen)
+        return True
+
+    def _chosen(self, argument: str) -> Hit | None:
+        """The hit a number names, or None after saying why not."""
+        if not self.hits:
+            self.out.print("[red]nothing to pick from — search first[/]")
+            return None
+        try:
+            position = int(argument)
+            if position < 1:
+                # Python would read hits[-1] and show the wrong chunk.
+                raise IndexError
+            return self.hits[position - 1]
+        except (ValueError, IndexError):
+            self.out.print(f"[red]pick a hit between 1 and {len(self.hits)}[/]")
+            return None
+
+    def open(self, hit: Hit) -> None:
+        """Hand one hit to `$EDITOR` at its line."""
+        argv = open_in_editor(hit)
+        self.out.print(f"[dim]{' '.join(argv)}[/]")
+        try:
+            subprocess.run(argv, check=False)
+        except OSError as exc:
+            self.out.print(f"[red]could not run the editor — {exc}[/]")
+
+    def show(self, hit: Hit) -> None:
+        """Print one hit whole, highlighted as its own language."""
+        from rich.syntax import Syntax
+
+        meta = hit.metadata
+        self.out.print(
+            f"[bold]{meta['repo']}[/]/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
+        )
+        self.out.print(
+            Syntax(
+                str(meta["text"]),
+                str(meta.get("lang") or "text"),
+                theme="ansi_dark",
+                line_numbers=True,
+                start_line=int(meta["start_line"]),
+                word_wrap=True,
+                background_color="default",
+            )
+        )
+
+
 def run(pipeline: Pipeline, *, history_dir: Path) -> None:
-    """The loop itself: read a line, answer it, repeat.
+    """Read a line, answer it, repeat.
+
+    The loop and nothing else: what a line *means* is `_Session.handle`.
 
     Args:
-        pipeline: Already built — that is the whole point of this command.
+        pipeline: Already built — that is the point of this command.
         history_dir: Where to keep the input history.
     """
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
 
-    out = console()
     history_dir.mkdir(parents=True, exist_ok=True)
-    session: PromptSession[str] = PromptSession(
+    prompt: PromptSession[str] = PromptSession(
         history=FileHistory(str(history_dir / HISTORY_FILE)),
         completer=_completer(),
     )
-    name = Config().name
-    out.print(f"wsindex [bold]{name}[/] — model loaded once, ask away. :help for the rest.")
-    hits: list[Hit] = []
-
+    session = _Session(pipeline, console())
+    session.out.print(
+        f"wsindex [bold]{Config().name}[/] — model loaded once, ask away. :help for the rest."
+    )
     while True:
         try:
-            line = session.prompt("wsindex> ").strip()
+            line = prompt.prompt("wsindex> ").strip()
         except KeyboardInterrupt:
             # Ctrl-C abandons the line, like every other REPL; Ctrl-D
-            # ends the session, which is what EOFError below means.
+            # ends the session, which is the EOFError below.
             continue
         except EOFError:
             return
-        if not line:
-            continue
-        if line in (":quit", ":q", ":exit"):
+        if line and not session.handle(line):
             return
-        if line in (":help", ":h", "?"):
-            out.print(_HELP)
-            continue
-        if line == ":repos":
-            for repo in Config().repos:
-                out.print(f"  [bold]{repo.id}[/]  [dim]{repo.path}[/]")
-            continue
-        if _show(out, line, hits):
-            continue
-        try:
-            query = parse(line)
-        except ShellError as exc:
-            out.print(f"[red]{exc}[/]")
-            continue
-        try:
-            hits = list(
-                pipeline.search(query.text, k=query.k, repo=query.repo, filters=query.filters)
-            )
-        except ValueError as exc:
-            out.print(f"[red]{exc}[/]")
-            continue
-        if not hits:
-            out.print("[dim]no results[/]")
-            continue
-        render_hits(hits, target=out)
-
-
-def _show(console_out: Console, line: str, hits: list[Hit]) -> bool:
-    """Handle the hit-picking words; True when the line was one of them.
-
-    Split out because it is the only stateful part of the loop — it reads
-    the previous answer — and because it is where every "which hit did
-    you mean" mistake lives.
-    """
-    words = line.split()
-    verb = words[0]
-    if verb in (":open", ":show"):
-        argument = words[1] if len(words) > 1 else ""
-    elif verb.isdigit():
-        verb, argument = ":show", verb
-    else:
-        return False
-
-    if not hits:
-        console_out.print("[red]nothing to pick from — search first[/]")
-        return True
-    try:
-        chosen = hits[int(argument) - 1]
-        if int(argument) < 1:
-            raise IndexError
-    except (ValueError, IndexError):
-        console_out.print(f"[red]pick a hit between 1 and {len(hits)}[/]")
-        return True
-
-    if verb == ":open":
-        argv = open_in_editor(chosen)
-        console_out.print(f"[dim]{' '.join(argv)}[/]")
-        try:
-            subprocess.run(argv, check=False)
-        except OSError as exc:
-            console_out.print(f"[red]could not run the editor — {exc}[/]")
-        return True
-
-    meta = chosen.metadata
-    from rich.syntax import Syntax
-
-    console_out.print(
-        f"[bold]{meta['repo']}[/]/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
-    )
-    console_out.print(
-        Syntax(
-            str(meta["text"]),
-            str(meta.get("lang") or "text"),
-            theme="ansi_dark",
-            line_numbers=True,
-            start_line=int(meta["start_line"]),
-            word_wrap=True,
-            background_color="default",
-        )
-    )
-    return True
 
 
 __all__ = ["HISTORY_FILE", "Query", "ShellError", "open_in_editor", "parse", "run"]
