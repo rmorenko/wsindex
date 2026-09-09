@@ -38,6 +38,11 @@ wsindex = "wsindex.cli:app"
 
 [project.optional-dependencies]
 ml = ["sentence-transformers>=5.7,<6"]
+server = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "python-multipart>=0.0.20,<1",
+]
 ast = [
   "tree-sitter>=0.26,<1",
   "tree-sitter-c-sharp>=0.23,<1",

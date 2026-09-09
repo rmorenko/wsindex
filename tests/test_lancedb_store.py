@@ -628,3 +628,43 @@ def test_chunk_text_does_not_read_across_datasets(store: LanceDBStore) -> None:
     shared = make_chunk("same text", path="a.py")
     store.add_chunks("one", chunks=[shared])
     assert store.chunk_text("two", ids=[shared.id]) == {}
+
+
+# --- staleness: a handle is pinned to the version it opened at ------------
+
+
+def test_a_second_handle_does_not_see_writes_until_it_refreshes(tmp_path: Path) -> None:
+    # Measured in `probes/step30` with real processes; reproduced here
+    # with two handles, since the snapshot is per handle rather than per
+    # process. This is the bug `refresh` exists for: a long-lived reader
+    # answers from the corpus it opened with, and never fails doing it.
+    uri = str(tmp_path / "db")
+    writer = LanceDBStore(uri, embedder=FakeEmbedder(dim=DIM))
+    writer.create_dataset("ds", metric="cosine")
+    writer.add_chunks("ds", chunks=[make_chunk("first")])
+    reader = LanceDBStore(uri, embedder=FakeEmbedder(dim=DIM))
+    assert len(reader.search("ds", query="first", k=10)) == 1
+
+    writer.add_chunks("ds", chunks=[make_chunk("second", path="two.md")])
+
+    assert len(reader.search("ds", query="first", k=10)) == 1  # still the old snapshot
+    reader.refresh()
+    assert len(reader.search("ds", query="first", k=10)) == 2
+
+
+def test_refresh_finds_a_dataset_another_handle_created(tmp_path: Path) -> None:
+    # Both tables, not just the data one: the dataset registry is written
+    # by whoever ran `create_dataset`, and a store that refreshed only
+    # half would keep answering "no such dataset" for a repo somebody
+    # else registered.
+    uri = str(tmp_path / "db")
+    first = LanceDBStore(uri, embedder=FakeEmbedder(dim=DIM))
+    first.create_dataset("ds", metric="cosine")
+    second = LanceDBStore(uri, embedder=FakeEmbedder(dim=DIM))
+    first.create_dataset("later", metric="cosine")
+
+    with pytest.raises(ValueError):
+        second.search("later", query="x", k=1)
+
+    second.refresh()
+    assert second.search("later", query="x", k=1) == []

@@ -193,6 +193,29 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
+    def refresh(self) -> None:
+        """See what other processes have written since this store opened.
+
+        A store may hold a snapshot: LanceDBStore does, and `probes/step30`
+        measured what that means — a handle polled 40 times over 0.8 s
+        while another process committed saw its opening version every
+        time. Reads do not refresh themselves.
+
+        Harmless in a CLI, where the process is younger than the
+        question. A correctness bug in anything long-lived: after an
+        outside `index`, a server would answer from the corpus as it was
+        when the server started, and never fail while doing it.
+
+        On the contract rather than in the server because staleness
+        belongs to long-lived processes, not to HTTP — the MCP adapter
+        and any library caller have the same problem (ADR-10).
+        `Pipeline.search` calls this, so no caller has to remember.
+
+        Cheap by design: 4 ms against a 111 ms search on a local path.
+        A backend without snapshot semantics implements it as a no-op.
+        """
+
+    @abstractmethod
     def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
         """Reclaim the disk that deleted and rewritten chunks still occupy.
 

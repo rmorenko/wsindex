@@ -168,7 +168,15 @@ class LinkStore:
         """
         index_dir.mkdir(parents=True, exist_ok=True)
         self.path = index_dir / LINKS_FILE
-        self._db = sqlite3.connect(self.path)
+        # `check_same_thread=False` because the server runs a sync
+        # endpoint in a worker thread while this connection was opened in
+        # the main one, and sqlite3 refuses that by default — measured as
+        # a hard failure of `POST /index` before the flag went in. Safe
+        # here on two counts: `sqlite3.threadsafety` is 3 (the library
+        # serializes access itself), and every write goes through the
+        # server's one-writer lock (ADR-10). The default exists to catch
+        # accidental sharing; this sharing is the design.
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._db.executescript(
             """
             CREATE TABLE IF NOT EXISTS links (

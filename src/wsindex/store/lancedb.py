@@ -138,8 +138,11 @@ class LanceDBStore(VectorStore):
     def _get_datasets(self) -> dict[str, dict[str, Any]]:
         """Registry rows by dataset name; one scan per store instance.
 
-        The cache is updated locally after writes — the store lives for
-        a single CLI invocation, so it cannot grow stale.
+        The cache is updated locally after writes. It used to say it
+        could not grow stale because a store lived for one CLI
+        invocation — true until Этап 11 gave the store a process that
+        outlives the question, at which point a repo registered by
+        somebody else stayed invisible here forever. `refresh` drops it.
         """
         if not self._known_datasets:
             for d in self.dataset_table.search().to_list():
@@ -392,6 +395,21 @@ class LanceDBStore(VectorStore):
         if not root.is_dir():
             return None
         return sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
+
+    def refresh(self) -> None:
+        """Move both handles to the newest committed version.
+
+        `checkout_latest` on each table. Both, because the dataset
+        registry is written by `create_dataset` in whichever process ran
+        it — a server that refreshed only the data table would keep
+        answering "no such dataset" for a repo somebody else registered.
+        """
+        for table in self._tables():
+            # Untyped in lancedb's stubs, like most of its surface.
+            table.checkout_latest()  # type: ignore[no-untyped-call]
+        # And the registry cache above it: moving the table handle
+        # forward means nothing while a dict remembers the old answer.
+        self._known_datasets.clear()
 
     def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
         """Merge small files and drop old versions, on every table.

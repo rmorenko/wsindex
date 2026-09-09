@@ -375,6 +375,11 @@ class Pipeline:
             repos = [r for r in repos if r.id == repo]
             if not repos:
                 raise ValueError(f"unknown repo id: {repo!r}")
+        # Before reading, not after: a store holds the version it opened
+        # at, so a long-lived process would answer from the corpus as it
+        # was when it started and never fail doing it (ADR-10). Costs
+        # ~4 ms; a CLI never notices and a server cannot do without it.
+        self.store.refresh()
         n = _CANDIDATE_MULTIPLIER if self.reranker else 1
         all_hits: list[Hit] = []
         for r in repos:

@@ -24,6 +24,7 @@ having a user to talk to is a property of this module, not of the config
 real file is `_require_config_file`'s.
 """
 
+import os
 import re
 from datetime import timedelta
 from pathlib import Path
@@ -614,6 +615,60 @@ def fetch(url: str) -> None:
         typer.echo(f"{key}: {value}")
     typer.echo("")
     typer.echo(document.text)
+
+
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option("--host", help="Address to bind")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="Port to bind")] = 8000,
+) -> None:
+    """Serve the workspace over HTTP: search, index, and an admin page.
+
+    The same engine this CLI uses, behind a thin HTTP layer (ADR-10):
+    `/search` is this command's `search`, `/index` is its `index`, and
+    `/admin` is a page with the repo list and two buttons. `[server]
+    interval` turns on automatic syncing; `[server] token_env` names the
+    variable holding the bearer token every request must carry.
+
+    Binds to localhost by default. A search index over private
+    repositories reaching the network is a decision, not a default —
+    pass `--host 0.0.0.0` to make it, preferably with a token set.
+    """
+    config = _config()
+    _require_config_file(config)
+    try:
+        import uvicorn
+
+        from wsindex.server import create_app
+    except ImportError as exc:  # pragma: no cover - depends on the install
+        typer.echo(
+            "error: the server needs the `server` extra — "
+            "`uv sync --extra server` (fastapi, uvicorn)",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+
+    token: str | None = None
+    name = config.server_token_env
+    if name is not None:
+        token = os.environ.get(name)
+        if not token:
+            # The same refusal a connector makes: starting anyway would
+            # open the index to anyone who can reach the port, and the
+            # config says that is not what was wanted.
+            typer.echo(
+                f"error: ${name} is not set, and [server] token_env names it — "
+                "set it, or remove token_env to serve without authentication",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+    else:
+        typer.echo(
+            "warning: serving without authentication ([server] token_env is unset)", err=True
+        )
+
+    typer.echo(f"wsindex '{config.name}' on http://{host}:{port}  (admin at /admin)")
+    uvicorn.run(create_app(token=token), host=host, port=port, log_level="warning")
 
 
 @app.command()

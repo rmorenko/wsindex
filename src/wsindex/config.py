@@ -553,6 +553,32 @@ class Config:
         return {str(prefix): str(template) for prefix, template in raw.items()}
 
     @property
+    def server_token_env(self) -> str | None:
+        """Name of the variable holding the server's bearer token.
+
+            [server]
+            token_env = "WSINDEX_TOKEN"
+            interval = 900
+
+        The name, never the value — the rule connectors keep (step 29a)
+        and the S3 store keeps (ADR-7). Absent means an open server,
+        which is a decision someone has to write down rather than a
+        default someone can fall into: `wsindex serve` says so out loud.
+        """
+        value = self._data.get("server", {}).get("token_env")
+        return str(value) if value else None
+
+    @property
+    def server_interval(self) -> float:
+        """Seconds between automatic sync cycles; 0 disables them.
+
+        Zero by default. A server that starts pulling remotes on its own
+        the moment it boots is a surprise, and this particular surprise
+        spends somebody's rate limit.
+        """
+        return float(self._data.get("server", {}).get("interval", 0) or 0)
+
+    @property
     def connectors(self) -> list[ConnectorSpec]:
         """External document sources, in routing order.
 

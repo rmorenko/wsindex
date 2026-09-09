@@ -1,0 +1,302 @@
+"""HTTP over the same Pipeline: search, index, status.
+
+The whole of Этап 11's first half, and deliberately the smallest thing
+that can be called a server. Every endpoint is a call into the library
+and a rendering of what it returned — there is no indexing code here, no
+chunking, no store access that `Pipeline` does not already do. ADR-10
+puts it plainly: an endpoint that cannot be expressed as a library call
+means the library is missing something, not that the server should grow
+it.
+
+Which is why the contract mirrors the CLI's. `GET /search?q=...&k=&repo=`
+is `wsindex search --repo`; `POST /index` is `wsindex index`. Two
+interfaces over one engine stay honest only while they say the same
+things, and the cheapest way to keep them saying the same things is to
+give them the same words.
+
+Authentication
+--------------
+A bearer token, named by the config as an environment variable and never
+written in it — the rule connectors keep (step 29a) and the S3 store
+keeps (ADR-7). With `token_env` set and the variable empty the server
+refuses to start: a search index over private repositories is not a
+thing to begin serving by accident. With no `token_env` at all the
+server is open, which is a decision a person has to write down.
+
+State
+-----
+One `Pipeline`, built once at startup and shared. That is safe for reads
+because `Pipeline.search` refreshes the store first (ADR-10), and it is
+what makes a request cheap: building a pipeline means loading an
+embedding model.
+
+Writes are serialized by a lock. Not for correctness — `probes/step30`
+measured concurrent writers losing nothing — but because two indexing
+runs of the same repo do the same work twice and neither shortens the
+other's next pass. One at a time, and the second caller is told the
+first is running rather than made to wait.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Annotated, Any
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+
+from wsindex.config import Config
+from wsindex.ingest import NotAGitRepositoryError
+from wsindex.model import Kind, SearchFilter
+from wsindex.server.admin import mount_admin
+from wsindex.server.scheduler import mount_scheduler
+
+if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
+    from wsindex.pipeline import Pipeline
+
+# FastAPI at module scope, not inside the factory. It has to be: with
+# postponed annotations a route's `request: Request` is resolved against
+# the *module* globals, and a name imported inside a function is not
+# there — FastAPI then reads it as a missing query parameter and answers
+# 422 to every call. Importing here costs a base install nothing, since
+# nothing imports `wsindex.server` except `wsindex serve`, which checks
+# for the extra first.
+
+
+@dataclass
+class RunLog:
+    """The last few indexing runs, for `status` and the admin page.
+
+    In memory and bounded: a server that kept every run would be a
+    logging system, and the question this answers is "did the last sync
+    work", which needs the last few.
+    """
+
+    limit: int = 20
+    entries: list[dict[str, Any]] = field(default_factory=list)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def record(self, kind: str, started: float, detail: dict[str, Any]) -> None:
+        """Append one finished run, dropping the oldest past `limit`."""
+        with self._lock:
+            self.entries.insert(
+                0,
+                {
+                    "kind": kind,
+                    "at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started)),
+                    "seconds": round(time.monotonic() - started, 2) if started < 1e9 else None,
+                    **detail,
+                },
+            )
+            del self.entries[self.limit :]
+
+
+class Busy(RuntimeError):
+    """An indexing run was asked for while one was already going."""
+
+
+@dataclass
+class Writer:
+    """The one-writer rule of ADR-10, as a lock that refuses to queue.
+
+    `try` rather than `acquire`: a caller who waits learns nothing and a
+    scheduler that waits piles up. Told "already running", both do the
+    right thing — the scheduler skips this tick, the human refreshes.
+    """
+
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    @contextmanager
+    def held(self) -> Iterator[None]:
+        """Hold the write lock, or raise `Busy` immediately.
+
+        Raises:
+            Busy: Another indexing run is in progress.
+        """
+        if not self._lock.acquire(blocking=False):
+            raise Busy("an indexing run is already in progress")
+        try:
+            yield
+        finally:
+            self._lock.release()
+
+    @property
+    def busy(self) -> bool:
+        """True while a run holds the lock."""
+        return self._lock.locked()
+
+
+def _hit_json(hit: Any) -> dict[str, Any]:
+    """One hit as the CLI prints it, plus what a machine needs.
+
+    The same fields `wsindex search` shows, because two interfaces that
+    describe one result differently are two results as far as a reader is
+    concerned.
+    """
+    meta = hit.metadata
+    return {
+        "repo": str(meta["repo"]),
+        "path": str(meta["path"]),
+        "start_line": int(meta["start_line"]),
+        "end_line": int(meta["end_line"]),
+        "lang": str(meta.get("lang", "")),
+        "kind": str(meta.get("kind", "")),
+        "symbol": meta.get("symbol"),
+        "score": round(float(hit.score), 4),
+        "text": str(meta["text"]),
+    }
+
+
+def create_app(
+    *,
+    pipeline_factory: Callable[[], Pipeline] | None = None,
+    token: str | None = None,
+) -> FastAPI:
+    """Build the ASGI application.
+
+    A factory rather than a module-level `app` so that the pipeline is
+    built once, explicitly, and a test can pass its own. The import of
+    FastAPI is inside for the same reason every optional dependency is
+    imported late here: a base install must not pay for the `server`
+    extra to import `wsindex`.
+
+    Args:
+        pipeline_factory: Builds the shared Pipeline. Defaults to the
+            CLI's composition root, so the server and the CLI cannot
+            drift into different engines.
+        token: Bearer token every request must carry, or None for an
+            open server.
+
+    Returns:
+        The application, with `state.pipeline`, `state.writer`,
+        `state.runs` and `state.token` attached for the routers.
+    """
+    if pipeline_factory is None:
+        from wsindex.cli import _build_pipeline
+
+        pipeline_factory = _build_pipeline
+
+    app = FastAPI(
+        title="wsindex",
+        summary="Semantic search across the repositories of a workspace.",
+        version="0.1.0",
+    )
+    app.state.pipeline = pipeline_factory()
+    app.state.writer = Writer()
+    app.state.runs = RunLog()
+    app.state.token = token
+
+    def authorize(request: Request) -> None:
+        """Reject a request without the configured bearer token."""
+        if request.app.state.token is None:
+            return
+        header = request.headers.get("Authorization", "")
+        offered = header.removeprefix("Bearer ").strip()
+        if offered != request.app.state.token:
+            # 401 with no hint about which half was wrong: a server that
+            # says "unknown token" to one caller and "no token" to
+            # another has told both something.
+            raise HTTPException(status_code=401, detail="unauthorized")
+
+    guarded = [Depends(authorize)]
+
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        """Liveness, unauthenticated: a probe is not a reader.
+
+        Deliberately says nothing about the workspace — a load balancer
+        needs to know the process is up, not what it indexes.
+        """
+        return {"status": "ok"}
+
+    @app.get("/search", dependencies=guarded)
+    def search(
+        q: Annotated[str, Query(description="Natural-language query")],
+        k: Annotated[int, Query(ge=1, le=100, description="How many hits")] = 10,
+        repo: Annotated[str | None, Query(description="Restrict to one repo id")] = None,
+        lang: Annotated[list[str] | None, Query(description="Language (repeat for OR)")] = None,
+        kind: Annotated[list[Kind] | None, Query(description="Kind (repeat for OR)")] = None,
+        path: Annotated[str | None, Query(description="Path glob")] = None,
+        symbol: Annotated[str | None, Query(description="Substring of the symbol")] = None,
+    ) -> dict[str, Any]:
+        """Search the workspace. The CLI's `search`, with its flags as query params."""
+        candidate = SearchFilter(
+            lang=tuple(lang or ()),
+            kind=tuple(kind or ()),
+            path=path,
+            symbol=symbol,
+        )
+        try:
+            hits = app.state.pipeline.search(
+                q, k=k, repo=repo, filters=None if candidate.is_empty else candidate
+            )
+        except ValueError as exc:
+            # An unknown repo id is the caller's mistake, not the
+            # server's — the CLI exits 1 on it, and 400 is the same
+            # sentence in HTTP.
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"query": q, "count": len(hits), "hits": [_hit_json(hit) for hit in hits]}
+
+    @app.post("/index", dependencies=guarded)
+    def index() -> dict[str, Any]:
+        """Re-index every configured repo. Incremental, exactly as the CLI is."""
+        started = time.time()
+        clock = time.monotonic()
+        try:
+            with app.state.writer.held():
+                report = app.state.pipeline.index()
+        except Busy as exc:
+            # 409, not 429: nothing is rate-limiting the caller, the
+            # resource is in a state that forbids the request.
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except NotAGitRepositoryError as exc:
+            # A repo in the config that is not a checkout. The CLI prints
+            # this and exits 1; letting it out as a 500 would say the
+            # server broke, when the answer is in the config file.
+            app.state.runs.record("index", started, {"error": str(exc)})
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        detail = {
+            "files": report.files,
+            "chunks": report.chunks,
+            "written": report.written,
+            "deleted": report.deleted,
+            "commits": report.commits,
+            "full_repos": list(report.full_repos),
+            "missing_repos": list(report.missing_repos),
+            "seconds": round(time.monotonic() - clock, 2),
+        }
+        app.state.runs.record("index", started, detail)
+        return detail
+
+    @app.get("/status", dependencies=guarded)
+    def status() -> dict[str, Any]:
+        """What this server is serving: workspace, repos, recent runs."""
+        config = Config()
+        return {
+            "workspace": config.name,
+            "backend": config.backend.value,
+            "store": config.store_uri,
+            "rank": config.rank_enabled,
+            "indexing": app.state.writer.busy,
+            "repos": [
+                {
+                    "id": repo.id,
+                    "path": repo.path,
+                    "remote": repo.remote,
+                    "source": repo.source.value if repo.source else None,
+                    "documents": len(repo.urls),
+                }
+                for repo in config.repos
+            ],
+            "runs": list(app.state.runs.entries),
+        }
+
+    mount_scheduler(app, guarded)
+    mount_admin(app, guarded)
+    return app
+
+
+__all__ = ["Busy", "RunLog", "Writer", "create_app"]

@@ -411,6 +411,52 @@ report readable — and it is also why deleting the config that published a
 port makes the code reading it drift again, with nothing to update by
 hand. See [ADR-9](docs/adr/adr-009-links-as-entities.md).
 
+## Running it as a server
+
+The same engine behind HTTP, for a workspace more than one person
+searches:
+
+```bash
+uv sync --extra server
+export WSINDEX_TOKEN=...
+uv run wsindex serve            # http://127.0.0.1:8000, admin at /admin
+```
+
+```toml
+[server]
+token_env = "WSINDEX_TOKEN"   # the variable's name, never the token
+interval = 900                # seconds between automatic syncs; 0 = off
+```
+
+`GET /search?q=...&k=&repo=&lang=&kind=&path=&symbol=` is this CLI's
+`search` with its flags as query parameters, `POST /index` is `index`,
+`GET /status` reports the workspace and the last runs, and `/healthz`
+answers without a token because a load balancer is not a reader.
+`POST /hooks/sync` syncs and re-indexes now — point a git host's webhook
+at it; the body is ignored, since "something changed" is all an
+incremental run needs to hear. OpenAPI comes free at `/openapi.json`.
+
+`/admin` is a page with the repo list, a sync button and the recent runs.
+
+**Nothing server-shaped leaks into the engine.** Every endpoint is a call
+into the same library the CLI uses — an endpoint that could not be
+written that way would mean the library was missing something, not that
+the server should grow it. See
+[ADR-10](docs/adr/adr-010-library-server-boundary.md).
+
+**Two processes, one index.** Measured rather than assumed: concurrent
+writers lose nothing, a stale writer is still a correct writer, and
+deduplication holds across processes. The one real hazard is reading —
+a handle is pinned to the version it opened at, so a long-lived process
+would answer from the corpus it started with and never fail doing it.
+Searches refresh first, at about 4 ms against a 111 ms search. Indexing
+runs one at a time and a second caller is told so (409) rather than
+queued: two runs of the same repo do the same work twice.
+
+Binding is `127.0.0.1` unless you say otherwise, and a `token_env`
+naming an unset variable stops the server from starting rather than
+opening the index to whoever can reach the port.
+
 ## Reclaiming space
 
 Deleting a chunk hides it immediately but does not free its bytes, and
@@ -530,10 +576,11 @@ pair) is recorded in [ADR-7](docs/adr/adr-007-post-mvp-storage.md).
 
 ## Extras
 
-| Extra | Enables                                                                       | Without it                                                               |
-| ----- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `ml`  | `sentence-transformers` embeddings (real semantic search)                     | `--provider fake`: deterministic pseudo-vectors, exact-text matches only |
-| `ast` | tree-sitter chunking for py/rs/ts/java code and toml/yaml/json/xml/Dockerfile | sliding-window text chunks for everything                                |
+| Extra    | Enables                                                                       | Without it                                                               |
+| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ml`     | `sentence-transformers` embeddings (real semantic search)                     | `--provider fake`: deterministic pseudo-vectors, exact-text matches only |
+| `server` | `wsindex serve`: HTTP API, scheduler and admin page (FastAPI)                 | search from the CLI only                                                 |
+| `ast`    | tree-sitter chunking for py/rs/ts/java code and toml/yaml/json/xml/Dockerfile | sliding-window text chunks for everything                                |
 
 Every grammar degrades independently: a language without its grammar falls
 back to plain text chunks, nothing crashes.
