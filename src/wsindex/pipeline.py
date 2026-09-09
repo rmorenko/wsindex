@@ -450,6 +450,23 @@ class Pipeline:
             self.links.delete_by_source(stale)
         return deleted
 
+    def commit_message(self, repo: str, chunk_id: str) -> str | None:
+        """The text of one indexed commit message, or None if it is gone.
+
+        A question about the workspace, answered here rather than by
+        callers reaching through `pipeline.store` — which two of them
+        did, each writing the same three lines. None is ordinary: a
+        commit chunk that a later run re-indexed away is not an error.
+
+        Args:
+            repo: Repo id the commit belongs to.
+            chunk_id: Id of the commit's own chunk, as a blame edge holds it.
+
+        Returns:
+            The message, or None when the store no longer has it.
+        """
+        return self.store.chunk_text(repo, ids=[chunk_id]).get(chunk_id)
+
     def search(
         self,
         query: str,

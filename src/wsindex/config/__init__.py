@@ -227,6 +227,18 @@ class Config:
             raise ValueError("no index dir: this config was built from defaults")
         return resolve_index_dir(self._location, self.name)
 
+    def _setting(self, section: str, key: str, default: Any = None) -> Any:
+        """One optional key of one optional section.
+
+        The eight optional settings were each written as
+        `self._data.get("store", {}).get("uri")` — a two-step reach whose
+        every repetition is a chance to forget the second default. The
+        raw document stays the source of truth: a section wsindex does
+        not know about survives a `save`, which a typed model of the file
+        would quietly drop.
+        """
+        return self._data.get(section, {}).get(key, default)
+
     @property
     def name(self) -> str:
         """Workspace name; identification only, nothing derives from it."""
@@ -267,23 +279,23 @@ class Config:
             ValueError: No explicit uri and no config file to derive one
                 from (see `index_dir`).
         """
-        uri = self._data.get("store", {}).get("uri")
+        uri = self._setting("store", "uri")
         return str(uri) if uri is not None else str(self.index_dir)
 
     @property
     def metric(self) -> str:
         """Similarity metric datasets are created with."""
-        return str(self._data.get("store", {}).get("metric", "cosine"))
+        return str(self._setting("store", "metric", "cosine"))
 
     @property
     def rank_enabled(self) -> bool:
         """Whether search runs the cross-encoder reranking stage."""
-        return bool(self._data.get("rank", {}).get("enabled", False))
+        return bool(self._setting("rank", "enabled", False))
 
     @property
     def rank_model(self) -> str:
         """Cross-encoder model the reranking stage loads."""
-        return str(self._data.get("rank", {}).get("model", DEFAULT_RANK_MODEL))
+        return str(self._setting("rank", "model", DEFAULT_RANK_MODEL))
 
     @property
     def references(self) -> dict[str, str]:
@@ -320,7 +332,7 @@ class Config:
         which is a decision someone has to write down rather than a
         default someone can fall into: `wsindex serve` says so out loud.
         """
-        value = self._data.get("server", {}).get("token_env")
+        value = self._setting("server", "token_env")
         return str(value) if value else None
 
     @property
@@ -331,7 +343,7 @@ class Config:
         the moment it boots is a surprise, and this particular surprise
         spends somebody's rate limit.
         """
-        return float(self._data.get("server", {}).get("interval", 0) or 0)
+        return float(self._setting("server", "interval", 0) or 0)
 
     @property
     def connectors(self) -> list[ConnectorSpec]:

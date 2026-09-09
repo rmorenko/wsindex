@@ -163,8 +163,7 @@ def _echo_commit(pipeline: Pipeline, links: LinkStore, edge: "Edge") -> None:
         # change" — see `blame_links`.
         typer.echo(f"    {edge.name}  (message not indexed)")
         return
-    texts = pipeline.store.chunk_text(edge.repo, ids=[edge.dst_chunk_id])
-    message = texts.get(edge.dst_chunk_id)
+    message = pipeline.commit_message(edge.repo, edge.dst_chunk_id)
     if message is None:
         typer.echo(f"    {edge.name}  (message not indexed)")
         return

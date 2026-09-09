@@ -116,3 +116,27 @@ Revisit thresholds:
 - the LanceDB API is young (`table_names()` deprecated in favour of
   `list_tables()` within one minor line) — the version is pinned
   and renames are expected.
+
+## What changed afterwards (2026-09-10)
+
+An ADR records a decision at a moment; the store has moved since, and
+twice in ways this document would otherwise misdescribe.
+
+**Reads hold a snapshot.** "Optimistic concurrency supporting multiple
+writers" is true and was measured, but it says nothing about readers — and
+a Lance handle is pinned to the version it opened at. A long-lived
+process therefore answers from the corpus it started with, forever, and
+never fails while doing it. `VectorStore.refresh()` was added to the
+contract for this, and `Pipeline.search` calls it. See
+[ADR-10](adr-010-library-server-boundary.md), which measured the effect
+and the 4 ms cost.
+
+**The dataset registry is cached in memory.** `create_dataset` writes to a
+second table and the store keeps what it read in a dict, whose docstring
+claimed it could not grow stale because a store lived for one CLI
+invocation. That stopped being true when the server gave the store a
+process that outlives the question: a repo registered elsewhere stayed
+invisible. `refresh()` clears it.
+
+Both are consequences of the same premise this ADR did not examine:
+"one store object per process" was assumed to mean "one short process".

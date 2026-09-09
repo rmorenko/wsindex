@@ -119,11 +119,11 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
             for hit in found:
                 commits = []
                 for edge in links.out_of([str(hit.native_id)], kind=LinkKind.BLAMED_BY):
-                    message = None
-                    if edge.dst_chunk_id is not None:
-                        message = engine.store.chunk_text(edge.repo, ids=[edge.dst_chunk_id]).get(
-                            edge.dst_chunk_id
-                        )
+                    message = (
+                        engine.commit_message(edge.repo, edge.dst_chunk_id)
+                        if edge.dst_chunk_id is not None
+                        else None
+                    )
                     commits.append({"commit": edge.name, "message": message})
                 definitions.append(
                     {
