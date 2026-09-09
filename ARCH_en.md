@@ -2,6 +2,15 @@
 
 > Status: draft for the MVP (Phase E1). The document version is aligned with the BRD and the WSIndex Concept. All facts about Tensorus v1 and the architectural core are fixed as a single reference and must not diverge between documents.
 
+> **Storage is out of date, deliberately and only here.** This document
+> describes Tensorus v1 as the index database, with `LocalStore` as its
+> fallback. Neither exists any more: **ADR-7**
+> (`docs/adr/adr-007-post-mvp-storage.md`, 2026-08-19) replaced both with
+> an embedded LanceDB, and the code was removed on 2026-08-21. §8 records
+> that; §§1–7 have not been rewritten around it yet, and every mention of
+> Tensorus below should be read as history. The README describes what the
+> project actually stores today.
+
 ______________________________________________________________________
 
 ## 1. Overview and Goal
