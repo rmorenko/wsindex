@@ -3,6 +3,13 @@
 First stage of the indexing pipeline (ARCH §4): yields WalkedFile entries
 that the chunker dispatcher consumes. Reads only file names, sizes and a
 small binary-sniff prefix — never whole file contents.
+
+Which files count as indexable is not decided here. Suffixes and exact
+names come from the language registry, so registering a `LanguageSpec`
+is enough to make this stage select the files — see
+`wsindex.ingest.languages`. What stays here is the policy that has
+nothing to do with language: pruned directories, the size ceiling, the
+binary sniff.
 """
 
 import os
@@ -10,6 +17,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Kind
 
 # Directory-pruning policy in one place: any hidden directory (dot-prefix)
@@ -29,29 +37,6 @@ def _skip_dir(name: str) -> bool:
     duplicate the hidden-dir rule silently). Colocating them is cheap.
     """
     return name.startswith(".") or name in IGNORED_DIRS
-
-
-# Decision tables instead of if/elif chains: adding a format is one data row.
-# Only the ARCH §1 corpus is listed on purpose — every extra format is a
-# future obligation for the chunkers.
-_SUFFIX_MAP: dict[str, tuple[str, Kind]] = {
-    ".py": ("python", Kind.CODE),
-    ".rs": ("rust", Kind.CODE),
-    ".ts": ("typescript", Kind.CODE),
-    ".java": ("java", Kind.CODE),
-    ".toml": ("toml", Kind.CONFIG),
-    ".yaml": ("yaml", Kind.CONFIG),
-    ".yml": ("yaml", Kind.CONFIG),
-    ".json": ("json", Kind.CONFIG),
-    ".rst": ("rst", Kind.DOC),
-    ".txt": ("text", Kind.DOC),
-    ".md": ("markdown", Kind.DOC),
-}
-
-# Files matched by exact name (they have no useful extension).
-_FILENAME_MAP: dict[str, tuple[str, Kind]] = {
-    "Dockerfile": ("dockerfile", Kind.CONFIG),
-}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -78,8 +63,15 @@ class WalkedFile:
 
 
 def detect_lang_kind(path: Path) -> tuple[str, Kind] | None:
-    """Map a file to (lang, kind) by suffix or exact name; None = skip."""
-    return _SUFFIX_MAP.get(path.suffix.lower()) or _FILENAME_MAP.get(path.name)
+    """Map a file to (lang, kind) by suffix or exact name; None = skip.
+
+    The table this used to hold is now `wsindex.ingest.languages.REGISTRY`,
+    so a plugin that registers a `LanguageSpec` starts getting its files
+    walked without touching this module. That was the point: the walker
+    was the one stage a language could not reach from outside.
+    """
+    spec = REGISTRY.match(path)
+    return (spec.name, spec.kind) if spec is not None else None
 
 
 def is_binary(path: Path) -> bool:

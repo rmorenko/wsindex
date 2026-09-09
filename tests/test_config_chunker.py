@@ -6,7 +6,8 @@ the no-grammar guard test runs everywhere.
 
 import pytest
 
-from wsindex.ingest.ast import CONFIG_PARSERS, chunk_config
+from wsindex.ingest.chunker import chunk_file
+from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Chunk, Kind
 
 TOML = """\
@@ -63,9 +64,9 @@ SAMPLES = [("toml", TOML), ("yaml", YAML), ("json", JSON), ("dockerfile", DOCKER
 
 
 def _chunk(text: str, lang: str) -> list[Chunk]:
-    if lang not in CONFIG_PARSERS:
+    if REGISTRY.parser(lang) is None:
         pytest.skip(f"no {lang} grammar installed")
-    return chunk_config(text, repo="r", path=f"cfg.{lang}", lang=lang, kind=Kind.CONFIG)
+    return chunk_file(text, repo="r", path=f"cfg.{lang}", lang=lang, kind=Kind.CONFIG)
 
 
 def _shape(chunks: list[Chunk]) -> list[tuple[int, int, str | None, str | None]]:
@@ -141,7 +142,11 @@ def test_metadata_flows_through(lang: str, sample: str) -> None:
     assert (chunk.repo, chunk.path, chunk.lang, chunk.kind) == expected
 
 
-def test_unknown_lang_is_rejected_with_hint() -> None:
-    # Runs everywhere: "ini" is never registered, no parser gets touched.
-    with pytest.raises(RuntimeError, match="--extra ast"):
-        chunk_config("key = 1\n", repo="r", path="s.ini", lang="ini", kind=Kind.CONFIG)
+def test_unregistered_lang_falls_back_to_text_chunks() -> None:
+    # Runs everywhere: "ini" is never registered, so there is no parser
+    # and no extractor, and the dispatcher windows the file instead.
+    # This used to raise; the registry made the raise unreachable, since
+    # `ast_chunks` now takes a parser rather than looking one up.
+    chunks = chunk_file("key = 1\n", repo="r", path="s.ini", lang="ini", kind=Kind.CONFIG)
+    assert len(chunks) == 1
+    assert chunks[0].node_type is None

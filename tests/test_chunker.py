@@ -10,8 +10,24 @@ from textwrap import dedent
 import pytest
 
 from wsindex.ingest import chunk_file
-from wsindex.ingest.ast import CODE_PARSERS, CONFIG_PARSERS
+from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Kind
+
+
+def has_grammar(lang: str) -> bool:
+    return REGISTRY.parser(lang) is not None
+
+
+def drop_grammar(monkeypatch: pytest.MonkeyPatch, lang: str) -> None:
+    """Make the registry report no parser for one language.
+
+    The dispatcher asks the registry per call, so hiding the parser is
+    all it takes to exercise the fallback — no need to reach into a
+    shared dict the way the old parser tables required.
+    """
+    real = REGISTRY.parser
+    monkeypatch.setattr(REGISTRY, "parser", lambda name: None if name == lang else real(name))
+
 
 REPO = "test"
 
@@ -38,7 +54,7 @@ def test_code_falls_back_to_plain_windows() -> None:
     assert chunks[0].symbol is None
 
 
-@pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("python"), reason="needs the ast extra")
 def test_python_code_gets_ast_chunks() -> None:
     code = "def f():\n    return 1\n"
     chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
@@ -48,7 +64,7 @@ def test_python_code_gets_ast_chunks() -> None:
     assert chunks[0].text == "def f():\n    return 1"
 
 
-@pytest.mark.skipif("rust" not in CODE_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("rust"), reason="needs the ast extra")
 def test_rust_code_gets_ast_chunks() -> None:
     code = "impl S {\n    fn m(&self) -> u8 {\n        1\n    }\n}\n"
     chunks = chunk_file(code, repo=REPO, path="src/s.rs", lang="rust", kind=Kind.CODE)
@@ -56,7 +72,7 @@ def test_rust_code_gets_ast_chunks() -> None:
     assert by_symbol["S::m"].node_type == "function_item"
 
 
-@pytest.mark.skipif("java" not in CODE_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("java"), reason="needs the ast extra")
 def test_java_code_gets_ast_chunks() -> None:
     code = "class App {\n    void run() {\n    }\n}\n"
     chunks = chunk_file(code, repo=REPO, path="src/App.java", lang="java", kind=Kind.CODE)
@@ -64,7 +80,7 @@ def test_java_code_gets_ast_chunks() -> None:
     assert by_symbol["App.run"].node_type == "method_declaration"
 
 
-@pytest.mark.skipif("typescript" not in CODE_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("typescript"), reason="needs the ast extra")
 def test_typescript_code_gets_ast_chunks() -> None:
     code = "export function f(): number {\n  return 1;\n}\n"
     chunks = chunk_file(code, repo=REPO, path="src/f.ts", lang="typescript", kind=Kind.CODE)
@@ -74,11 +90,11 @@ def test_typescript_code_gets_ast_chunks() -> None:
     assert chunks[0].text.startswith("export function f")
 
 
-@pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("python"), reason="needs the ast extra")
 def test_python_without_tree_sitter_falls_back_to_plain_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delitem(CODE_PARSERS, "python")
+    drop_grammar(monkeypatch, "python")
     code = "def f():\n    return 1\n"
     chunks = chunk_file(code, repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE)
     assert len(chunks) == 1
@@ -86,7 +102,7 @@ def test_python_without_tree_sitter_falls_back_to_plain_windows(
     assert chunks[0].symbol is None
 
 
-@pytest.mark.skipif("toml" not in CONFIG_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("toml"), reason="needs the ast extra")
 def test_toml_config_gets_table_chunks() -> None:
     cfg = "[table]\nkey = 1\n"
     chunks = chunk_file(cfg, repo=REPO, path="pyproject.toml", lang="toml", kind=Kind.CONFIG)
@@ -104,12 +120,9 @@ def test_config_without_grammar_falls_back_to_plain_windows() -> None:
     assert chunks[0].symbol is None
 
 
-@pytest.mark.skipif("toml" not in CONFIG_PARSERS, reason="needs the ast extra")
+@pytest.mark.skipif(not has_grammar("toml"), reason="needs the ast extra")
 def test_removed_grammar_falls_back_to_plain_windows(monkeypatch: pytest.MonkeyPatch) -> None:
-    # CONFIG_PARSERS is one shared dict object: the dispatcher imported a
-    # reference to it, so deleting the entry is visible through both names
-    # (unlike rebinding a flag, which needs patching per namespace).
-    monkeypatch.delitem(CONFIG_PARSERS, "toml")
+    drop_grammar(monkeypatch, "toml")
     cfg = "[table]\nkey = 1\n"
     chunks = chunk_file(cfg, repo=REPO, path="pyproject.toml", lang="toml", kind=Kind.CONFIG)
     assert chunks[0].node_type is None

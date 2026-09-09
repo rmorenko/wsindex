@@ -11,15 +11,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from wsindex.ingest.ast import (
-    _CODE_EXTRACTORS,
-    _CONFIG_EXTRACTORS,
-    CODE_PARSERS,
-    CONFIG_PARSERS,
-    HAS_TREE_SITTER,
-    chunk_code_ast,
-)
+from wsindex.ingest.ast import HAS_TREE_SITTER
 from wsindex.ingest.ast.rust import _extend_back
+from wsindex.ingest.chunker import chunk_file
+from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Chunk, Kind
 
 if TYPE_CHECKING:
@@ -62,9 +57,9 @@ TAIL = 1
 
 
 def _chunk(text: str, lang: str = "python") -> list[Chunk]:
-    if lang not in CODE_PARSERS:
+    if REGISTRY.parser(lang) is None:
         pytest.skip(f"no {lang} grammar installed")
-    return chunk_code_ast(text, repo="r", path=f"sample.{lang}", lang=lang, kind=Kind.CODE)
+    return chunk_file(text, repo="r", path=f"sample.{lang}", lang=lang, kind=Kind.CODE)
 
 
 @requires_tree_sitter
@@ -119,20 +114,14 @@ def test_broken_file_does_not_crash() -> None:
     assert isinstance(chunks, list)  # error-tolerant parse, no exception
 
 
-@pytest.mark.skipif("python" not in CODE_PARSERS, reason="needs the ast extra")
-def test_missing_grammar_is_rejected_with_hint(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delitem(CODE_PARSERS, "python")
-    # Call chunk_code_ast directly: _chunk would pytest.skip on the deleted
-    # registry entry, silently bypassing the guard under test.
-    with pytest.raises(RuntimeError, match="--extra ast"):
-        chunk_code_ast(
-            "def f():\n    return 1\n", repo="r", path="s.py", lang="python", kind=Kind.CODE
-        )
-
-
 def test_every_parser_has_an_extractor() -> None:
-    assert set(CODE_PARSERS) <= set(_CODE_EXTRACTORS)
-    assert set(CONFIG_PARSERS) <= set(_CONFIG_EXTRACTORS)
+    # This used to be a hand-checked invariant across four parallel
+    # tables. `LanguageSpec` carries the grammar and the extractor as one
+    # value and `register` refuses one without the other, so the two can
+    # no longer drift — this asserts the property still holds end to end.
+    for spec in REGISTRY.specs:
+        if REGISTRY.parser(spec.name) is not None:
+            assert REGISTRY.extractor(spec.name) is not None, spec.name
 
 
 # --- _extend_back (rust prelude look-behind) --------------------------------

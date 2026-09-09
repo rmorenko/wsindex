@@ -9,30 +9,17 @@ together live in the package __init__.
 
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from wsindex.model import Chunk, Kind
 
 try:
-    from tree_sitter import Language, Node, Parser
+    from tree_sitter import Node, Parser
 
     HAS_TREE_SITTER = True
 except ImportError:  # pragma: no cover - only reachable on a base install (CI matrix)
     HAS_TREE_SITTER = False
-
-
-def load_parsers(table: tuple[tuple[str, str, str], ...]) -> dict[str, Parser]:
-    """Build a lang->Parser dict from whichever grammar modules import."""
-    parsers: dict[str, Parser] = {}
-    for lang, module_name, getter in table:
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError:  # pragma: no cover - partial grammar install
-            continue
-        parsers[lang] = Parser(Language(getattr(module, getter)()))
-    return parsers
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -155,21 +142,36 @@ def def_span(outer: Node, *, covered: list[bool], symbol: str, node_type: str) -
 
 def ast_chunks(
     *,
-    parsers: dict[str, Parser],
-    extractors: dict[str, Callable[[Node, list[str], list[bool]], list[Span]]],
+    parser: Parser,
+    extractor: Callable[[Node, list[str], list[bool]], list[Span]],
     text: str,
     repo: str,
     path: str,
     lang: str,
     kind: Kind,
 ) -> list[Chunk]:
-    """Shared skeleton: parse, run the per-language extractor, fill the gaps."""
-    parser = parsers.get(lang)
-    if parser is None:
-        raise RuntimeError(f"no grammar for {lang!r} — run `uv sync --extra ast`")
+    """Shared skeleton: parse, run the per-language extractor, fill the gaps.
+
+    One language's parser and extractor rather than a table of them:
+    picking the pair is the registry's job (`LanguageSpec`), and passing
+    two dicts plus the key to look them up with only made it possible for
+    the two to disagree.
+
+    Args:
+        parser: Grammar-backed parser for `lang`.
+        extractor: That language's span policy.
+        text: File contents.
+        repo: Repo id for the produced chunks.
+        path: Repo-relative path for the produced chunks.
+        lang: Language name recorded on every chunk.
+        kind: Artifact category recorded on every chunk.
+
+    Returns:
+        Chunks in file order, covering every non-blank line exactly once.
+    """
     lines = text.splitlines()
     covered = [False] * (len(lines) + 1)
     root = parser.parse(text.encode()).root_node
-    spans = extractors[lang](root, lines, covered)
+    spans = extractor(root, lines, covered)
     spans += gap_spans(lines, covered=covered, start=1, end=len(lines), symbol=None, node_type=None)
     return _assemble(spans, lines=lines, repo=repo, path=path, lang=lang, kind=kind)
