@@ -167,7 +167,7 @@ class Pipeline:
             if diff.full:
                 full_repos.append(repo.id)
             if diff.full or diff.changed or diff.deleted:
-                totals = self._apply(repo, root=root, diff=diff)
+                totals = self._apply(repo, root=root, diff=diff, config=config)
                 files += totals.files
                 chunks_count += totals.chunks
                 written += totals.written
@@ -217,7 +217,7 @@ class Pipeline:
         since = None if dirty else state.commits.get(repo.id)
         return diff_since(root, since=since), dirty
 
-    def _apply(self, repo: Repository, *, root: Path, diff: RepoDiff) -> _Totals:
+    def _apply(self, repo: Repository, *, root: Path, diff: RepoDiff, config: Config) -> _Totals:
         """Chunk what changed, then delete what the tree no longer produces.
 
         The two halves are one thought: `add_chunks` makes the store hold
@@ -265,6 +265,14 @@ class Pipeline:
         by_short = {m.symbol: m.id for m in messages}
         commit_ids = {c.sha: by_short[c.short] for c in commits if c.short in by_short}
         written_commits = self.store.add_chunks(dataset_name=repo.id, chunks=messages)
+        if self.links is not None and messages:
+            # A commit message is where a ticket gets named, so the
+            # outward references live here more than anywhere.
+            self.links.add_links(
+                links_for(messages, references=config.references),
+                repo=repo.id,
+                path="commits",
+            )
 
         files = chunks_count = written = 0
         fresh_ids: set[str] = set()
@@ -281,7 +289,11 @@ class Pipeline:
             chunks_count += len(chunks)
             written += self.store.add_chunks(dataset_name=repo.id, chunks=chunks)
             if self.links is not None:
-                self.links.add_links(links_for(chunks), repo=repo.id, path=walked.rel_path)
+                self.links.add_links(
+                    links_for(chunks, references=config.references),
+                    repo=repo.id,
+                    path=walked.rel_path,
+                )
                 # Blame is the expensive half of step 27 (~28 ms/file), so
                 # it is paid per *indexed* file — which the incremental
                 # path already keeps down to what changed.

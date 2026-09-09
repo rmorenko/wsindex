@@ -66,6 +66,10 @@ class LinkKind(StrEnum):
     DECLARES = "declares"
     """A configuration publishes a value code may name."""
 
+    REFERENCES = "references"
+    """A commit message or document points at something outside the
+    repository — a ticket, an issue, a merge request, a url."""
+
     BLAMED_BY = "blamed_by"
     """A chunk's lines were last written by a commit. Unlike the pair
     above this one resolves at write time — `dst_chunk_id` names the
@@ -85,8 +89,14 @@ class Link:
             the same spelling, which is what lets them meet.
         line: 1-based line within the file, for pointing a user at it.
         dst_chunk_id: The chunk this resolves to, when something already
-            knows. Left None by the extractors: resolution is a query
-            (see `dangling`), not a fact frozen at write time.
+            knows. Left None by the code-to-config extractors: resolution
+            there is a query (see `dangling`), not a fact frozen at write
+            time. `BLAMED_BY` does fill it, because both ends are built
+            by the same run.
+        url: Where a `REFERENCES` link points, outside the repository.
+            Resolved at index time from the config's templates, so the
+            link store reads on its own — at the cost of going stale if a
+            template changes, which a full re-index fixes.
     """
 
     src_chunk_id: str
@@ -94,6 +104,7 @@ class Link:
     name: str
     line: int
     dst_chunk_id: str | None = None
+    url: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -141,6 +152,7 @@ class LinkStore:
                 name         TEXT NOT NULL,
                 line         INTEGER NOT NULL,
                 dst_chunk_id TEXT,
+                url          TEXT,
                 repo         TEXT NOT NULL,
                 path         TEXT NOT NULL,
                 PRIMARY KEY (src_chunk_id, kind, name, line)
@@ -188,8 +200,8 @@ class LinkStore:
         before = self._db.total_changes
         self._db.executemany(
             "INSERT OR IGNORE INTO links "
-            "(src_chunk_id, kind, name, line, dst_chunk_id, repo, path) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(src_chunk_id, kind, name, line, dst_chunk_id, url, repo, path) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     link.src_chunk_id,
@@ -197,6 +209,7 @@ class LinkStore:
                     link.name,
                     link.line,
                     link.dst_chunk_id,
+                    link.url,
                     repo,
                     path,
                 )

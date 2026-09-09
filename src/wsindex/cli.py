@@ -69,7 +69,16 @@ def _config() -> Config:
     workspace that does not exist. So the message lives here, where
     there is a terminal to write it to.
     """
-    config = Config()
+    try:
+        config = Config()
+    except (KeyError, ValueError) as exc:
+        # A malformed file is the user's to fix, not a crash to report.
+        # `TOMLDecodeError` is a ValueError, so this covers unparsable
+        # TOML as well as a missing section or an unusable value — and a
+        # traceback in the output is always a bug (see the module
+        # docstring), including this one.
+        typer.echo(f"error: cannot read the wsindex config — {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     if config.is_default:
         typer.echo("warning: no wsindex config found. Checked:", err=True)
         for line in searched_paths():

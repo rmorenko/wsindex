@@ -117,6 +117,12 @@ class Config:
         # `$XDG_CONFIG_HOME` and may run from anywhere.
         "store": {"metric": "cosine"},
         "rank": {"enabled": False, "model": DEFAULT_RANK_MODEL},
+        # Empty on purpose. A built-in `PROJ-123` pattern is not
+        # possible: measured on this repository it matched 198 times and
+        # every hit was an internal number — ADR-7, FR-111 — not a
+        # ticket. Which prefixes name a tracker is knowledge only the
+        # workspace has, so nothing is recognized until it says.
+        "references": {},
         "repos": [],
     }
     """Project defaults, in the on-disk layout. Never handed out directly:
@@ -376,6 +382,28 @@ class Config:
     def rank_model(self) -> str:
         """Cross-encoder model the reranking stage loads."""
         return str(self._data.get("rank", {}).get("model", DEFAULT_RANK_MODEL))
+
+    @property
+    def references(self) -> dict[str, str]:
+        r"""Prefix -> url template for external references.
+
+        Maps the literal prefix a reference is written with to the url it
+        resolves to, `{key}` standing for the digits:
+
+            [references]
+            "PROJ-" = "https://jira.example.com/browse/PROJ-{key}"
+            "#" = "https://github.com/org/repo/issues/{key}"
+            "!" = "https://gitlab.example.com/org/repo/-/merge_requests/{key}"
+
+        A prefix rather than a named pattern because a named one has to
+        guess. `[A-Z]+-\d+` looks like a Jira key and also matches
+        `ADR-7`, `UTF-8` and `ISO-8601`; measured on this repository it
+        produced 198 matches and not one was a ticket. Declaring the
+        prefixes is the difference between that and zero false positives,
+        and it costs the user one line each.
+        """
+        raw = self._data.get("references", {})
+        return {str(prefix): str(template) for prefix, template in raw.items()}
 
     @property
     def repos(self) -> list[Repository]:

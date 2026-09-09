@@ -445,3 +445,27 @@ def test_sync_still_indexes_after_a_skip_but_exits_nonzero(workspace: Path, orig
     # file being looked for. The claim is that the file was indexed.
     found = runner.invoke(app, ["search", "scratch", "-k", "5", "--lang", "python"])
     assert "scratch" in found.output
+
+
+def test_a_malformed_config_is_an_error_not_a_traceback(workspace: Path) -> None:
+    # The module's own rule: a traceback in the output is always a bug.
+    # Duplicating a section is easy to do by appending a snippet from a
+    # README, and it used to produce a raw TOMLDecodeError traceback.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(config.read_text() + "\n[references]\n")
+
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 1
+    assert "cannot read the wsindex config" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_a_config_missing_a_required_section_is_an_error_too(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text('[workspace]\nname = "ws"\nbackend = "local"\n')
+
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 1
+    assert "cannot read the wsindex config" in result.output
