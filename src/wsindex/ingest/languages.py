@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from wsindex.ingest.ast import configs, java, python, rust, typescript
+from wsindex.ingest.ast import c, configs, cpp, go, java, python, rust, typescript
 from wsindex.ingest.ast.core import HAS_TREE_SITTER, Span
 from wsindex.model import Kind
 
@@ -293,6 +293,56 @@ BUILTIN_LANGUAGES: tuple[LanguageSpec, ...] = (
         # would need `language_tsx` and is not indexed today.
         grammar=GrammarSpec(module="tree_sitter_typescript", getter="language_typescript"),
         spans=typescript.spans,
+    ),
+    LanguageSpec(
+        name="javascript",
+        kind=Kind.CODE,
+        # `.jsx` too: the JavaScript grammar parses JSX, so React sources
+        # need no second language. `.mjs`/`.cjs` are the module-flavoured
+        # spellings Node introduced.
+        suffixes=(".js", ".jsx", ".mjs", ".cjs"),
+        grammar=GrammarSpec(module="tree_sitter_javascript", getter="language"),
+        # Same policy object as TypeScript, not a copy of it: the node
+        # names the extractor matches on (`function_declaration`,
+        # `class_declaration`, `lexical_declaration`, `export_statement`)
+        # are shared across the whole family. TS-only nodes simply never
+        # appear in a JS tree.
+        spans=typescript.spans,
+    ),
+    LanguageSpec(
+        name="tsx",
+        kind=Kind.CODE,
+        suffixes=(".tsx",),
+        # A language of its own only because the grammar is: TSX is a
+        # separate parser inside tree-sitter-typescript, and one spec
+        # binds one grammar. The policy is TypeScript's, unchanged.
+        grammar=GrammarSpec(module="tree_sitter_typescript", getter="language_tsx"),
+        spans=typescript.spans,
+    ),
+    LanguageSpec(
+        name="go",
+        kind=Kind.CODE,
+        suffixes=(".go",),
+        grammar=GrammarSpec(module="tree_sitter_go", getter="language"),
+        spans=go.spans,
+    ),
+    LanguageSpec(
+        name="c",
+        kind=Kind.CODE,
+        # `.h` goes to C rather than C++ on the usual convention. A C++
+        # header written as `.h` is still indexed — the parser is error
+        # tolerant — but its classes fall to the gap pass. `.hpp` is the
+        # unambiguous spelling and belongs to C++ below.
+        suffixes=(".c", ".h"),
+        grammar=GrammarSpec(module="tree_sitter_c", getter="language"),
+        spans=c.spans,
+    ),
+    LanguageSpec(
+        name="cpp",
+        kind=Kind.CODE,
+        suffixes=(".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"),
+        grammar=GrammarSpec(module="tree_sitter_cpp", getter="language"),
+        spans=cpp.spans,
     ),
     LanguageSpec(
         name="java",

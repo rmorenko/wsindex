@@ -3,33 +3,33 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "wsindex-lang-go"
+name = "wsindex-lang-lua"
 version = "0.1.0"
-description = "Go language support for wsindex, as a worked example of a language plugin."
+description = "Lua language support for wsindex, as a worked example of a language plugin."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "WSIndex contributors" }]
-keywords = ["wsindex", "plugin", "go", "tree-sitter"]
+keywords = ["wsindex", "plugin", "lua", "tree-sitter"]
 
 # A plugin owns its grammar. wsindex core ships grammars only for the
 # languages it supports itself, so shipping Go support means shipping the
 # dependency that parses Go.
 #
 # A plugin published to PyPI would also declare `wsindex>=0.1` here. This
-# one does not, so that `uv pip install -e examples/wsindex-lang-go`
+# one does not, so that `uv pip install -e examples/wsindex-lang-lua`
 # works inside the wsindex repo without resolving wsindex from an index
 # it is not published to.
-dependencies = ["tree-sitter-go>=0.23,<1"]
+dependencies = ["tree-sitter-lua>=0.5,<1"]
 
 # The whole integration surface. hatchling copies this into
-# wsindex_lang_go-0.1.0.dist-info/entry_points.txt at install time, and
+# wsindex_lang_lua-0.1.0.dist-info/entry_points.txt at install time, and
 # wsindex reads it back with importlib.metadata — see wsindex.ingest.plugins.
 [project.entry-points."wsindex.languages"]
-go = "wsindex_lang_go:LANGUAGES"
+lua = "wsindex_lang_lua:LANGUAGES"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/wsindex_lang_go"]
+packages = ["src/wsindex_lang_lua"]
 
 [tool.ruff]
 line-length = 100

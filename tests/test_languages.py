@@ -289,23 +289,33 @@ def test_a_registered_language_is_walked_and_chunked(
     # both the walker (which files count) and the chunker (how they are
     # split) start honouring it. Before this step the walker's table was
     # a module constant and no plugin could reach it.
-    register_globally(LanguageSpec(name="lua", kind=Kind.CODE, suffixes=(".lua",)))
-    (tmp_path / "main.lua").write_text("local function greet()\n  return 'hi'\nend\n")
+    # An invented suffix, not a real language: `.lua` used to stand in
+    # here and stopped being unclaimed the moment the example plugin was
+    # installed. A registry test must not depend on the environment.
+    register_globally(LanguageSpec(name="invented", kind=Kind.CODE, suffixes=(".invented",)))
+    (tmp_path / "main.invented").write_text("greet()\n")
 
     walked = list(walk_repo(tmp_path))
-    assert [(f.rel_path, f.lang, f.kind) for f in walked] == [("main.lua", "lua", Kind.CODE)]
+    assert [(f.rel_path, f.lang, f.kind) for f in walked] == [
+        ("main.invented", "invented", Kind.CODE)
+    ]
 
     chunks = chunk_file(
-        (tmp_path / "main.lua").read_text(), repo="r", path="main.lua", lang="lua", kind=Kind.CODE
+        (tmp_path / "main.invented").read_text(),
+        repo="r",
+        path="main.invented",
+        lang="invented",
+        kind=Kind.CODE,
     )
     # No grammar declared, so it lands on the text chunker — which is the
     # documented fallback, not a failure.
     assert chunks
-    assert all(chunk.lang == "lua" for chunk in chunks)
+    assert all(chunk.lang == "invented" for chunk in chunks)
 
 
 def test_an_unregistered_suffix_is_still_skipped(tmp_path: Path) -> None:
     # The negative half: the walker did not simply start accepting
     # everything when its table moved into the registry.
-    (tmp_path / "main.lua").write_text("local x = 1\n")
+    (tmp_path / "main.invented").write_text("x = 1\n")
+    assert REGISTRY.match(Path("main.invented")) is None
     assert list(walk_repo(tmp_path)) == []

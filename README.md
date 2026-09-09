@@ -5,9 +5,10 @@
 
 **WSIndex** is a CLI that semantically indexes a developer workspace — multiple
 repositories at once — and answers natural-language questions with exact
-`file:line` locations. Code (Python, Rust, TypeScript, Java) and configs
-(TOML, YAML, JSON, Dockerfile) are chunked by their syntax trees, docs by
-headers; every chunk is embedded and searched by meaning, not by keywords.
+`file:line` locations. Code (Python, JavaScript/JSX, TypeScript/TSX, Go,
+Java, C, C++, Rust) and configs (TOML, YAML, JSON, Dockerfile) are chunked
+by their syntax trees, docs by headers; every chunk is embedded and
+searched by meaning, not by keywords.
 
 ## Quickstart
 
@@ -123,7 +124,7 @@ to wsindex:
 ```toml
 # in your plugin's pyproject.toml
 [project.entry-points."wsindex.languages"]
-go = "wsindex_lang_go:LANGUAGES"
+lua = "wsindex_lang_lua:LANGUAGES"
 ```
 
 ```python
@@ -131,7 +132,7 @@ from wsindex.ingest import GrammarSpec, LanguageSpec
 from wsindex.ingest.ast import Span, def_span, symbol_name
 
 
-def go_spans(root, lines, covered) -> list[Span]:
+def lua_spans(root, lines, covered) -> list[Span]:
     """Which parts of the tree deserve a chunk of their own."""
     spans = []
     for child in root.named_children:
@@ -144,28 +145,28 @@ def go_spans(root, lines, covered) -> list[Span]:
 
 LANGUAGES = (
     LanguageSpec(
-        name="go",
+        name="lua",
         kind=Kind.CODE,
-        suffixes=(".go",),
-        grammar=GrammarSpec(module="tree_sitter_go", getter="language"),
-        spans=go_spans,
+        suffixes=(".lua",),
+        grammar=GrammarSpec(module="tree_sitter_lua", getter="language"),
+        spans=lua_spans,
     ),
 )
 ```
 
-Install it and the walker starts selecting `.go` files while the chunker
+Install it and the walker starts selecting `.lua` files while the chunker
 routes them through the grammar. Whatever your extractor does not claim
 becomes a "gap" chunk, so every non-blank line is indexed exactly once
 either way. A broken plugin is a warning and a skip, never a crash.
 
-[`examples/wsindex-lang-go/`](examples/wsindex-lang-go/) is a complete,
-installable plugin — functions, methods, named types, and Go doc comments
-attached to what they document — with a
-[guide for plugin authors](examples/wsindex-lang-go/README.md):
+[`examples/wsindex-lang-lua/`](examples/wsindex-lang-lua/) is a complete,
+installable plugin — every spelling of a Lua function, with its comment
+block attached — and a
+[guide for plugin authors](examples/wsindex-lang-lua/README.md):
 
 ```bash
-uv pip install -e examples/wsindex-lang-go
-uv run wsindex index          # .go files are now indexed
+uv pip install -e examples/wsindex-lang-lua
+uv run wsindex index          # .lua files are now indexed
 ```
 
 ## Storage

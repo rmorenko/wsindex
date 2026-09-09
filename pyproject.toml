@@ -40,7 +40,11 @@ wsindex = "wsindex.cli:app"
 ml = ["sentence-transformers>=5.7,<6"]
 ast = [
   "tree-sitter>=0.26,<1",
+  "tree-sitter-c>=0.24,<1",
+  "tree-sitter-cpp>=0.23,<1",
   "tree-sitter-dockerfile>=0.2,<1",
+  "tree-sitter-go>=0.25,<1",
+  "tree-sitter-javascript>=0.25,<1",
   "tree-sitter-java>=0.23,<1",
   "tree-sitter-json>=0.24,<1",
   "tree-sitter-python>=0.25,<1",
@@ -159,12 +163,12 @@ help = "Run the wsindex CLI"
 cmd = "wsindex"
 
 [tool.poe.tasks.example-plugin]
-help = "Install the example Go plugin and run its tests (examples/wsindex-lang-go)"
+help = "Install the example Lua plugin and run its tests (examples/wsindex-lang-lua)"
 interpreter = "bash"
 shell = """
 set -eu -o pipefail
-uv pip install -q -e examples/wsindex-lang-go
-pytest examples/wsindex-lang-go/tests
+uv pip install -q -e examples/wsindex-lang-lua
+pytest examples/wsindex-lang-lua/tests
 """
 
 [tool.poe.tasks.acceptance]

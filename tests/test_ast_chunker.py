@@ -56,6 +56,11 @@ TAIL = 1
 '''
 
 
+def _installed() -> set[str]:
+    """Languages whose grammar is actually present in this environment."""
+    return {spec.name for spec in REGISTRY.specs if REGISTRY.parser(spec.name) is not None}
+
+
 def _chunk(text: str, lang: str = "python") -> list[Chunk]:
     if REGISTRY.parser(lang) is None:
         pytest.skip(f"no {lang} grammar installed")
@@ -326,3 +331,234 @@ def test_metadata_flows_through(lang: str, sample: str) -> None:
     chunk = _chunk(sample, lang=lang)[0]
     expected = ("r", f"sample.{lang}", lang, Kind.CODE)
     assert (chunk.repo, chunk.path, chunk.lang, chunk.kind) == expected
+
+
+# --- step 25b: JavaScript / JSX / TSX, Go, C, C++ --------------------------
+#
+# The batch is "cheap" in the plan's sense: JS, JSX and TSX reuse the
+# TypeScript policy object outright, and Go arrives from the example
+# plugin unchanged. Only C and C++ needed new extractors — and only
+# because C hides names in declarator chains and C++ nests whole files
+# in namespaces.
+
+
+JAVASCRIPT = """\
+import x from "y";
+
+function alpha(a) {
+	return a;
+}
+
+const beta = (b) => b * 2;
+
+const PLAIN = 42;
+
+class Widget {
+	render() {
+		return null;
+	}
+}
+"""
+
+
+@pytest.mark.skipif("javascript" not in _installed(), reason="needs the ast extra")
+def test_javascript_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(JAVASCRIPT, lang="javascript")]
+    assert got == [
+        (None, None),  # the import
+        ("alpha", "function_declaration"),
+        ("beta", "lexical_declaration"),  # arrow const counts as a function
+        (None, None),  # a plain const is a legitimate gap
+        ("Widget", "class_declaration"),
+        ("Widget.render", "method_definition"),
+        ("Widget", "class_declaration"),  # the closing brace
+    ]
+
+
+@pytest.mark.skipif("javascript" not in _installed(), reason="needs the ast extra")
+def test_jsx_needs_no_second_language() -> None:
+    # The JavaScript grammar parses JSX, so `.jsx` is the same language.
+    code = "function Button({label}) {\n\treturn <button>{label}</button>;\n}\n"
+    assert [c.symbol for c in _chunk(code, lang="javascript")] == ["Button"]
+
+
+@pytest.mark.skipif("tsx" not in _installed(), reason="needs the ast extra")
+def test_tsx_gets_typescript_policy_with_jsx_syntax() -> None:
+    code = (
+        "interface Props { label: string }\n\n"
+        "export function Button({label}: Props) {\n"
+        "\treturn <button>{label}</button>;\n}\n"
+    )
+    got = [(c.symbol, c.node_type) for c in _chunk(code, lang="tsx")]
+    assert got == [
+        ("Props", "interface_declaration"),
+        ("Button", "function_declaration"),  # the `export` keyword is inside
+    ]
+
+
+GO = """\
+package main
+
+// Server owns the socket.
+type Server struct {
+	Host string
+}
+
+func New(host string) *Server {
+	return &Server{Host: host}
+}
+
+func (s *Server) Serve(path string) error {
+	return nil
+}
+
+func (s Server) String() string {
+	return s.Host
+}
+"""
+
+
+@pytest.mark.skipif("go" not in _installed(), reason="needs the ast extra")
+def test_go_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(GO, lang="go")]
+    assert got == [
+        (None, None),  # package clause
+        ("Server", "type_declaration"),
+        ("New", "function_declaration"),
+        ("Server.Serve", "method_declaration"),
+        ("Server.String", "method_declaration"),
+    ]
+
+
+@pytest.mark.skipif("go" not in _installed(), reason="needs the ast extra")
+def test_go_doc_comment_joins_its_declaration() -> None:
+    # Arrived with the extractor from the example plugin; pointer and
+    # value receivers qualify identically.
+    by_symbol = {c.symbol: c for c in _chunk(GO, lang="go")}
+    assert by_symbol["Server"].text.startswith("// Server owns the socket.")
+    assert {"Server.Serve", "Server.String"} <= set(by_symbol)
+
+
+C = """\
+#include <stdio.h>
+
+struct Node {
+	int value;
+};
+
+enum Color { RED, GREEN };
+
+static int helper(int a) {
+	return a;
+}
+
+int *make(void) {
+	return 0;
+}
+"""
+
+
+@pytest.mark.skipif("c" not in _installed(), reason="needs the ast extra")
+def test_c_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(C, lang="c")]
+    assert got == [
+        (None, None),  # the include
+        ("Node", "struct_specifier"),
+        ("Color", "enum_specifier"),
+        ("helper", "function_definition"),
+        ("make", "function_definition"),
+    ]
+
+
+@pytest.mark.skipif("c" not in _installed(), reason="needs the ast extra")
+def test_c_pointer_return_still_yields_the_name() -> None:
+    # `int *make(void)` nests the function_declarator inside a
+    # pointer_declarator; a one-level lookup would miss the name.
+    by_symbol = {c.symbol: c for c in _chunk(C, lang="c")}
+    assert by_symbol["make"].text.startswith("int *make(void)")
+
+
+CPP = """\
+#include <string>
+
+namespace app {
+
+class Server {
+public:
+	void serve(const std::string& p) { host_ = p; }
+	void stop();
+
+private:
+	std::string host_;
+};
+
+void Server::stop() {}
+
+template <typename T>
+T identity(T v) {
+	return v;
+}
+
+}  // namespace app
+"""
+
+
+@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+def test_cpp_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(CPP, lang="cpp")]
+    assert got == [
+        (None, None),  # the include and the namespace header
+        ("Server", "class_specifier"),
+        ("Server::serve", "function_definition"),  # inline method
+        ("Server", "class_specifier"),  # the class remainder
+        ("Server::stop", "function_definition"),  # out-of-line definition
+        ("identity", "function_definition"),
+        (None, None),  # the namespace's closing brace
+    ]
+
+
+@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+def test_cpp_finds_definitions_inside_namespaces() -> None:
+    # The whole point of the recursion: a file wrapped in a namespace has
+    # one top-level node, so a flat walk would find nothing at all.
+    assert any(c.symbol == "identity" for c in _chunk(CPP, lang="cpp"))
+
+
+@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+def test_cpp_qualifies_methods_with_the_native_separator() -> None:
+    # `Server::serve`, not `Server.serve` — the same choice Rust makes.
+    symbols = {c.symbol for c in _chunk(CPP, lang="cpp")}
+    assert {"Server::serve", "Server::stop"} <= symbols
+
+
+@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+def test_cpp_template_keeps_its_parameter_list() -> None:
+    by_symbol = {c.symbol: c for c in _chunk(CPP, lang="cpp")}
+    assert by_symbol["identity"].text.startswith("template <typename T>")
+
+
+@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+def test_cpp_nested_namespaces_are_reached() -> None:
+    code = "namespace a {\nnamespace b {\nint f() { return 1; }\n}\n}\n"
+    assert any(c.symbol == "f" for c in _chunk(code, lang="cpp"))
+
+
+@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+def test_extern_c_block_is_descended_into() -> None:
+    # `extern "C" {}` nests exactly like a namespace does.
+    code = 'extern "C" {\nint legacy(void) { return 1; }\n}\n'
+    assert any(c.symbol == "legacy" for c in _chunk(code, lang="cpp"))
+
+
+@pytest.mark.parametrize("lang", ["javascript", "tsx", "go", "c", "cpp"])
+def test_batch_one_languages_cover_every_line(lang: str) -> None:
+    # The invariant the plan names for every new language: each non-blank
+    # line lands in exactly one chunk, no matter how the extractor works.
+    if lang not in _installed():
+        pytest.skip(f"no {lang} grammar installed")
+    source = {"javascript": JAVASCRIPT, "tsx": JAVASCRIPT, "go": GO, "c": C, "cpp": CPP}[lang]
+    chunks = _chunk(source, lang=lang)
+    covered = [line for c in chunks for line in range(c.start_line, c.end_line + 1)]
+    non_blank = {i for i, line in enumerate(source.splitlines(), 1) if line.strip()}
+    assert non_blank <= set(covered)
+    assert len(covered) == len(set(covered))

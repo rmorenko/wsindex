@@ -1,43 +1,19 @@
-"""Go support for wsindex, written against the published plugin surface.
+"""Go policy: doc comments stick to declarations, receivers qualify methods.
 
-Everything this package imports comes from two places:
-
-- `wsindex.ingest` — the specification: `LanguageSpec`, `GrammarSpec`.
-- `wsindex.ingest.ast` — the toolkit an extractor is written with:
-  `line_span` for a node's line range, `mark_covered` to claim those
-  lines, `symbol_name` to read a node's name, `Span` for the result.
-  (`def_span` bundles the first three; Go needs them apart because of
-  the doc-comment look-behind below.)
-
-Nothing private, and no edit to wsindex itself. That is the claim the
-plugin system makes, and this package is where it gets tested.
-
-What Go gets chunked into
--------------------------
-One chunk per function, per method, and per named type, each including
-the `//` doc comment written above it — that sentence is usually the most
-searchable thing about a declaration, and filing it separately would be a
-waste. Everything else — the package clause, imports, `var`/`const`
-blocks — falls through to the gap pass and becomes chunks of its own, so
-every non-blank line is indexed exactly once.
-
-Methods carry a qualified symbol (`Server.Serve`), the same shape the
-built-in Python extractor gives class methods, so `--symbol Server`
-finds a type's whole method set.
+Arrived as the step-25 example plugin and moved into the box by step 25b.
+The extractor is unchanged — which is the useful part of the story: a
+language written entirely against the published plugin surface needed no
+rework to become a built-in. The seam holds in both directions.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from wsindex.ingest import GrammarSpec, LanguageSpec
-from wsindex.ingest.ast import Span, line_span, mark_covered, symbol_name
-from wsindex.model import Kind
+from wsindex.ingest.ast.core import Span, line_span, mark_covered, symbol_name
 
 if TYPE_CHECKING:
     from tree_sitter import Node
-
-__all__ = ["GO", "LANGUAGES", "go_spans"]
 
 
 def _extend_back(siblings: list[Node], *, index: int, start_line: int) -> int:
@@ -157,13 +133,12 @@ def _type_spans(siblings: list[Node], index: int, covered: list[bool]) -> list[S
     return spans
 
 
-def go_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
+def spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Claim Go's top-level definitions; everything else becomes gaps.
 
-    Signature fixed by `wsindex.ingest.SpanExtractor`. `lines` goes
-    unused here: the doc-comment look-behind works off sibling nodes and
-    their line numbers, so the text itself is never needed. The parameter
-    stays because the contract passes it to every extractor.
+    `lines` goes unused: the doc-comment look-behind works off sibling
+    nodes and their line numbers, so the text itself is never needed. The
+    parameter stays because `SpanExtractor` passes it to every language.
 
     Args:
         root: Root of the parsed file; may be a partial tree, since the
@@ -193,20 +168,3 @@ def go_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
         elif child.type == "type_declaration":
             spans += _type_spans(children, index, covered)
     return spans
-
-
-GO = LanguageSpec(
-    name="go",
-    kind=Kind.CODE,
-    suffixes=(".go",),
-    # Named indirectly rather than imported: if `tree-sitter-go` were
-    # somehow absent, wsindex falls back to text windows for `.go` files
-    # instead of dropping the language — degraded, but still indexed.
-    grammar=GrammarSpec(module="tree_sitter_go", getter="language"),
-    spans=go_spans,
-)
-
-LANGUAGES = (GO,)
-"""What the entry point resolves to. A tuple rather than the bare spec
-because a plugin may grow — Go templates would be a second entry here,
-not a second entry point."""
