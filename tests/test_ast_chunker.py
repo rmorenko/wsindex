@@ -562,3 +562,196 @@ def test_batch_one_languages_cover_every_line(lang: str) -> None:
     non_blank = {i for i, line in enumerate(source.splitlines(), 1) if line.strip()}
     assert non_blank <= set(covered)
     assert len(covered) == len(set(covered))
+
+
+# --- step 25c: C#, Kotlin, PHP, Ruby ---------------------------------------
+#
+# Four languages, one extractor. They differ in almost everything except
+# the shape that matters — something optional wraps the file, types hold
+# members, some declarations stand alone — so the walk lives once in
+# `ast.nested` and each language supplies a `NestedPolicy`. What is
+# pinned below is that the policies describe their languages correctly.
+
+
+CSHARP = """\
+using System;
+
+namespace App {
+	public class Server {
+		public void Serve(string p) { }
+		public int Port { get; set; }
+	}
+
+	public enum Color { Red, Green }
+}
+"""
+
+
+@pytest.mark.skipif("csharp" not in _installed(), reason="needs the ast extra")
+def test_csharp_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(CSHARP, lang="csharp")]
+    assert got == [
+        (None, None),  # using directive + the namespace header
+        ("Server", "class_declaration"),
+        ("Server.Serve", "method_declaration"),
+        ("Server.Port", "property_declaration"),
+        ("Server", "class_declaration"),  # the class remainder
+        ("Color", "enum_declaration"),  # claimed whole
+        (None, None),  # the namespace's closing brace
+    ]
+
+
+@pytest.mark.skipif("csharp" not in _installed(), reason="needs the ast extra")
+def test_csharp_finds_declarations_inside_a_namespace() -> None:
+    # Everything in C# nests under a namespace, so without the recursion
+    # a whole file would yield exactly one chunk.
+    assert any(c.symbol == "Server.Serve" for c in _chunk(CSHARP, lang="csharp"))
+
+
+@pytest.mark.skipif("csharp" not in _installed(), reason="needs the ast extra")
+def test_csharp_file_scoped_namespace_is_a_container_too() -> None:
+    code = "namespace App;\n\nclass S {\n\tvoid M() { }\n}\n"
+    assert any(c.symbol == "S.M" for c in _chunk(code, lang="csharp"))
+
+
+KOTLIN = """\
+package app
+
+class Server(val host: String) {
+	fun serve(path: String): Boolean {
+		return true
+	}
+}
+
+object Registry {
+	fun get(): Int = 1
+}
+
+fun topLevel(a: Int) = a
+"""
+
+
+@pytest.mark.skipif("kotlin" not in _installed(), reason="needs the ast extra")
+def test_kotlin_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(KOTLIN, lang="kotlin")]
+    assert got == [
+        (None, None),  # the package header — not a container, just a line
+        ("Server", "class_declaration"),
+        ("Server.serve", "function_declaration"),
+        ("Server", "class_declaration"),
+        ("Registry", "object_declaration"),
+        ("Registry.get", "function_declaration"),
+        ("Registry", "object_declaration"),
+        ("topLevel", "function_declaration"),  # the same node type, standalone
+    ]
+
+
+@pytest.mark.skipif("kotlin" not in _installed(), reason="needs the ast extra")
+def test_kotlin_members_live_in_a_child_not_a_field() -> None:
+    # Kotlin keeps members in a `class_body` child rather than a `body`
+    # field — the case `NestedPolicy.body_types` exists for. If the
+    # fallback were missing, classes would yield one chunk and no methods.
+    symbols = {c.symbol for c in _chunk(KOTLIN, lang="kotlin")}
+    assert {"Server.serve", "Registry.get"} <= symbols
+
+
+PHP = """\
+<?php
+namespace App;
+
+class Server {
+	public function serve(string $p): void {}
+	private $host;
+}
+
+function helper(int $a): int { return $a; }
+"""
+
+
+@pytest.mark.skipif("php" not in _installed(), reason="needs the ast extra")
+def test_php_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(PHP, lang="php")]
+    assert got == [
+        (None, None),  # the php tag and the file-scoped namespace
+        ("Server", "class_declaration"),
+        ("Server.serve", "method_declaration"),
+        ("Server", "class_declaration"),  # the private field and brace
+        ("helper", "function_definition"),
+    ]
+
+
+@pytest.mark.skipif("php" not in _installed(), reason="needs the ast extra")
+def test_php_braced_namespace_is_descended_into() -> None:
+    code = "<?php\nnamespace App {\nfunction f(): int { return 1; }\n}\n"
+    assert any(c.symbol == "f" for c in _chunk(code, lang="php"))
+
+
+RUBY = """\
+require "json"
+
+module App
+  class Server
+    def serve(path)
+      true
+    end
+
+    def self.build
+      new
+    end
+  end
+end
+
+def top_level(x)
+  x
+end
+"""
+
+
+@pytest.mark.skipif("ruby" not in _installed(), reason="needs the ast extra")
+def test_ruby_sample_spans_symbols_and_node_types() -> None:
+    got = [(c.symbol, c.node_type) for c in _chunk(RUBY, lang="ruby")]
+    assert got == [
+        (None, None),  # the require and the module header
+        ("Server", "class"),
+        ("Server.serve", "method"),
+        ("Server.build", "singleton_method"),  # `def self.build`
+        ("Server", "class"),
+        (None, None),  # the module's `end`
+        ("top_level", "method"),  # the same node type, standalone
+    ]
+
+
+@pytest.mark.skipif("ruby" not in _installed(), reason="needs the ast extra")
+def test_ruby_def_is_a_method_inside_a_class_and_a_function_outside() -> None:
+    # The case that makes the standalone/member split earn its keep: one
+    # node type, two meanings, decided by where it sits.
+    by_symbol = {c.symbol for c in _chunk(RUBY, lang="ruby")}
+    assert "Server.serve" in by_symbol  # qualified inside the class
+    assert "top_level" in by_symbol  # bare at the top level
+
+
+@pytest.mark.skipif("ruby" not in _installed(), reason="needs the ast extra")
+def test_ruby_class_level_methods_answer_the_same_symbol_query() -> None:
+    # `def self.build` is Ruby's class method; qualifying it the same way
+    # is what makes `--symbol Server` return a type's whole surface.
+    symbols = {c.symbol for c in _chunk(RUBY, lang="ruby")}
+    assert {"Server.serve", "Server.build"} <= symbols
+
+
+@pytest.mark.parametrize("lang", ["csharp", "kotlin", "php", "ruby"])
+def test_batch_two_languages_cover_every_line(lang: str) -> None:
+    if lang not in _installed():
+        pytest.skip(f"no {lang} grammar installed")
+    source = {"csharp": CSHARP, "kotlin": KOTLIN, "php": PHP, "ruby": RUBY}[lang]
+    chunks = _chunk(source, lang=lang)
+    covered = [line for c in chunks for line in range(c.start_line, c.end_line + 1)]
+    non_blank = {i for i, line in enumerate(source.splitlines(), 1) if line.strip()}
+    assert non_blank <= set(covered)
+    assert len(covered) == len(set(covered))
+
+
+@pytest.mark.parametrize("lang", ["csharp", "kotlin", "php", "ruby"])
+def test_batch_two_broken_files_do_not_crash(lang: str) -> None:
+    if lang not in _installed():
+        pytest.skip(f"no {lang} grammar installed")
+    assert isinstance(_chunk("class Broken {\n", lang=lang), list)

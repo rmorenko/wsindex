@@ -30,43 +30,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
-from wsindex.ingest.ast import c, configs, cpp, go, java, python, rust, typescript
-from wsindex.ingest.ast.core import HAS_TREE_SITTER, Span
+from wsindex.ingest.ast import (
+    c,
+    configs,
+    cpp,
+    csharp,
+    go,
+    java,
+    kotlin,
+    php,
+    python,
+    ruby,
+    rust,
+    typescript,
+)
+from wsindex.ingest.ast.core import HAS_TREE_SITTER, SpanExtractor
 from wsindex.model import Kind
 
 if TYPE_CHECKING:
-    from tree_sitter import Node, Parser
-
-
-class SpanExtractor(Protocol):
-    """Per-language policy: which parts of a tree become their own chunks.
-
-    Called once per file with the parse tree and the file's lines. The
-    `covered` list is the shared bookkeeping that makes chunking total:
-    mark the lines a span claims (`core.mark_covered`, or `core.def_span`
-    which does it for you) and whatever is left becomes gap chunks, so
-    every non-blank line lands in exactly one chunk.
-    """
-
-    def __call__(self, root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
-        """Extract spans from one parsed file.
-
-        Args:
-            root: Root node of the parsed file. The parser is
-                error-tolerant, so this may describe a partial tree —
-                return what you recognized and let the gap pass cover
-                the rest rather than raising.
-            lines: The file's lines, without terminators; 0-based, while
-                span line numbers are 1-based inclusive.
-            covered: One flag per line (index 0 unused), shared with the
-                gap pass. Mark what you claim.
-
-        Returns:
-            The spans this language wants as chunks of their own.
-        """
-        ...
+    from tree_sitter import Parser
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -264,6 +248,17 @@ class LanguageRegistry:
         return parsers
 
 
+__all__ = [
+    "BUILTIN_LANGUAGES",
+    "REGISTRY",
+    "GrammarSpec",
+    "LanguageRegistry",
+    "LanguageSpec",
+    # Re-exported from `ast.core`, where it lives so the language modules
+    # can name it without importing this registry back.
+    "SpanExtractor",
+]
+
 REGISTRY = LanguageRegistry()
 """The process-wide registry. Step 24's plugin loader appends to it."""
 
@@ -352,6 +347,38 @@ BUILTIN_LANGUAGES: tuple[LanguageSpec, ...] = (
         spans=java.spans,
     ),
     # Configs: chunked by their top-level structure rather than by defs.
+    LanguageSpec(
+        name="csharp",
+        kind=Kind.CODE,
+        suffixes=(".cs",),
+        grammar=GrammarSpec(module="tree_sitter_c_sharp", getter="language"),
+        spans=csharp.spans,
+    ),
+    LanguageSpec(
+        name="kotlin",
+        kind=Kind.CODE,
+        # `.kts` is a Kotlin script — same grammar, same policy.
+        suffixes=(".kt", ".kts"),
+        grammar=GrammarSpec(module="tree_sitter_kotlin", getter="language"),
+        spans=kotlin.spans,
+    ),
+    LanguageSpec(
+        name="php",
+        kind=Kind.CODE,
+        suffixes=(".php",),
+        # `language_php` parses a full file including the `<?php` tag;
+        # the package also ships a tag-less variant we do not want.
+        grammar=GrammarSpec(module="tree_sitter_php", getter="language_php"),
+        spans=php.spans,
+    ),
+    LanguageSpec(
+        name="ruby",
+        kind=Kind.CODE,
+        suffixes=(".rb",),
+        filenames=("Rakefile", "Gemfile"),
+        grammar=GrammarSpec(module="tree_sitter_ruby", getter="language"),
+        spans=ruby.spans,
+    ),
     LanguageSpec(
         name="toml",
         kind=Kind.CONFIG,

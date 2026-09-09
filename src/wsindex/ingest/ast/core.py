@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 from wsindex.model import Chunk, Kind
 
@@ -30,6 +31,39 @@ class Span:
     end_line: int
     symbol: str | None
     node_type: str | None
+
+
+class SpanExtractor(Protocol):
+    """Per-language policy: which parts of a tree become their own chunks.
+
+    Called once per file with the parse tree and the file's lines. The
+    `covered` list is the shared bookkeeping that makes chunking total:
+    mark the lines a span claims (`mark_covered`, or `def_span` which
+    does it for you) and whatever is left becomes gap chunks, so every
+    non-blank line lands in exactly one chunk.
+
+    Lives here rather than with `LanguageSpec` so that `nested.extractor`
+    can declare it as a return type: the registry imports the language
+    modules, so the language modules cannot import the registry.
+    """
+
+    def __call__(self, root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
+        """Extract spans from one parsed file.
+
+        Args:
+            root: Root node of the parsed file. The parser is
+                error-tolerant, so this may describe a partial tree —
+                return what you recognized and let the gap pass cover the
+                rest rather than raising.
+            lines: The file's lines, without terminators; 0-based, while
+                span line numbers are 1-based inclusive.
+            covered: One flag per line (index 0 unused), shared with the
+                gap pass. Mark what you claim.
+
+        Returns:
+            The spans this language wants as chunks of their own.
+        """
+        ...
 
 
 def line_span(node: Node) -> tuple[int, int]:

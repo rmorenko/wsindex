@@ -5,10 +5,10 @@
 
 **WSIndex** is a CLI that semantically indexes a developer workspace — multiple
 repositories at once — and answers natural-language questions with exact
-`file:line` locations. Code (Python, JavaScript/JSX, TypeScript/TSX, Go,
-Java, C, C++, Rust) and configs (TOML, YAML, JSON, Dockerfile) are chunked
-by their syntax trees, docs by headers; every chunk is embedded and
-searched by meaning, not by keywords.
+`file:line` locations. Code (Python, JavaScript/JSX, TypeScript/TSX, Java,
+C, C++, C#, Go, Rust, Kotlin, PHP, Ruby) and configs (TOML, YAML, JSON,
+Dockerfile) are chunked by their syntax trees, docs by headers; every chunk
+is embedded and searched by meaning, not by keywords.
 
 ## Quickstart
 
