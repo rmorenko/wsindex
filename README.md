@@ -38,6 +38,49 @@ wsindex/src/wsindex/ingest/text_chunker.py:107-111  0.598  def chunk_text(text: 
 _(After this README itself gets indexed, it will match its own example
 query too — semantic search is honest like that.)_
 
+## Ranking the results
+
+Search is one funnel. The store returns k×4 candidates by vector
+similarity, and — when it is enabled — a cross-encoder reads each
+`(query, chunk)` pair properly and re-sorts them down to k:
+
+```toml
+[rank]
+enabled = true
+model = "cross-encoder/ms-marco-MiniLM-L6-v2"
+```
+
+Off by default, because it loads a second model. Measured on the
+acceptance corpus it moved three of ten queries up and none down —
+"expose dataset operations over http" from rank 4 to 1, "generate
+embeddings for text" from 4 to 2 — at about 4 ms per pair, so a search
+with `-k 5` pays roughly 80 ms.
+
+Two better-known ideas were measured and **not** built, both on this
+corpus rather than in the abstract:
+
+- **BM25 hybrid.** Semantics is supposed to be blind to exact rare
+  tokens, so identifier queries should fail. They did not: `list_to_tensor`,
+  `tensorus-models>=0.0.3` and a verbatim error string all land in the
+  top 3, two of them first. A probe also showed Tantivy's default
+  tokenizer splits on `_`, `-` and `.`, so BM25 would not have given an
+  exact match anyway — only a bag of sub-words, which is where MiniLM is
+  already strong. The three identifier queries stay in the acceptance
+  criteria as a regression test.
+- **MaxSim / late interaction.** One vector per token instead of one per
+  chunk costs **×123** on this corpus (651 MB against 5.3 MB), and 19% of
+  chunks are longer than the model reads anyway, so the per-token
+  representation is truncated exactly like the pooled one. Re-scoring the
+  same candidate set with MaxSim made ranking *worse* — mean rank 2.10 →
+  2.30, and the two queries it pushed down are the two the cross-encoder
+  pulls up. This tested MaxSim over a bi-encoder's token embeddings, not
+  ColBERT, whose token vectors are trained for it; that would be a second
+  model and its own index format.
+
+The threshold for revisiting either is a real recall failure: a query
+whose answer never reaches the candidate set at all. Re-ranking cannot
+help there, and neither can any amount of it.
+
 ## Marking up a repository
 
 What is worth indexing is a property of a repository, not of a
