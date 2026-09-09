@@ -1,4 +1,4 @@
-"""Step 28: `wsindex refs` and `wsindex why`, the consumers of links.
+"""`wsindex refs` and `wsindex why`, the consumers of links.
 
 Everything the two commands show was recorded by earlier steps — drift
 edges (26), blame edges and commit chunks (27), external references
@@ -178,7 +178,7 @@ def test_why_needs_a_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 def test_why_survives_a_definition_with_no_blame(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # An untracked file has no history (step 27), so its chunks carry no
+    # An untracked file has no history, so its chunks carry no
     # blame edges. `why` says so rather than printing an empty section.
     (workspace / "svc" / "fresh.py").write_text("def brandnew():\n    return 1\n")
     runner.invoke(app, ["index"])
@@ -207,7 +207,7 @@ def test_why_labels_a_commit_from_before_this_run(workspace: Path) -> None:
     # its lines still belong to the older commit. An incremental run
     # indexes only the new commits, so that older edge has no
     # destination — and is kept anyway, because knowing *which* commit
-    # still answers "when did this change" (step 27, `blame_links`).
+    # still answers "when did this change" (see `blame_links`).
     #
     # Appending a new function would not do it: the existing chunk keeps
     # its id, and the link written by the first run survives intact.

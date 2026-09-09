@@ -6,7 +6,8 @@ returns what we told it to. So the entry points below are genuine
 `importlib.metadata.EntryPoint` values pointing at `tests/plugin_fixture*`,
 which pytest puts on `sys.path`. What is patched is only *discovery*:
 `entry_points()` reads the metadata of installed distributions, and
-installing a package per test case is step 25's job, not a unit test's.
+installing a package per test case is the example plugin's job, not a
+unit test's.
 
 Every case registers into a throwaway `LanguageRegistry`. A test that
 mutated the process-wide `REGISTRY` would leak into the rest of the run.
@@ -126,7 +127,7 @@ def test_an_object_that_is_not_a_spec_is_skipped(
 def test_a_malformed_spec_is_skipped(
     registry: LanguageRegistry, advertise: Callable[..., None]
 ) -> None:
-    # The specification's own rules do the rejecting (step 23); the
+    # The specification's own rules do the rejecting; the
     # loader only decides that it costs a warning rather than a crash.
     advertise(ep("bad", "plugin_fixture:BROKEN"))
     with pytest.warns(PluginLoadWarning, match="must be lowercase and start with"):
@@ -185,7 +186,7 @@ def test_wsindex_advertises_no_language_plugins_of_its_own() -> None:
     # core must not pay discovery to find what it already ships.
     #
     # Asks wsindex's own metadata rather than the whole environment —
-    # otherwise installing any plugin (which is exactly what step 25
+    # otherwise installing any plugin (which is exactly what the example
     # does) would fail this.
     from importlib.metadata import distribution
 

@@ -1,9 +1,9 @@
 """MCP: the workspace index as tools an agent can call.
 
-Этап 12's last step, and the answer to the "IDE plugin" the scope
-excluded. An agent client — Claude Code, an editor's assistant — speaks
-MCP already, so a plugin per editor is a plugin nobody has to write:
-point the client at `wsindex mcp` and it can search the workspace.
+The answer to the "IDE plugin" the scope excluded. An agent client —
+Claude Code, an editor's assistant — speaks MCP already, so a plugin per
+editor is a plugin nobody has to write: point the client at
+`wsindex mcp` and it can search the workspace.
 
 Three tools, and they are the three commands worth calling from outside:
 
@@ -21,7 +21,7 @@ Two transports, one set of tools
 `build()` returns a `FastMCP` and knows nothing about how it is reached.
 `wsindex mcp` runs it over stdio, which is what an editor spawns; the
 same object also exposes a streamable-HTTP app, so a workspace already
-running `wsindex serve` (Этап 11) can offer MCP on the same port. The
+running `wsindex serve` can offer MCP on the same port. The
 tool bodies are written once, which is the whole point of building it
 this way rather than twice.
 

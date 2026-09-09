@@ -257,7 +257,8 @@ def test_a_pipeline_without_a_link_store_still_indexes(tmp_path: Path, commit: C
 
 def test_a_port_in_prose_is_neither_side_of_the_drift_rule() -> None:
     # A sentence naming a port is not a claim anyone can be held to, so a
-    # doc chunk is neither a reference nor a declaration. Since step 27b
+    # doc chunk is neither a reference nor a declaration. Since
+    # external references arrived,
     # it does contribute a REFERENCES link for the url itself, which is a
     # different assertion entirely.
     from wsindex.ingest.link_extract import links_for

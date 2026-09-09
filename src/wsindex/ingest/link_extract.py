@@ -8,10 +8,10 @@ would have caught the 8080/8000 bug — `config.py` defaulting to
 it is deliberately narrow. ADR-9 lists the other edge kinds and the
 evidence each still owes.
 
-The second (step 27b) reaches *outside* the repository: a commit message
-or a document naming a ticket, an issue or a url. Nothing is downloaded —
-it is a cheap bridge, so "why" can reach a ticket without a connector,
-and stage 10b can bring the contents later.
+The second reaches *outside* the repository: a commit message or a
+document naming a ticket, an issue or a url. Nothing is downloaded — it
+is a cheap bridge, so "why" can reach a ticket without a connector, and
+a connector can bring the contents later.
 
 Which prefixes count is entirely the workspace's to say. A built-in
 `PROJ-123` rule is not possible: measured on this repository it matched

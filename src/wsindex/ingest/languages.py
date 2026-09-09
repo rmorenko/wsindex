@@ -1,6 +1,6 @@
 """What a language is, to wsindex: the plugin specification and its registry.
 
-First step of Этап 9. Until now a language was spread across four
+Until this module a language was spread across four
 unrelated tables — two parser tables, two extractor tables — plus a fifth
 in the walker that nothing else could see. Adding one meant editing three
 files and knowing which; adding one *from outside the package* was simply
@@ -13,8 +13,8 @@ Register a spec and every stage picks it up — the walker starts selecting
 those files, the chunker starts routing them.
 
 That is the whole contract a plugin has to satisfy. The loader that finds
-plugins through entry points is step 24; this module only defines what it
-will hand over, and validates it. `register` is deliberately strict and
+plugins through entry points is `wsindex.ingest.plugins`; this module
+only defines what it will hand over, and validates it. `register` is deliberately strict and
 raises: a malformed spec is a bug in the plugin, and the loader is the
 right place to decide that one bad plugin should be a warning rather than
 a dead workspace.
@@ -123,7 +123,7 @@ class LanguageRegistry:
     """The languages this process knows, and the tables derived from them.
 
     Parsers are built lazily and cached, then dropped whenever a spec is
-    registered. That ordering is what lets step 24 load plugins after
+    registered. That ordering is what lets the loader add plugins after
     this module is imported: nothing has been computed from the specs
     until something asks.
 
@@ -320,7 +320,7 @@ __all__ = [
 ]
 
 REGISTRY = LanguageRegistry(plugins=True)
-"""The process-wide registry. Step 24's plugin loader appends to it."""
+"""The process-wide registry; the plugin loader appends to it."""
 
 
 BUILTIN_LANGUAGES: tuple[LanguageSpec, ...] = (

@@ -314,7 +314,7 @@ def index() -> None:
             # Reported, not listed: this is the evidence that code and
             # configuration have drifted apart (ADR-9), and a count is
             # enough to send someone looking. Listing them is `wsindex
-            # refs`/`why` territory (step 28).
+            # refs`/`why` territory.
             first = drift[0]
             typer.echo(
                 f"drift: {len(drift)} unresolved config reference(s), "
@@ -462,7 +462,7 @@ def _definitions(pipeline: Pipeline, symbol: str, *, limit: int = 20) -> list[Hi
     """Chunks whose symbol contains `symbol`, nearest match first.
 
     Goes through `search` rather than a dedicated store lookup: the
-    `symbol` filter is a prefilter (step 19g), so the store narrows to
+    `symbol` filter is a prefilter, so the store narrows to
     exactly the matching chunks and the ranking is what breaks ties among
     them. Adding an exact-lookup method to `VectorStore` for this would
     grow the contract for one caller.
@@ -588,7 +588,7 @@ def fetch(url: str) -> None:
     """Fetch one external document through the configured connectors.
 
     The way to check a `[[connectors]]` entry does what you meant, and
-    the seam step 29b materializes through. A pointed pull: this brings
+    the seam `wsindex.snapshot` materializes through. A pointed pull: this brings
     back the document at the url and nothing around it.
     """
     config = _config()

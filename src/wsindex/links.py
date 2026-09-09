@@ -29,7 +29,7 @@ Lifetimes
 ---------
 Links are keyed by `chunk_id`, and a chunk id is `sha256(text, path)` —
 it does not survive an edit. `Pipeline` deletes the chunks a changed file
-no longer produces (step 22) and must delete their links in the same
+no longer produces and must delete their links in the same
 breath. Otherwise two things rot: the store grows edges pointing at
 nothing forever, and — worse — those orphans are indistinguishable from
 real dangling links, so the drift report fills with noise from deleted
@@ -206,7 +206,7 @@ class LinkStore:
         `CREATE TABLE IF NOT EXISTS` does nothing to a table that already
         exists, so a `links.db` written before a column was introduced
         keeps its old shape and every read fails with `no such column`.
-        Found the hard way: `url` arrived in step 27b and broke `refs` on
+        Found the hard way: `url` was added later and broke `refs` on
         any index built before it.
 
         Additive only, and that is enough by construction: a link is

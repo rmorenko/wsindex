@@ -1,9 +1,9 @@
 """HTTP over the same Pipeline: search, index, status.
 
-The whole of Этап 11's first half, and deliberately the smallest thing
-that can be called a server. Every endpoint is a call into the library
-and a rendering of what it returned — there is no indexing code here, no
-chunking, no store access that `Pipeline` does not already do. ADR-10
+Deliberately the smallest thing that can be called a server. Every
+endpoint is a call into the library and a rendering of what it returned
+— there is no indexing code here, no chunking, no store access that
+`Pipeline` does not already do. ADR-10
 puts it plainly: an endpoint that cannot be expressed as a library call
 means the library is missing something, not that the server should grow
 it.
@@ -17,10 +17,10 @@ give them the same words.
 Authentication
 --------------
 A bearer token, named by the config as an environment variable and never
-written in it — the rule connectors keep (step 29a) and the S3 store
-keeps (ADR-7). With `token_env` set and the variable empty the server
-refuses to start: a search index over private repositories is not a
-thing to begin serving by accident. With no `token_env` at all the
+written in it — the rule connectors keep and the S3 store keeps (ADR-7).
+With `token_env` set and the variable empty the server refuses to start:
+a search index over private repositories is not a thing to begin serving
+by accident. With no `token_env` at all the
 server is open, which is a decision a person has to write down.
 
 State
@@ -30,8 +30,8 @@ because `Pipeline.search` refreshes the store first (ADR-10), and it is
 what makes a request cheap: building a pipeline means loading an
 embedding model.
 
-Writes are serialized by a lock. Not for correctness — `probes/step30`
-measured concurrent writers losing nothing — but because two indexing
+Writes are serialized by a lock. Not for correctness — concurrent writers
+were measured losing nothing (ADR-10) — but because two indexing
 runs of the same repo do the same work twice and neither shortens the
 other's next pass. One at a time, and the second caller is told the
 first is running rather than made to wait.

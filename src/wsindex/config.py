@@ -102,7 +102,8 @@ class Repository:
             for itself does.
         source: Set to `connector` for a snapshot repository — one whose
             files `wsindex sync` writes by fetching `urls` and
-            committing them (step 29b). Mutually exclusive with `remote`:
+            committing them (see `wsindex.snapshot`). Mutually exclusive
+            with `remote`:
             a working copy has exactly one owner.
         urls: The documents a snapshot repository holds. Meaningless
             without `source`, and rejected there — a url list on a git
@@ -560,8 +561,8 @@ class Config:
             token_env = "WSINDEX_TOKEN"
             interval = 900
 
-        The name, never the value — the rule connectors keep (step 29a)
-        and the S3 store keeps (ADR-7). Absent means an open server,
+        The name, never the value — the rule connectors keep and the S3
+        store keeps (ADR-7). Absent means an open server,
         which is a decision someone has to write down rather than a
         default someone can fall into: `wsindex serve` says so out loud.
         """
@@ -735,7 +736,7 @@ class Config:
         the documented way to mark up a repository, is then a syntax
         error on the very file `wsindex add-repo` just wrote.
 
-        The same trap `connectors` fell into (step 29a) and the same
+        The same trap `connectors` fell into, and the same
         rule: whatever a person is told to hand-edit must be a shape they
         can hand-edit. So the array of tables is written here rather than
         left to a heuristic, while every value still goes through

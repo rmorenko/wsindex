@@ -225,7 +225,7 @@ def test_dataset_name_with_quote(tmp_path: Path) -> None:
     assert [h.native_id for h in hits] == [a.id]
 
 
-# --- step 19g: structural filters, prefilter semantics ---------------------
+# --- structural filters, prefilter semantics ------------------------------
 
 
 @pytest.fixture
@@ -353,7 +353,7 @@ def test_filter_path_escapes_like_metachars(tmp_path: Path) -> None:
     assert [h.metadata["path"] for h in hits] == ["test_a.py"]
 
 
-# --- step 20: delete_chunks -----------------------------------------------
+# --- delete_chunks --------------------------------------------------------
 
 
 def test_delete_makes_chunks_invisible_to_search(store: LanceDBStore) -> None:
@@ -424,7 +424,7 @@ def test_delete_scopes_by_dataset(tmp_path: Path) -> None:
     assert {h.native_id for h in hits2} == {shared.id, ds2_only.id}
 
 
-# --- step 22: chunk_ids, the read half of incremental indexing -----------
+# --- chunk_ids, the read half of incremental indexing --------------------
 
 
 def test_chunk_ids_returns_what_was_stored(store: LanceDBStore) -> None:
@@ -482,7 +482,7 @@ def test_chunk_ids_escapes_quotes_in_paths(store: LanceDBStore) -> None:
     assert store.chunk_ids(dataset_name="repo", paths=["it's/a.py"]) == {chunk.id}
 
 
-# --- step 22в: compact, the reclaim half of delete_chunks ----------------
+# --- compact, the reclaim half of delete_chunks --------------------------
 
 
 def du(root: Path) -> int:
@@ -634,7 +634,7 @@ def test_chunk_text_does_not_read_across_datasets(store: LanceDBStore) -> None:
 
 
 def test_a_second_handle_does_not_see_writes_until_it_refreshes(tmp_path: Path) -> None:
-    # Measured in `probes/step30` with real processes; reproduced here
+    # Measured with real processes (ADR-10); reproduced here
     # with two handles, since the snapshot is per handle rather than per
     # process. This is the bug `refresh` exists for: a long-lived reader
     # answers from the corpus it opened with, and never fails doing it.

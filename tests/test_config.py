@@ -305,7 +305,7 @@ def test_subclass_gets_its_own_instance() -> None:
     assert isinstance(Sub(), Sub)
 
 
-# --- step 22b: an optional remote per repo -------------------------------
+# --- an optional remote per repo -----------------------------------------
 
 
 def test_repo_without_a_remote_has_none() -> None:
@@ -400,7 +400,7 @@ def test_add_repo_refuses_the_same_contradiction() -> None:
     assert not config.repos
 
 
-# --- per-repo markup (step 17z) ------------------------------------------
+# --- per-repo markup -----------------------------------------------------
 
 
 def test_per_repo_markup_round_trips(tmp_path: Path) -> None:
@@ -469,7 +469,7 @@ def test_add_repo_records_ignore_globs() -> None:
 
 
 def test_a_saved_config_can_be_hand_edited(tmp_path: Path) -> None:
-    # The trap `connectors = []` fell into in step 29a, and `repos` had
+    # The trap `connectors = []` fell into, and `repos` had
     # been in it from the start: tomli_w writes a short repo entry as
     # `repos = [{...}]`, and TOML forbids attaching `[[repos]]` or
     # `[repos.formats]` to a static array. Whatever a person is told to

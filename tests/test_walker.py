@@ -3,7 +3,7 @@
 `selected` below is how the pipeline actually decides — it lists paths
 and asks `inspect_file` about each. A `walk_repo` generator used to
 answer the same question by traversing the tree itself; it went away with
-step 29, having outlived the pipeline's use of it by four steps.
+later, having outlived the pipeline's use of it.
 """
 
 from pathlib import Path
@@ -163,7 +163,7 @@ def test_ignored_dirs_does_not_repeat_the_hidden_rule() -> None:
     assert not any(name.startswith(".") for name in IGNORED_DIRS)
 
 
-# --- step 22: the per-file policy, asked about one named path ------------
+# --- the per-file policy, asked about one named path ---------------------
 
 
 def test_the_policy_is_the_same_however_a_path_arrives(tmp_path: Path) -> None:
@@ -239,7 +239,7 @@ def test_inspect_file_returns_lang_and_kind(tmp_path: Path) -> None:
     assert (walked.rel_path, walked.lang, walked.kind) == ("mod.py", "python", Kind.CODE)
 
 
-# --- per-repo markup (step 17z) ------------------------------------------
+# --- per-repo markup -----------------------------------------------------
 
 
 def test_a_repo_can_ignore_a_path_glob(tmp_path: Path) -> None:

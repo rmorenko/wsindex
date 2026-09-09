@@ -1,8 +1,8 @@
-"""Step 27b: references out of the repository, into trackers and urls.
+"""References out of the repository, into trackers and urls.
 
 A commit message names a ticket; a doc links a page. Recognising those is
 a cheap bridge — nothing is downloaded — so that "why" can reach the
-ticket without a connector, and stage 10b can bring contents later.
+ticket without a connector, and a connector can bring contents later.
 
 The measurement that shaped this is worth restating, because it is the
 whole reason the config carries the patterns. A built-in `PROJ-123` rule

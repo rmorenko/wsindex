@@ -6,8 +6,8 @@ produces no commit", "a dropped url deletes its file" — are claims about
 what git does, and a mock would only confirm our idea of it.
 
 The *sources* are fake, because what is being tested is the
-materialization, not the network. `probes/step29b` already established
-what the real ones hand back, and re-establishing it on every test run
+materialization, not the network. What the real ones hand back was
+established by probing them once; re-establishing it on every test run
 would make the suite depend on GitHub being up.
 """
 

@@ -398,7 +398,7 @@ def test_save_over_an_existing_state_replaces_it(tmp_path: Path) -> None:
     assert IndexState.load(tmp_path).commits == {"repo2": "two"}
 
 
-# --- the loop step 22 will run: index, record, ask again ------------------
+# --- the loop the pipeline runs: index, record, ask again ----------------
 
 
 def test_state_drives_the_next_diff(repo: Path, git: GitRunner, tmp_path: Path) -> None:

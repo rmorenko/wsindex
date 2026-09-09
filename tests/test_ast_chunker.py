@@ -125,7 +125,7 @@ def test_every_parser_has_an_extractor_or_a_splitter() -> None:
     # value and `register` refuses one without the other, so the two can
     # no longer drift — this asserts the property still holds end to end.
     #
-    # Since step 25d a grammar may instead belong to a *container*, whose
+    # A grammar may instead belong to a *container*, whose
     # parse is used to split the file rather than to chunk it. Those have
     # a splitter and no extractor, by construction.
     for spec in REGISTRY.specs:
@@ -339,7 +339,7 @@ def test_metadata_flows_through(lang: str, sample: str) -> None:
     assert (chunk.repo, chunk.path, chunk.lang, chunk.kind) == expected
 
 
-# --- step 25b: JavaScript / JSX / TSX, Go, C, C++ --------------------------
+# --- JavaScript / JSX / TSX, Go, C, C++ -----------------------------------
 #
 # The batch is "cheap" in the plan's sense: JS, JSX and TSX reuse the
 # TypeScript policy object outright, and Go arrives from the example
@@ -570,7 +570,7 @@ def test_batch_one_languages_cover_every_line(lang: str) -> None:
     assert len(covered) == len(set(covered))
 
 
-# --- step 25c: C#, Kotlin, PHP, Ruby ---------------------------------------
+# --- C#, Kotlin, PHP, Ruby ------------------------------------------------
 #
 # Four languages, one extractor. They differ in almost everything except
 # the shape that matters — something optional wraps the file, types hold

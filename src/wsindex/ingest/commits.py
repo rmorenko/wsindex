@@ -162,8 +162,8 @@ def _blame(root: Path, rel_path: str) -> dict[int, str]:
     would pay the process cost once per chunk instead of once per file.
 
     An empty result is a normal answer, not a failure. A full pass
-    indexes untracked files too (step 22 lists them with
-    `ls-files --others`), and git cannot blame a file that is in no
+    indexes untracked files too (`ls-files --others` lists them), and git
+    cannot blame a file that is in no
     commit: `fatal: no such path ... in HEAD`. A file with no history has
     no blame edges, which is exactly right — and letting that kill the
     run would mean one new file breaks indexing for the whole workspace.

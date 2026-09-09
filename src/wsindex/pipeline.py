@@ -8,13 +8,13 @@ constructor; which repositories to index and with which metric comes from
 threading those two values through the composition root only to hand them
 back unchanged was ceremony.
 
-`index` is incremental against git (Этап 8). Both of its paths — the
+`index` is incremental against git. Both of its paths — the
 full pass and the incremental one — end in the same two lines: add the
 chunks the working tree currently produces, then delete every stored
 chunk in scope that it did not. Only the scope differs (a few changed
 paths, or the whole dataset), which is why the reconciling delete is
 written once. That also fixes the debt the full pass carried before
-step 20: it used to only ever add, so a file that shrank or vanished
+the store used to only ever add, so a file that shrank or vanished
 left its old chunks in the index forever.
 """
 
@@ -155,7 +155,7 @@ class Pipeline:
 
         Raises:
             NotAGitRepositoryError: A configured repo is not a git
-                repository root. Git-only is a decision of Этап 8: a
+                repository root. Git-only is a decision: a
                 fallback to plain walking would mean two models of
                 state, so this is a config error with a message.
         """
@@ -260,7 +260,7 @@ class Pipeline:
         forget: list[str] = list(diff.deleted)
         for rel_path in diff.changed:
             # The repo's own markup, not the workspace's: what to index
-            # is a property of this repository (step 17z).
+            # is a property of this repository.
             walked = inspect_file(root, rel_path, ignore=repo.ignore, formats=repo.formats)
             if walked is None:
                 # It changed into something we do not index — renamed to
@@ -315,7 +315,8 @@ class Pipeline:
                     repo=repo.id,
                     path=walked.rel_path,
                 )
-                # Blame is the expensive half of step 27 (~28 ms/file), so
+                # Blame is the expensive half of commit indexing
+                # (~28 ms/file), so
                 # it is paid per *indexed* file — which the incremental
                 # path already keeps down to what changed.
                 self.links.add_links(

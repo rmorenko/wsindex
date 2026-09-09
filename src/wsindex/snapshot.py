@@ -8,9 +8,9 @@ way — the snapshot is a `[[repos]]` entry like any other.
 That indirection buys four things at once, and it is why the fetched
 text never touches the store directly:
 
-- **The git-only invariant of Этап 8 survives.** Everything wsindex
-  indexes is a git working copy, so incremental indexing (steps 21-22)
-  works here without a single change: a document that did not change
+- **The git-only invariant survives.** Everything wsindex indexes is a
+  git working copy, so incremental indexing works here without a single
+  change: a document that did not change
   produces no commit, so `diff_since` reports nothing and the sync costs
   no embeddings.
 - **`file:line` stays honest.** A hit points at a line of a file that
@@ -27,10 +27,10 @@ The probe behind the third point
 --------------------------------
 "Every sync is a commit" is worth nothing if an unchanged document comes
 back different — the log would then record noise at whatever interval
-the sync runs, which is worse than no history at all. `probes/step29b`
-fetched four real documents twice, several seconds apart: a GitHub
-issue, a raw markdown file, and two HTML pages. All four came back
-byte-identical, text and metadata alike.
+the sync runs, which is worse than no history at all. So it was
+measured: four real documents fetched twice, several seconds apart — a
+GitHub issue, a raw markdown file, and two HTML pages. All four came
+back byte-identical, text and metadata alike.
 
 So stability is a property of the *sources*, and the one thing that
 could break it is us. That is why the frontmatter carries no fetch
@@ -153,8 +153,8 @@ def document_path(url: str) -> PurePosixPath:
     directory tree reads like the site it came from and the doc chunker
     gets a path worth showing in a search hit.
 
-    Four defences, each answering something `probes/step29b` measured on
-    real and hostile urls:
+    Four defences, each answering something measured on real and hostile
+    urls:
 
     - **Traversal.** `https://host/../../etc/passwd` and its
       percent-encoded twin both reach `_segment`, which drops `..` and

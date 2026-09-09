@@ -4,7 +4,7 @@ Every command starts from disk state only (fresh-process model), so each
 test chdirs into its own tmp_path and drives the full loop through files.
 
 `repo1` is a real git repository: `index` is incremental against git
-(Этап 8) and treats anything else as a config error.
+and treats anything else as a config error.
 """
 
 import subprocess
@@ -201,7 +201,7 @@ def test_embedder_dim_mismatch_is_rejected(
     assert "dim" in result.output
 
 
-# --- step 19g: scope + filter flags on `search` ----------------------------
+# --- scope and filter flags on `search` -----------------------------------
 
 
 def _bootstrap_two_repos(workspace: Path) -> None:
@@ -249,7 +249,7 @@ def test_search_path_glob_filters(workspace: Path) -> None:
             assert "src/" in line, f"path filter failed to constrain: {line!r}"
 
 
-# --- step 22в: wsindex compact -------------------------------------------
+# --- wsindex compact ------------------------------------------------------
 
 
 def test_compact_reports_reclaimed_space(workspace: Path) -> None:
@@ -322,7 +322,7 @@ def test_compact_says_so_when_size_cannot_be_measured(
     assert "reclaimed" not in result.output
 
 
-# --- step 22b: wsindex sync ----------------------------------------------
+# --- wsindex sync ---------------------------------------------------------
 
 
 @pytest.fixture
@@ -441,7 +441,7 @@ def test_sync_still_indexes_after_a_skip_but_exits_nonzero(workspace: Path, orig
     assert result.exit_code == 1
     assert "uncommitted changes" in result.output
     assert "files:" in result.output  # the index run still happened
-    # `--lang python`, not top-1: since step 27 the corpus holds commit
+    # `--lang python`, not top-1: the corpus holds commit
     # messages too, and with the fake embedder a commit can outscore the
     # file being looked for. The claim is that the file was indexed.
     found = runner.invoke(app, ["search", "scratch", "-k", "5", "--lang", "python"])
@@ -472,7 +472,7 @@ def test_a_config_missing_a_required_section_is_an_error_too(workspace: Path) ->
     assert "cannot read the wsindex config" in result.output
 
 
-# --- step 29a: wsindex fetch ---------------------------------------------
+# --- wsindex fetch --------------------------------------------------------
 
 
 def test_fetch_prints_a_document(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:

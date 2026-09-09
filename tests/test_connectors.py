@@ -1,10 +1,10 @@
-"""Step 29a: the connector contract, the router, and the config.
+"""The connector contract, the router, and the config.
 
 A connector is a pointed pull — fetch the document at this url, nothing
 around it. What is tested here is the seam: who claims a url, what a
 token does and does not do, and what each source's answer becomes.
 
-The network is stubbed everywhere but one case. `probes/step29a` did the
+The network is stubbed everywhere but one case. A probe did the
 real asking, before any of this was written, and its findings are what
 these tests pin; a suite that re-asked GitHub on every run would be slow,
 rate-limited and green only when someone's wifi is up. The one live case
@@ -55,7 +55,7 @@ def test_an_unclaimed_url_routes_nowhere() -> None:
 
 
 def test_an_unknown_type_is_skipped_not_fatal() -> None:
-    # The user may have a plugin installed on another machine (step 29c).
+    # The user may have a plugin installed on another machine.
     # One unusable entry must not disable the rest.
     unknown = ConnectorSpec(type="not-installed", url_pattern="https://*")
     assert isinstance(route("https://example.invalid/a", [unknown, ANY_HTTP]), GenericHttpConnector)

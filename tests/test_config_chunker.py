@@ -191,7 +191,7 @@ def test_unregistered_lang_falls_back_to_text_chunks() -> None:
 
 
 def test_xml_children_of_the_root_are_the_unit_not_the_root() -> None:
-    # The trap `probes/step17j` found: an XML file has exactly one
+    # The trap measuring real files found: an XML file has exactly one
     # top-level element, so "top-level elements" — the rule every other
     # extractor here follows — would make each file a single chunk.
     # Measured on Maven's own pom: `<project>` is 1287 of 1306 lines.

@@ -1,9 +1,9 @@
 """Keeping working copies up to date: clone, fetch, fast-forward.
 
-Third step of Этап 8, and the piece that makes a workspace
-self-sufficient: with a `remote` on a repo, `wsindex sync` produces the
-working copy `index` then reads. It is the foundation the server mode
-(этап 11) schedules on top; here it is a command the user runs.
+The piece that makes a workspace self-sufficient: with a `remote` on a
+repo, `wsindex sync` produces the working copy `index` then reads. The
+server's scheduler runs the same thing on a timer; here it is a command
+the user runs.
 
 Separate from `git_state` on purpose. That module *observes* — it asks
 git what changed and never writes. This one *changes the working copy*,
@@ -21,7 +21,7 @@ definition destroys nothing, and a clone into a directory that did not
 exist.
 
 That timidity costs nothing downstream: `index` handles a dirty tree by
-falling back to a full pass (step 22), so declining to sync degrades
+falling back to a full pass, so declining to sync degrades
 speed, never correctness.
 """
 
@@ -68,7 +68,7 @@ def _clone(remote: str, into: Path) -> None:
     commit it last indexed, and a shallow history stops resolving that
     commit as soon as the shallow boundary moves past it. `diff_since`
     would degrade to a full listing every time — correct, but it would
-    quietly undo step 22.
+    quietly undo incremental indexing.
 
     Args:
         remote: Clone url, straight from the config.

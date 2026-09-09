@@ -9,7 +9,7 @@ Pipeline reads the repo list from `Config()`, so "add a second repo" is
 stays the same one across the whole test.
 
 Every repo here is a real git repository, because `index` is incremental
-against git (Этап 8) and refuses to touch anything else. The `commit`
+against git and refuses to touch anything else. The `commit`
 helper is how a test says "this is now the committed state", which is
 also what puts the repo on the incremental path — an uncommitted change
 forces a full pass by design.
@@ -144,7 +144,8 @@ def test_store_search_finds_exact_chunk(pipeline: Pipeline, store: LanceDBStore)
 
 
 def test_second_run_reads_nothing(pipeline: Pipeline) -> None:
-    # Before step 22 this re-read and re-chunked everything and leaned on
+    # Before incremental indexing this re-read and re-chunked everything
+    # and leaned on
     # dedup to write nothing. Now the diff is empty, so no file is opened
     # at all — that is where the wall-clock saving comes from.
     pipeline.index()
@@ -238,7 +239,7 @@ class InvertingReranker(FakeReranker):
 def test_reranker_replaces_scores_and_reorders(
     config: Config, store: LanceDBStore, state_dir: Path
 ) -> None:
-    # Scoped to code: since step 27 the corpus holds commit messages too,
+    # Scoped to code: the corpus holds commit messages too,
     # and the claim under test is about the reranker's effect on an
     # ordering, not about which kinds happen to be in it.
     only_code = SearchFilter(kind=(Kind.CODE,))
@@ -271,7 +272,7 @@ def test_pipeline_fetches_k_times_multiplier_with_reranker(
     assert kwargs_plain["k"] == 3
 
 
-# --- step 19g: repo scope + filter passthrough -----------------------------
+# --- repo scope and filter passthrough ------------------------------------
 
 
 def test_search_with_repo_narrows_dataset_list(
@@ -334,7 +335,7 @@ def test_reranker_respects_filters(config: Config, store: LanceDBStore, state_di
     assert all(h.metadata["kind"] == "doc" for h in hits)
 
 
-# --- step 22: incremental index ------------------------------------------
+# --- incremental index ---------------------------------------------------
 
 
 def edit(root: Path, rel: str, text: str, commit: Committer) -> None:
@@ -367,7 +368,8 @@ def test_changed_file_is_the_only_one_read(
 def test_changed_file_no_longer_answers_with_its_old_text(
     tmp_path: Path, pipeline: Pipeline, store: LanceDBStore, commit: Committer
 ) -> None:
-    # The debt step 20 named: without the reconciling delete the old
+    # The debt `delete_chunks` was added for: without the reconciling
+    # delete the old
     # chunk would stay searchable forever.
     pipeline.index()
     edit(tmp_path / "repo1", "src/main.py", "def g():\n    return 99\n", commit)
@@ -499,7 +501,7 @@ def test_one_dirty_repo_does_not_hold_back_a_clean_one(
 
 
 def test_non_git_repo_is_a_config_error(tmp_path: Path, config: Config, pipeline: Pipeline) -> None:
-    # Git-only is the Этап 8 decision: a plain directory is a mistake in
+    # Git-only is the decision: a plain directory is a mistake in
     # the config, not a reason to silently switch models of state.
     plain = tmp_path / "plain"
     plain.mkdir()

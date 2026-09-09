@@ -1,6 +1,6 @@
 """How the CLI shows things, and when it is allowed to be pretty.
 
-Этап 12's first step. One rule governs the whole module:
+One rule governs the whole module:
 
 **Rich output only on a terminal.** `wsindex search x | grep foo` and
 `wsindex search x > hits.txt` have to keep working, and a table drawn

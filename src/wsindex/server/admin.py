@@ -1,8 +1,7 @@
 """The admin page: repos, their state, and the two buttons worth having.
 
-Этап 11's last step, and its scope is in the word *minimal*: the repo
-list with indexing status, adding a repo, running a sync by hand, and
-the log of recent runs. Nothing else — the plan says so, and every
+Minimal on purpose: the repo list with indexing status, adding a repo,
+running a sync by hand, and the log of recent runs. Nothing else — every
 addition here is a thing the API already does that would then exist
 twice.
 
@@ -166,7 +165,7 @@ def mount_admin(app: FastAPI, guarded: list[Any]) -> None:
 
         Writes through `Config`, exactly as `wsindex add-repo` does, so
         the file the CLI reads next is the file this wrote — including
-        the array-of-tables shape that keeps it hand-editable (step 17z).
+        the array-of-tables shape that keeps it hand-editable.
         """
         config = Config()
         location = config.location

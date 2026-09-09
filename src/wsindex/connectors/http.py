@@ -1,9 +1,9 @@
 """The fallback connector: fetch a url, hand back readable text.
 
 Anything already written in text needs no source-specific knowledge — a
-raw markdown file arrives usable, and `probes/step29a` confirmed it:
-`README.md` from a raw.githubusercontent url is markdown with nothing to
-convert. HTML is the case that needs work, and it needs only enough to
+raw markdown file arrives usable, and that was confirmed against the
+real thing: `README.md` from a raw.githubusercontent url is markdown
+with nothing to convert. HTML is the case that needs work, and it needs only enough to
 stop being markup.
 
 How much is enough
@@ -17,8 +17,8 @@ JavaScript, and no parser is needed to be sure of that.
 What it does not do is produce *markdown*: headings and links flatten,
 and navigation chrome ("Skip to content", the nav menu) comes through as
 text. Turning a source's own format into markdown belongs to
-materialization (step 29b), where there is a file to write and a
-converter per source to pick.
+materialization (`wsindex.snapshot`), where there is a file to write and
+a converter per source to pick.
 """
 
 from __future__ import annotations

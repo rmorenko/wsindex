@@ -196,10 +196,10 @@ class VectorStore(ABC):
     def refresh(self) -> None:
         """See what other processes have written since this store opened.
 
-        A store may hold a snapshot: LanceDBStore does, and `probes/step30`
-        measured what that means — a handle polled 40 times over 0.8 s
-        while another process committed saw its opening version every
-        time. Reads do not refresh themselves.
+        A store may hold a snapshot: LanceDBStore does, and what that
+        means was measured — a handle polled 40 times over 0.8 s while
+        another process committed saw its opening version every time.
+        Reads do not refresh themselves.
 
         Harmless in a CLI, where the process is younger than the
         question. A correctness bug in anything long-lived: after an

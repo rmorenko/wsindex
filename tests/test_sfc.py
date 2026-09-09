@@ -1,4 +1,4 @@
-"""Step 25d: HTML, and the single-file-component mechanism.
+"""HTML, and the single-file-component mechanism.
 
 The new machinery of the stage is not a grammar — it is that one file may
 be several languages. A `.vue` or `.svelte` component holds a template, a

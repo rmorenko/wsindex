@@ -199,7 +199,7 @@ def test_unknown_language_has_neither(registry: LanguageRegistry) -> None:
 
 def test_registering_after_a_lookup_is_picked_up(registry: LanguageRegistry) -> None:
     # Parsers are built lazily and dropped on register, which is what
-    # will let step 24 load plugins after this module was imported.
+    # will let the loader add plugins after this module was imported.
     registry.register(LanguageSpec(name="md", kind=Kind.DOC, suffixes=(".md",)))
     assert registry.parser("md") is None  # forces the parser table to build
     registry.register(

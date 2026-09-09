@@ -2,8 +2,8 @@
 
 First after the generic fallback because the workspaces this was built
 for live on GitHub, so it can be checked against something real rather
-than described. `probes/step29a` asked the API before this was written,
-and three answers are baked in below.
+than described. The API was asked before this was written, and three
+answers are baked in below.
 
 **An issue and a pull request are one endpoint.** `/issues/{n}` answers
 for both — a PR is an issue with extra fields — so there is no url shape

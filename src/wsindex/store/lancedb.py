@@ -140,7 +140,7 @@ class LanceDBStore(VectorStore):
 
         The cache is updated locally after writes. It used to say it
         could not grow stale because a store lived for one CLI
-        invocation — true until Этап 11 gave the store a process that
+        invocation — true until the server gave the store a process that
         outlives the question, at which point a repo registered by
         somebody else stayed invisible here forever. `refresh` drops it.
         """
@@ -334,7 +334,7 @@ class LanceDBStore(VectorStore):
         predicate = f"dataset = '{_sql_quote(dataset_name)}' AND id IN ({id_list})"
         result = self.tbl.delete(predicate)
         # LanceDB's DeleteResult carries num_deleted_rows at runtime (see
-        # probes/step20/probe_delete.py), but the field is missing from
+        # measured), but the field is missing from
         # the stubs as of 0.21+; the cast + ignore is self-cleaning via
         # `warn_unused_ignores` when the stubs catch up.
         return cast("int", result.num_deleted_rows)  # type: ignore[attr-defined]
@@ -417,7 +417,7 @@ class LanceDBStore(VectorStore):
         Order matters inside LanceDB's `optimize`: compaction writes a
         NEW, merged version and the versions it replaces stay on disk, so
         compacting without pruning makes the directory *grow*. Measured
-        in probes/step22v: 20 append batches then 150 deletes left 273 KB,
+        measured: 20 append batches then 150 deletes left 273 KB,
         a bare `optimize()` took it to 317 KB, and only pruning brought it
         to 43 KB. Passing `cleanup_older_than` is therefore not a tuning
         knob here — it is the half that does the reclaiming.

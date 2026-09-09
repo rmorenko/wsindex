@@ -1,6 +1,6 @@
 """`wsindex shell`: ask many questions of one loaded model.
 
-Этап 12's second step, and the one that fixes the CLI's real cost. A
+The command that fixes the CLI's real cost. A
 `wsindex search` spends most of its seconds before it searches anything:
 building the embedder means loading a model, and opening the store means
 reading a manifest. Ask three questions and you pay for all of that three

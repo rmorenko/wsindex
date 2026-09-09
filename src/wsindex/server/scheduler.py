@@ -1,7 +1,7 @@
 """Keeping the index current without anybody asking: a tick, and a hook.
 
-Этап 11's third step. Two ways for work to start, because two things
-cause it: time passes, or somebody pushes.
+Two ways for work to start, because two things cause it: time passes, or
+somebody pushes.
 
 - **A tick.** Every `[server] interval` seconds, do what `wsindex sync`
   does — pull the repos that have a remote, materialize the snapshots

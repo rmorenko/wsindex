@@ -1,6 +1,6 @@
 """Reranker contract: (query, texts) in, per-text scores out.
 
-Second stage of the search funnel (ARCH stage 7): the bi-encoder store
+Second stage of the search funnel: the bi-encoder store
 retrieves top-N cheaply, the reranker rescores those N with a cross-
 encoder that sees each (query, text) pair together — more precise but
 too expensive to run on the whole dataset. Fake for tests, real one
@@ -69,7 +69,7 @@ class CrossEncoderReranker(Reranker):
     Needs the optional `ml` extra (`uv sync --extra ml`); the import is
     deferred to `__init__` so the module stays importable without it.
     Wrapped with a Sigmoid activation so scores are in [0, 1] and
-    comparable to the bi-encoder cosine scale (see ADR-... / step 18).
+    comparable to the bi-encoder cosine scale.
     """
 
     def __init__(self, model_name: str) -> None:

@@ -1,8 +1,7 @@
 """Finding language plugins: entry points in, registered languages out.
 
-Second step of Этап 9. Step 23 said what a plugin must hand over — a
-`LanguageSpec`; this is how a plugin that wsindex has never heard of gets
-to hand it over at all.
+`LanguageSpec` says what a plugin must hand over; this is how a plugin
+wsindex has never heard of gets to hand it over at all.
 
 The mechanism is Python's own. A distribution advertises objects for
 other packages to find by declaring *entry points* in its build config:

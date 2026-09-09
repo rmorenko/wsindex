@@ -1,4 +1,4 @@
-"""Step 27: commit messages as corpus, blame as edges.
+"""Commit messages as corpus, blame as edges.
 
 A repository's reasoning lives in its commit messages and nowhere else —
 the step-26 spike proved that on this repo, for "why is dedup before
@@ -167,7 +167,7 @@ def test_blame_links_a_chunk_to_the_commit_that_wrote_it(repo: Path) -> None:
 
 def test_an_untracked_file_yields_no_blame_and_no_crash(repo: Path) -> None:
     # The bug this guards: a full pass indexes untracked files by design
-    # (step 22 lists them with `ls-files --others`), and git cannot blame
+    # (`ls-files --others` lists them), and git cannot blame
     # a file that is in no commit. Letting that raise would mean one new
     # file breaks indexing for the whole workspace.
     from wsindex.ingest import chunk_file

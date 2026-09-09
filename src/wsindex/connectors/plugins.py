@@ -1,8 +1,9 @@
 """Finding connector plugins: entry points in, registered types out.
 
-The same seam the language plugins use (step 24), pointed at a different
-registry. A distribution advertises a connector class, and the name it
-advertises it under is the `type` a config entry asks for:
+The same seam the language plugins use (`wsindex.ingest.plugins`),
+pointed at a different registry. A distribution advertises a connector
+class, and the name it advertises it under is the `type` a config entry
+asks for:
 
     # in the plugin's pyproject.toml
     [project.entry-points."wsindex.connectors"]

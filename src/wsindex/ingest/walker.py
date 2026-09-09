@@ -4,7 +4,7 @@ First stage of the indexing pipeline (ARCH §4): produces the WalkedFile
 entries the chunker dispatcher consumes. Reads only file names, sizes and
 a small binary-sniff prefix — never whole file contents.
 
-No traversal lives here any more. Since step 25b the pipeline gets its
+No traversal lives here any more. The pipeline gets its
 file list from git (`ls-files --cached --others --exclude-standard`)
 rather than from a filesystem walk, so what is left is the *policy*: does
 this one path deserve indexing. A `walk_repo` generator survived that

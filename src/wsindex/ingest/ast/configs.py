@@ -150,8 +150,8 @@ def _xml_name(element: Node) -> str | None:
 
     Every element this grammar produces opens with `STag` or
     `EmptyElemTag`, error trees included — six malformed samples in
-    `probes/step17j` all kept it, including an orphan closing tag and a
-    `< >`. So the None below guards against a future grammar rather than
+    six malformed samples all kept it, including an orphan closing tag
+    and a `< >`. So the None below guards against a future grammar rather than
     a tree anyone has seen.
     """
     tag = element.named_children[0] if element.named_children else None
@@ -235,7 +235,7 @@ def xml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     own `pom.xml`, `<project>` is 1287 of its 1306 lines.
 
     One chunk per *child* of the root is the obvious correction and it is
-    wrong at both ends, which is why `probes/step17j` measured it before
+    wrong at both ends, which is why it was measured on real files before
     any of this was written:
 
     - Tomcat's `web.xml` has **1029 children of the root**, four lines

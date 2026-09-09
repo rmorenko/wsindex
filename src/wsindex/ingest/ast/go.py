@@ -1,9 +1,9 @@
 """Go policy: doc comments stick to declarations, receivers qualify methods.
 
-Arrived as the step-25 example plugin and moved into the box by step 25b.
-The extractor is unchanged — which is the useful part of the story: a
-language written entirely against the published plugin surface needed no
-rework to become a built-in. The seam holds in both directions.
+Arrived as the example plugin and moved into the box unchanged — which
+is the useful part of the story: a language written entirely against the
+published plugin surface needed no rework to become a built-in. The seam
+holds in both directions.
 """
 
 from __future__ import annotations

@@ -1,7 +1,8 @@
 """Fetching one external document, and deciding who fetches it.
 
 A connector is a *pointed pull*, not a crawler: given a url — one a
-reference in a commit message pointed at (step 27b), or one a person
+reference in a commit message pointed at (see `wsindex.ingest.link_extract`),
+or one a person
 typed — bring back that document. Nothing walks a wiki space. That
 boundary is what keeps the cost of an external source proportional to
 what the repository actually mentions.
@@ -20,8 +21,8 @@ written anywhere.
 
 What the probes changed
 -----------------------
-`probes/step29a` asked each source before any of this was written, and
-two answers shaped the contract:
+Each source was asked before any of this was written, and two answers
+shaped the contract:
 
 - **GitHub answers 404 for a private repository you cannot see**, not
   403 — indistinguishable from a document that does not exist. So
@@ -32,8 +33,8 @@ two answers shaped the contract:
   answers for both, so there is no url shape to disambiguate.
 
 Custom connectors come from entry points under `wsindex.connectors` —
-the same seam the language plugins use (step 24). `BUILTIN` below is what
-the loader merges into; see `wsindex.connectors.plugins`, and
+the same seam the language plugins use. `BUILTIN` below is what the
+loader merges into; see `wsindex.connectors.plugins`, and
 `examples/wsindex-connector-notion` for a worked one.
 """
 
@@ -75,7 +76,7 @@ class Document:
         title: Short human name. Empty when the source has none.
         text: The document body. Markdown where the source speaks it,
             otherwise plain text; turning richer formats into markdown
-            is materialization's job (step 29b), not the fetch's.
+            is `wsindex.snapshot`'s job, not the fetch's.
         metadata: Whatever the source knows about the document — author,
             dates, state. Strings throughout, because this ends up in
             frontmatter or a sidecar, and a schema per source would be a
@@ -94,7 +95,7 @@ class ConnectorSpec:
 
     Attributes:
         type: Which connector implementation — a key of `BUILTIN`, or a
-            name a plugin registers (step 29v).
+            name a plugin registers.
         url_pattern: Glob the url must match, `*` and `?` as in a shell.
             A glob rather than a regex because these are written by hand
             in a config file, and `https://github.com/myorg/*` is what

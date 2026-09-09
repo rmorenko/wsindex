@@ -1,10 +1,9 @@
 """Git state for incremental indexing: what changed since the last run.
 
-Second stage of Этап 8 (step 21). `delete_chunks` (step 20) gave the store
-the ability to forget; this module answers the question that makes the
-ability useful — *which* files changed, so `Pipeline.index` can re-chunk
-only those and delete what disappeared. Wiring it into the pipeline is
-step 22; nothing here imports the pipeline or the config.
+`VectorStore.delete_chunks` gave the store the ability to forget; this
+module answers the question that makes the ability useful — *which* files
+changed, so `Pipeline.index` can re-chunk only those and delete what
+disappeared. Nothing here imports the pipeline or the config.
 
 Git-only, by decision: a repo that is not a git repository is a
 configuration error with a message, not a silent fall back to a full walk.
@@ -101,7 +100,7 @@ class RepoDiff:
     """What changed in one repo between two commits.
 
     Paths are repo-relative and POSIX-separated — the same shape as
-    `WalkedFile.rel_path`, so step 22 can match them against stored
+    `WalkedFile.rel_path`, so the pipeline can match them against stored
     chunks without translating.
 
     A commit-to-commit diff sees *committed* changes only: an edit that
