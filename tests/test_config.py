@@ -295,3 +295,40 @@ def test_subclass_gets_its_own_instance() -> None:
     # "_instance")` check would hand Sub() the parent's instance.
     assert Sub() is not Config()
     assert isinstance(Sub(), Sub)
+
+
+# --- step 22b: an optional remote per repo -------------------------------
+
+
+def test_repo_without_a_remote_has_none() -> None:
+    config = Config.default("demo")
+    config.add_repo("local", path="/checkouts/local")
+    assert config.repos[0].remote is None
+
+
+def test_remote_round_trips_through_the_file(tmp_path: Path) -> None:
+    config = Config.default("demo")
+    config.add_repo("upstream", path="/checkouts/up", remote="https://example.invalid/r.git")
+    path = config.save(tmp_path / "wsindex.toml")
+
+    Config.reset()
+    assert Config(path).repos[0].remote == "https://example.invalid/r.git"
+
+
+def test_omitted_remote_is_absent_from_the_document() -> None:
+    # TOML has no null and tomli_w refuses to write one, so "no remote"
+    # has to mean "no key" rather than an explicit None.
+    config = Config.default("demo")
+    config.add_repo("local", path="/checkouts/local")
+    assert "remote" not in config.to_dict()["repos"][0]
+
+
+def test_empty_remote_string_reads_as_no_remote(tmp_path: Path) -> None:
+    # A hand-edited `remote = ""` means the user cleared it, not that
+    # sync should try to clone from an empty url.
+    data = Config.default("demo").to_dict()
+    data["repos"] = [{"id": "r", "path": "/p", "remote": ""}]
+    path = tmp_path / "wsindex.toml"
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    Config.reset()
+    assert Config(path).repos[0].remote is None

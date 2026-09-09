@@ -207,8 +207,13 @@ class IndexState:
         return path
 
 
-def _run_git(root: Path, *args: str) -> bytes:
-    """Run one read-only git command in `root` and return raw stdout.
+def run_git(root: Path, *args: str) -> bytes:
+    """Run one git command in `root` and return raw stdout.
+
+    The single place in the package that knows how to invoke git safely:
+    argv (never a shell), a timeout, the read-only lock hint, and the
+    mapping of an environment failure onto a typed error. `git_sync` runs
+    its own commands through it for exactly that reason.
 
     Bytes, not text: paths come back from git as bytes and are decoded
     by the caller with `surrogateescape`, which `subprocess`'s own text
@@ -247,7 +252,7 @@ def _run_git(root: Path, *args: str) -> bytes:
     return completed.stdout
 
 
-def _decode(raw: bytes) -> str:
+def decode_path(raw: bytes) -> str:
     """Decode a path git handed us, preserving bytes that are not UTF-8."""
     return raw.decode("utf-8", errors="surrogateescape")
 
@@ -277,7 +282,7 @@ def ensure_repo_root(root: Path) -> Path:
     if not root.is_dir():
         raise NotAGitRepositoryError(f"not a directory: {root}")
     try:
-        raw = _run_git(root, "rev-parse", "--show-toplevel")
+        raw = run_git(root, "rev-parse", "--show-toplevel")
     except GitUnavailableError:
         # Caught before the parent class below: "git is missing" must not
         # be reported as "this is not a repository".
@@ -289,7 +294,7 @@ def ensure_repo_root(root: Path) -> Path:
             f"not a git repository: {root} — wsindex indexes git repos only "
             f"(run `git init` there, or point the config at a real clone)"
         ) from exc
-    top_level = Path(_decode(raw).strip()).resolve()
+    top_level = Path(decode_path(raw).strip()).resolve()
     if top_level != root.resolve():
         raise NotAGitRepositoryError(
             f"{root} is inside a git repository but is not its root ({top_level}) — "
@@ -312,7 +317,7 @@ def head_commit(root: Path) -> str:
         GitCommandError: The repository has no commits yet, or git failed.
     """
     ensure_repo_root(root)
-    return _decode(_run_git(root, "rev-parse", "HEAD")).strip()
+    return decode_path(run_git(root, "rev-parse", "HEAD")).strip()
 
 
 def has_uncommitted_changes(root: Path) -> bool:
@@ -341,7 +346,7 @@ def has_uncommitted_changes(root: Path) -> bool:
     ensure_repo_root(root)
     # --untracked-files=normal is the default, but naming it keeps the
     # answer independent of the user's `status.showUntrackedFiles`.
-    out = _run_git(root, "status", "--porcelain", "-z", "--untracked-files=normal")
+    out = run_git(root, "status", "--porcelain", "-z", "--untracked-files=normal")
     return bool(out.strip(b"\x00"))
 
 
@@ -372,7 +377,7 @@ def _parse_name_status(out: bytes) -> tuple[list[str], list[str]]:
     deleted: list[str] = []
     i = 0
     while i < len(fields):
-        status = _decode(fields[i])
+        status = decode_path(fields[i])
         code = status[:1]
         # Rename/copy carry a similarity score (R100) and two paths.
         needed = 2 if code in ("R", "C") else 1
@@ -381,14 +386,14 @@ def _parse_name_status(out: bytes) -> tuple[list[str], list[str]]:
         if i + needed >= len(fields):
             raise GitCommandError(f"truncated diff record: status {status!r} without its path(s)")
         if code == "D":
-            deleted.append(_decode(fields[i + 1]))
+            deleted.append(decode_path(fields[i + 1]))
         elif code in ("A", "M", "T"):
-            changed.append(_decode(fields[i + 1]))
+            changed.append(decode_path(fields[i + 1]))
         elif code == "R":
-            deleted.append(_decode(fields[i + 1]))
-            changed.append(_decode(fields[i + 2]))
+            deleted.append(decode_path(fields[i + 1]))
+            changed.append(decode_path(fields[i + 2]))
         elif code == "C":
-            changed.append(_decode(fields[i + 2]))
+            changed.append(decode_path(fields[i + 2]))
         else:
             # U (unmerged) and X (internal error) cannot occur between two
             # commits; seeing one means our assumptions are wrong, and
@@ -423,7 +428,7 @@ def diff_since(root: Path, *, since: str | None) -> RepoDiff:
         GitCommandError: git failed, or returned something unparsable.
     """
     ensure_repo_root(root)
-    head = _decode(_run_git(root, "rev-parse", "HEAD")).strip()
+    head = decode_path(run_git(root, "rev-parse", "HEAD")).strip()
     if since is None or not _commit_exists(root, since):
         # `--cached --others --exclude-standard` is "every file git
         # considers part of this project right now": tracked, plus
@@ -433,14 +438,14 @@ def diff_since(root: Path, *, since: str | None) -> RepoDiff:
         # indexed. Not a filesystem walk either, which would happily
         # index build output and local scratch files that .gitignore
         # exists to hide.
-        listed = _run_git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-        files = [_decode(f) for f in listed.split(b"\x00") if f]
+        listed = run_git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+        files = [decode_path(f) for f in listed.split(b"\x00") if f]
         return RepoDiff(changed=tuple(files), deleted=(), head=head, full=True)
     if since == head:
         return RepoDiff(changed=(), deleted=(), head=head, full=False)
     # Two explicit revisions, not `a..b`: the range syntax means something
     # different for `git log`, and spelling both out cannot be misread.
-    out = _run_git(root, "diff", "--name-status", "-z", since, head)
+    out = run_git(root, "diff", "--name-status", "-z", since, head)
     changed, deleted = _parse_name_status(out)
     return RepoDiff(changed=tuple(changed), deleted=tuple(deleted), head=head, full=False)
 
@@ -453,7 +458,7 @@ def _commit_exists(root: Path, commit: str) -> bool:
     could hold.
     """
     try:
-        _run_git(root, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
+        run_git(root, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
     except GitCommandError:
         return False
     return True

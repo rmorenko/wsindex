@@ -1,10 +1,10 @@
-"""Ingest stage: repository walking, file chunking, and git state.
+"""Ingest stage: getting sources in, and knowing what changed in them.
 
-The public API is what the pipeline consumes — the two indexing entry
-points (`walk_repo`, `chunk_file`) plus the git layer that tells an
-incremental run what changed. The ast/ and text_chunker submodules are
-implementation details reached via chunker dispatch, not by outside
-callers.
+Three concerns, in the order a workspace meets them: `git_sync` brings a
+working copy up to date, `walker` and `chunker` turn it into chunks, and
+`git_state` remembers how far indexing got so the next run can do less.
+The ast/ and text_chunker submodules are implementation details reached
+via chunker dispatch, not by outside callers.
 """
 
 from wsindex.ingest.chunker import chunk_file
@@ -18,6 +18,7 @@ from wsindex.ingest.git_state import (
     has_uncommitted_changes,
     head_commit,
 )
+from wsindex.ingest.git_sync import SyncOutcome, sync_repo
 from wsindex.ingest.walker import WalkedFile, inspect_file, walk_repo
 
 __all__ = [
@@ -26,11 +27,13 @@ __all__ = [
     "IndexState",
     "NotAGitRepositoryError",
     "RepoDiff",
+    "SyncOutcome",
     "WalkedFile",
     "chunk_file",
     "diff_since",
     "has_uncommitted_changes",
     "head_commit",
     "inspect_file",
+    "sync_repo",
     "walk_repo",
 ]

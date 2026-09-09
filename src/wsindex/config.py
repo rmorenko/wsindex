@@ -78,10 +78,16 @@ class Repository:
     Attributes:
         id: Stable unique name; doubles as the dataset name in the store.
         path: Repository root directory, absolute or workspace-relative.
+        remote: Clone url `wsindex sync` keeps `path` up to date from, or
+            None for a working copy the user manages themselves. Optional
+            because the two cases are both normal: a repo you already have
+            checked out needs no url, a repo the workspace should fetch
+            for itself does.
     """
 
     id: str
     path: str
+    remote: str | None = None
 
 
 class Config:
@@ -379,15 +385,24 @@ class Config:
         nothing to the config — `add_repo` is the way in.
         """
         return [
-            Repository(id=str(repo["id"]), path=str(repo["path"])) for repo in self._data["repos"]
+            Repository(
+                id=str(repo["id"]),
+                path=str(repo["path"]),
+                # `or None`: an empty string in a hand-edited file means
+                # "no remote", not a url that will fail at clone time.
+                remote=str(repo["remote"]) if repo.get("remote") else None,
+            )
+            for repo in self._data["repos"]
         ]
 
-    def add_repo(self, repo_id: str, *, path: str) -> None:
+    def add_repo(self, repo_id: str, *, path: str, remote: str | None = None) -> None:
         """Register a repository in the document (in memory; `save` is separate).
 
         Args:
             repo_id: Unique repo id; becomes the dataset name.
             path: Repository root directory.
+            remote: Clone url for `wsindex sync`; omitted for a working
+                copy the user maintains themselves.
 
         Raises:
             ValueError: The id is already registered — ids name datasets,
@@ -395,7 +410,12 @@ class Config:
         """
         if any(repo.id == repo_id for repo in self.repos):
             raise ValueError(f"repo id already exists: {repo_id}")
-        self._data["repos"].append({"id": repo_id, "path": path})
+        entry: dict[str, Any] = {"id": repo_id, "path": path}
+        # Absent rather than null when unset: TOML has no null, and
+        # tomli_w would refuse to write one.
+        if remote is not None:
+            entry["remote"] = remote
+        self._data["repos"].append(entry)
 
     def to_dict(self) -> dict[str, Any]:
         """The document as it would be written.

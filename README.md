@@ -63,6 +63,33 @@ re-index and nothing more; and it is per-machine even when the vectors
 sit in shared S3, since two hosts on different branches must not share
 one "last indexed commit".
 
+## Repos the workspace fetches for itself
+
+Give a repo a `remote` and `wsindex sync` keeps the working copy current
+— clone it if `path` does not exist yet, fast-forward it afterwards, then
+re-index whatever moved:
+
+```bash
+uv run wsindex add-repo app ~/checkouts/app --remote https://github.com/you/app.git
+uv run wsindex sync
+```
+
+```
+app: updated
+files: 2  chunks: 2  written: 2  deleted: 1
+```
+
+Repos without a `remote` are checkouts you maintain yourself, and sync
+leaves them alone.
+
+**Sync never touches work the remote does not have.** Uncommitted
+changes, or local commits that were never pushed, make it decline and say
+so on stderr (exit code 1) instead of choosing for you. The only write it
+ever performs is a fast-forward, which by definition destroys nothing.
+Declining costs speed and not correctness: `index` still runs, and a
+dirty tree simply gets the full pass. Use `--no-index` to update working
+copies without indexing.
+
 ## Reclaiming space
 
 Deleting a chunk hides it immediately but does not free its bytes, and

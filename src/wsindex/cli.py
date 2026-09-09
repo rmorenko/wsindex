@@ -25,13 +25,14 @@ real file is `_require_config_file`'s.
 """
 
 from datetime import timedelta
+from pathlib import Path
 from typing import Annotated, assert_never
 
 import typer
 
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
-from wsindex.ingest import NotAGitRepositoryError
+from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
 from wsindex.model import Kind, SearchFilter
 from wsindex.paths import (
     ConfigLocation,
@@ -193,17 +194,31 @@ def init(
 
 
 @app.command()
-def add_repo(repo_id: str, path: str) -> None:
-    """Register a repository; its id becomes the dataset name."""
+def add_repo(
+    repo_id: str,
+    path: str,
+    remote: Annotated[
+        str | None,
+        typer.Option("--remote", help="Clone url; `wsindex sync` keeps <path> up to date from it"),
+    ] = None,
+) -> None:
+    """Register a repository; its id becomes the dataset name.
+
+    With `--remote` the working copy becomes the workspace's business:
+    `wsindex sync` clones it if `path` does not exist yet and
+    fast-forwards it afterwards. Without one, `path` is a checkout you
+    maintain yourself and sync leaves it alone.
+    """
     config = _config()
     location = _require_config_file(config)
     try:
-        config.add_repo(repo_id, path=path)
+        config.add_repo(repo_id, path=path, remote=remote)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     config.save(location.path)
-    typer.echo(f"added repo '{repo_id}' -> {path}")
+    suffix = f" (remote: {remote})" if remote else ""
+    typer.echo(f"added repo '{repo_id}' -> {path}{suffix}")
 
 
 @app.command()
@@ -287,6 +302,51 @@ def search(
             f"{meta['repo']}/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
             f"  {hit.score:.3f}  {first_line}"
         )
+
+
+@app.command()
+def sync(
+    no_index: Annotated[
+        bool,
+        typer.Option("--no-index", help="Update the working copies only, do not re-index"),
+    ] = False,
+) -> None:
+    """Update every repo that has a `remote`, then re-index what changed.
+
+    Clones a repo whose `path` does not exist yet, fast-forwards one that
+    does. Repos without a `remote` are checkouts you maintain yourself
+    and are left alone.
+
+    Sync never touches work the remote does not have: uncommitted changes
+    or local commits make it decline and say so, rather than choosing for
+    you. That costs nothing but speed — `index` handles a dirty tree by
+    re-reading the whole repo.
+    """
+    config = _config()
+    _require_config_file(config)
+    remotes = [repo for repo in config.repos if repo.remote is not None]
+    if not remotes:
+        typer.echo("no repos have a remote — add one with `wsindex add-repo <id> <path> --remote`")
+        return
+    skipped = False
+    for repo in remotes:
+        try:
+            outcome = sync_repo(Path(repo.path), remote=str(repo.remote))
+        except (NotAGitRepositoryError, GitCommandError) as exc:
+            # One unreachable remote must not strand the repos after it,
+            # so this is reported per repo instead of aborting the run.
+            typer.echo(f"{repo.id}: failed — {exc}", err=True)
+            skipped = True
+            continue
+        stream_err = outcome.is_skip
+        typer.echo(f"{repo.id}: {outcome.value}", err=stream_err)
+        skipped = skipped or stream_err
+    if no_index:
+        # Exit code reflects the syncing, which is all this run did.
+        raise typer.Exit(code=1 if skipped else 0)
+    index()
+    if skipped:
+        raise typer.Exit(code=1)
 
 
 @app.command()
