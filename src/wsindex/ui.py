@@ -1,23 +1,14 @@
 """How the CLI shows things, and when it is allowed to be pretty.
 
-One rule governs the whole module:
-
-**Rich output only on a terminal.** `wsindex search x | grep foo` and
-`wsindex search x > hits.txt` have to keep working, and a table drawn
-with box-drawing characters is not something to grep. So a pipe, a file,
-a CI log and `NO_COLOR` all get exactly the output this CLI has always
-produced — one line per hit, `repo/path:start-end  score  first line` —
-and a human at a terminal gets a table with a syntax-highlighted
-snippet. Neither is an approximation of the other; they are for
-different readers.
-
-That rule is also what kept this step from touching a single existing
-test: `CliRunner` is not a terminal, so every assertion about output
-still describes what those callers see.
+One rule: **rich output only on a terminal.** `wsindex search x | grep`
+and `> hits.txt` have to keep working, and a table drawn with box
+characters is not something to grep. A pipe, a file, a CI log,
+`NO_COLOR` and `WSINDEX_PLAIN` all get the one-line-per-hit format this
+CLI has always produced; a human gets a table with a highlighted snippet
+at its real line numbers. Neither approximates the other.
 
 `lang` is already on every chunk, so highlighting costs nothing but
-asking for it — the chunker recorded the language when it read the file
-and the store carried it through.
+asking for it.
 """
 
 from __future__ import annotations

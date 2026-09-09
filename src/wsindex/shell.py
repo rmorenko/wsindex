@@ -1,28 +1,16 @@
 """`wsindex shell`: ask many questions of one loaded model.
 
-The command that fixes the CLI's real cost. A
-`wsindex search` spends most of its seconds before it searches anything:
-building the embedder means loading a model, and opening the store means
-reading a manifest. Ask three questions and you pay for all of that three
-times. Here it is paid once and the loop is as fast as the search.
+A `wsindex search` spends most of its seconds before it searches
+anything: loading a model, opening the store. Ask three questions and you
+pay for that three times. Here it is paid once.
 
-What the loop offers, and nothing more:
+History on disk, completion over flags and repo ids, a hit shown in full
+by number, `:open` into `$EDITOR` at the right line.
 
-- **History**, on disk, so yesterday's query is one arrow-up away.
-- **Completion** of the flags and of the repo ids, from the config — a
-  repo id is the one thing a person is guaranteed not to remember
-  exactly.
-- **Picking a hit by number**, then reading the whole chunk with its
-  syntax highlighted, or opening it in `$EDITOR` at the right line.
-
-Deliberately not a framework. There is no command language beyond a few
-words starting with `:`; a query is anything else. Growing a parser here
-would be building a second CLI inside the first one, and `typer` already
-has that job.
-
-The query flags are the search command's, because the shell is another
-adapter over the same library — the same rule the HTTP server keeps
-(ADR-10). `--lang python` means in here exactly what it means out there.
+Deliberately not a framework: there is no command language beyond a few
+words starting with `:`, and a query is anything else. The query flags
+are `wsindex search`'s, because this is another adapter over the same
+library — `--lang python` means the same thing in both.
 """
 
 from __future__ import annotations

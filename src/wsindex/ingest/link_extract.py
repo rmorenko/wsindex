@@ -1,37 +1,19 @@
-"""Finding links in chunks that were just produced.
+r"""Finding links in chunks the chunker has already built.
 
-Two rules. The first is the one the step-26 spike measured at zero false
-alarms:
-**code names a port, configuration publishes one.** It is the rule that
-would have caught the 8080/8000 bug — `config.py` defaulting to
-`http://localhost:8080` while `docker-compose.yml` published 8000 — and
-it is deliberately narrow. ADR-9 lists the other edge kinds and the
-evidence each still owes.
+Two kinds, both cheap because the text is already in hand.
 
-The second reaches *outside* the repository: a commit message or a
-document naming a ticket, an issue or a url. Nothing is downloaded — it
-is a cheap bridge, so "why" can reach a ticket without a connector, and
-a connector can bring the contents later.
+The first stays inside the repository: code *reads* a port or a key,
+configuration *declares* one, and a read with no declaration is drift.
+Only the pair ADR-9 measured at zero false alarms is here.
 
-Which prefixes count is entirely the workspace's to say. A built-in
-`PROJ-123` rule is not possible: measured on this repository it matched
-198 times and every hit was an internal number — ADR-7, FR-111 — not a
-ticket. See `Config.references`.
+The second reaches outside: a commit message or document naming a
+ticket, an issue or a url. Nothing is downloaded — it is a bridge, so
+"why" can reach a ticket without a connector.
 
-Why the chunk text and not the parse tree
------------------------------------------
-ADR-9 said edges would come from "a second visitor over the same parse".
-Implementing it showed the value rule does not need a parse at all: a
-`host:port` inside a string is recognisable in text, and the chunks have
-just been built, so their text is already in hand. That is cheaper than
-the ADR's plan, not more expensive, and it keeps the extractor out of
-`ast_chunks`, which would otherwise have to hand its tree back.
-
-It does widen the net: a port written in a comment is matched too. For a
-drift detector that is a feature — a comment claiming the service runs on
-8080 has drifted just as badly as code claiming it — and the measurement
-below says it costs nothing. A rule that needs the tree (calls, imports)
-is when the tree gets threaded through, and not before.
+Which prefixes count is the workspace's to say. A built-in `[A-Z]+-\d+`
+rule looks like a Jira key and also matches `ADR-7`, `UTF-8` and
+`ISO-8601`: measured on this repository it produced 198 matches and not
+one was a ticket.
 """
 
 from __future__ import annotations

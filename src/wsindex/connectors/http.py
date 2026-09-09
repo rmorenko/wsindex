@@ -1,24 +1,17 @@
 """The fallback connector: fetch a url, hand back readable text.
 
 Anything already written in text needs no source-specific knowledge — a
-raw markdown file arrives usable, and that was confirmed against the
-real thing: `README.md` from a raw.githubusercontent url is markdown
-with nothing to convert. HTML is the case that needs work, and it needs only enough to
-stop being markup.
+raw markdown file arrives usable. HTML is the case that needs work, and
+it needs only enough to stop being markup.
 
-How much is enough
-------------------
 Measured on a real documentation page: 83 KB of HTML becomes 6.9 KB of
-text, 8% of the original, with no script or style content leaking
-through. That is the whole justification for doing it with the standard
-library instead of taking a dependency — the remaining 92% is markup and
-JavaScript, and no parser is needed to be sure of that.
+text, 8% of the original, with no script or style leaking through. That
+is the whole justification for using the standard library instead of
+taking a dependency — the remaining 92% is markup and JavaScript.
 
 What it does not do is produce *markdown*: headings and links flatten,
-and navigation chrome ("Skip to content", the nav menu) comes through as
-text. Turning a source's own format into markdown belongs to
-materialization (`wsindex.snapshot`), where there is a file to write and
-a converter per source to pick.
+and navigation chrome comes through as text. Turning a source's own
+format into markdown belongs to `wsindex.snapshot`.
 """
 
 from __future__ import annotations

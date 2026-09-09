@@ -1,26 +1,16 @@
-"""Single-file components: one file, several languages.
+"""Single-file components: one file, several languages inside it.
 
-Every other language in the box is one file, one grammar, one extractor.
-A `.vue` or `.svelte` file is not: it is a container holding a template,
-a script and a style block, each written in a different language, each
-deserving the chunking its own language already knows how to do.
+A `.vue` or `.svelte` file is not written in one language — it is a
+`<template>`, a `<script>` and a `<style>`, each its own. Chunking it as
+one thing would give hits that are three languages at once.
 
-That does not fit `SpanExtractor`, which is handed one parse tree from
-one parser. So a container language declares a *splitter* instead: it
-takes the container's tree and returns `Section`s, and the chunker
-recurses — chunking each section as its own language, then shifting the
-resulting line numbers back into the container's coordinates.
+So a container language declares a `sections` splitter instead of a
+`spans` extractor: it says where each block starts and what language it
+is, and `chunk_file` chunks each with that language's own machinery. A
+`<script lang="ts">` gets the real TypeScript extractor for free.
 
-The recursion is the point. A `<script lang="ts">` block gets the real
-TypeScript extractor, functions and classes and all, because it *is*
-TypeScript; nothing here reimplements any of that. Add a language to the
-box and Vue script blocks written in it start being chunked properly for
-free.
-
-The container's own grammar is HTML, which is enough for both dialects:
-Vue writes explicit `<template>`, `<script>` and `<style>` blocks, and
-Svelte writes bare markup with `<script>` and `<style>` beside it, which
-the same parse describes.
+The tags themselves belong to no section, so the gap pass sweeps them up
+— without it `<script>` and `</script>` would fall out of the index.
 """
 
 from __future__ import annotations

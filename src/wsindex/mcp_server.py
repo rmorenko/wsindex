@@ -1,34 +1,16 @@
 """MCP: the workspace index as tools an agent can call.
 
-The answer to the "IDE plugin" the scope excluded. An agent client —
-Claude Code, an editor's assistant — speaks MCP already, so a plugin per
-editor is a plugin nobody has to write: point the client at
-`wsindex mcp` and it can search the workspace.
+The answer to "is there an IDE plugin": an agent client speaks MCP
+already, so no plugin has to exist. Point it at `wsindex mcp`.
 
-Three tools, and they are the three commands worth calling from outside:
+Three tools — `search`, `refs`, `why` — the three commands worth calling
+from outside. `index` is deliberately absent: a tool an agent may call
+again without thinking should not be minutes of CPU and somebody's git
+remotes.
 
-- `search` — the same funnel as `wsindex search`, filters included.
-- `refs` — everything that names a port, a ticket, a commit, a url.
-- `why` — the commits that wrote a definition, and their reasoning.
-
-`index` is deliberately absent. A tool an agent can call should be one it
-can call again without thinking, and re-indexing a workspace is minutes
-of CPU and somebody's git remotes. Indexing is a decision, and the CLI,
-the scheduler and `POST /index` are all better places to make it.
-
-Two transports, one set of tools
---------------------------------
-`build()` returns a `FastMCP` and knows nothing about how it is reached.
-`wsindex mcp` runs it over stdio, which is what an editor spawns; the
-same object also exposes a streamable-HTTP app, so a workspace already
-running `wsindex serve` can offer MCP on the same port. The
-tool bodies are written once, which is the whole point of building it
-this way rather than twice.
-
-The pipeline is built once and shared, exactly as the HTTP server builds
-it — and searches refresh the store first (ADR-10), so an agent holding
-a long session does not answer from the corpus as it was when the editor
-started.
+`build()` knows nothing about transport. `wsindex mcp` runs it over
+stdio, which is what an editor spawns; `wsindex serve` mounts the same
+object on HTTP. One implementation of the tools, two ways in.
 """
 
 from __future__ import annotations

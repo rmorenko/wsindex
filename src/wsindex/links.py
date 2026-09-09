@@ -1,42 +1,19 @@
-"""Links between chunks, and the one rule that keeps them honest.
+"""Links as entities: a small SQLite store beside the vectors.
 
-A link is an entity, not chunk metadata (ADR-9): the query inverts ("who
-reads this key"), a link outlives the chunk it was found in, and the
-relation is many-to-many with attributes of its own. Equality queries,
-not similarity — so SQLite, not the vector store.
+A link is a fact about a name — that code reads a port, that a config
+declares one, that a commit wrote a chunk's lines. It is an entity rather
+than chunk metadata because the query inverts ("who reads X"), because it
+outlives the chunk it was found in, and because the relation carries
+attributes of its own. See ADR-9 for which edge kinds earned their place.
 
-Both sides are links
---------------------
-The obvious design stores only what code says: "this file references port
-8080". Resolving that needs the other side — what the workspace's configs
-publish — and *that is a cross-file question in an incremental indexer*.
-Re-indexing one changed source file gives no access to config files
-nobody touched.
+SQLite rather than the vector store: this is a join, and a vector store
+that answered joins would be a database with a worse query language.
+It lives in the index directory — local to this machine, like
+`state.json`, even when the vectors sit in S3.
 
-So both sides are stored. Code emits `READS_KEY` ("I reference 8080"),
-config emits `DECLARES` ("I publish 8000"), each attached to the chunk it
-was found in. "Dangling" is then a query — a `READS_KEY` whose name no
-`DECLARES` answers — computed from whatever is in the store right now.
-Nothing has to be resolved at write time, which is what makes it survive
-incremental indexing.
-
-That also makes the drift detector work in the direction that matters
-most. Delete the config that published a port and its `DECLARES` links
-die with its chunks; the code that reads it becomes dangling on the next
-query. The feature and the lifetime rule are the same mechanism.
-
-Lifetimes
----------
-Links are keyed by `chunk_id`, and a chunk id is `sha256(text, path)` —
-it does not survive an edit. `Pipeline` deletes the chunks a changed file
-no longer produces and must delete their links in the same
-breath. Otherwise two things rot: the store grows edges pointing at
-nothing forever, and — worse — those orphans are indistinguishable from
-real dangling links, so the drift report fills with noise from deleted
-code and stops being worth reading.
-
-`delete_by_source` exists for exactly that call, and `Pipeline` makes it
-with the same set it hands `delete_chunks`.
+Links have the lifetime of their source chunk. A link that outlives its
+chunk is indistinguishable from a real dangling one, so the drift report
+would fill with references from code that no longer exists.
 """
 
 from __future__ import annotations

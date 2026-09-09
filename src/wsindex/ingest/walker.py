@@ -1,30 +1,17 @@
 """Which files are worth indexing, one file at a time.
 
-First stage of the indexing pipeline (ARCH §4): produces the WalkedFile
-entries the chunker dispatcher consumes. Reads only file names, sizes and
-a small binary-sniff prefix — never whole file contents.
+Reads only names, sizes and a small binary-sniff prefix — never whole
+contents. No traversal lives here: the pipeline gets its file list from
+git, so what is left is the *policy*.
 
-No traversal lives here any more. The pipeline gets its
-file list from git (`ls-files --cached --others --exclude-standard`)
-rather than from a filesystem walk, so what is left is the *policy*: does
-this one path deserve indexing. A `walk_repo` generator survived that
-change for a while as a tested primitive nobody called, which is how a
-second definition of the policy starts to drift from the first.
-
-Which files count as indexable is not decided here. Suffixes and exact
-names come from the language registry, so registering a `LanguageSpec`
-is enough to make this stage select the files — see
-`wsindex.ingest.languages`. What stays here is the policy that has
-nothing to do with language: pruned directories, the size ceiling, the
-binary sniff.
+Which files count as indexable is not decided here either. Suffixes and
+exact names come from the language registry, so registering a
+`LanguageSpec` is enough to make this stage select the files.
 
 The policy is *per repository*, which is why the tables arrive as
-arguments and the constants below are only defaults. What to index is a
-property of a repository, not of a workspace: in an Angular repo a
+arguments and the constants below are only defaults: in an Angular repo a
 `.component.html` is source, in a Python repo an `.html` is generated
-noise, and no global table can be right for both. `Config.repos` carries
-the two overrides (`ignore`, `formats`) and the pipeline passes them
-down — see `wsindex.config.Repository`.
+noise, and no global table is right for both.
 """
 
 from collections.abc import Mapping, Sequence

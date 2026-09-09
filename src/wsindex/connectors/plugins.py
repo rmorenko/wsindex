@@ -1,46 +1,23 @@
 """Finding connector plugins: entry points in, registered types out.
 
-The same seam the language plugins use (`wsindex.ingest.plugins`),
-pointed at a different registry. A distribution advertises a connector
-class, and the name it advertises it under is the `type` a config entry
-asks for:
+The seam the language plugins use (`wsindex.ingest.plugins`), pointed at
+a different registry. A distribution advertises a `Connector` subclass
+and the name it advertises it under is the `type` a config asks for:
 
-    # in the plugin's pyproject.toml
     [project.entry-points."wsindex.connectors"]
     notion = "wsindex_connector_notion:NotionConnector"
 
-    # in wsindex.toml
-    [[connectors]]
-    type = "notion"
-    url_pattern = "https://www.notion.so/myorg/*"
-    token_env = "NOTION_TOKEN"
+Nothing scans a filesystem: a connector becomes available by being
+*installed*, and the core keeps no list of them.
 
-Nothing here scans a filesystem. The build backend copies those lines
-into the installed distribution's metadata, and `importlib.metadata`
-reads the metadata of everything on `sys.path` — so a connector becomes
-available by being *installed*, and the core keeps no list of them.
+Everything checkable is checked at load, because the failure this exists
+to prevent is a plugin that installs cleanly and then does nothing. A
+type name belongs to whoever registered it first, so a plugin claiming
+`github` is skipped — a config saying `type = "github"` was written
+against the built-in.
 
-Simpler than the language loader in one way and stricter in another.
-Simpler, because a connector needs no spec object to describe it: the
-entry point's name is the type, and the class is the factory (a
-`Connector` subclass is already `Callable[[ConnectorSpec], Connector]`).
-Stricter, because that is checked at load time — an entry point that
-resolves to something else is rejected here rather than at the first
-fetch. The failure this exists to prevent is a plugin that installs
-cleanly and then does nothing, which is the hardest kind to diagnose.
-
-A type name belongs to whoever registered it first — the built-ins,
-because they are in place before any plugin loads, and among plugins
-whichever the metadata yields first. A plugin advertising `github` is
-skipped with a warning, because a config that says `type = "github"` was
-written against the built-in, and quietly changing what that word means
-without the config changing is worse than not loading the plugin. Same
-rule the language registry keeps for a plugin claiming a suffix that is
-already taken.
-
-Warnings, not exceptions, and through `warnings.warn` rather than
-stderr: this is library code, and someone else's broken package must not
-cost the user their workspace.
+Warnings, not exceptions: someone else's broken package must not cost the
+user their workspace.
 """
 
 from __future__ import annotations

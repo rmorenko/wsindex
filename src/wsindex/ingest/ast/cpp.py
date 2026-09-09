@@ -1,22 +1,14 @@
-"""C++ policy: namespaces recurse, classes act like python classes.
+"""C++ policy: definitions win over declarations, classes hold methods.
 
-Two things make C++ unlike its ancestor, and both are structural rather
-than cosmetic:
+The header/source split is the whole difficulty. The same function
+appears twice — declared in the header, defined in the source — and only
+one of them is worth a chunk. A declaration with no body is left to the
+gap pass, so a header reads as prose rather than as fifty one-line
+chunks.
 
-**Namespaces nest the whole file.** A file wrapped in `namespace app {}`
-has exactly one top-level node, so the flat loop every other language
-uses finds nothing. The walk descends into namespace bodies instead — and
-into `extern "C" {}`, which nests the same way.
-
-**A method has two places to live.** Declared inside the class body and
-defined outside it, `void Server::serve(...)`, and the grammar gives the
-out-of-line form a `qualified_identifier` — `Server::serve` already
-spelled with C++'s own separator. Inline methods are qualified by hand to
-match, so both halves of a class answer the same `--symbol Server` query.
-
-Templates wrap the thing they parameterize, so the span covers the
-`template <...>` line and the name comes from inside — the same unwrap
-python does for decorators.
+Qualified names (`Greeter::greet` in a source file) are kept as written:
+that is how a person searches for them, and reassembling the class name
+from a header the chunker may never have seen is not possible anyway.
 """
 
 from __future__ import annotations

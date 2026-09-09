@@ -1,24 +1,16 @@
 """The command line: one table of contents, and the commands themselves.
 
-Every invocation is a fresh process. State shared between commands has
-two very different owners:
-
-- `wsindex.toml` — the workspace declaration (repo list, backend
-  choice). Human-edited, read on every command, small. Found by the
-  four-mode resolver in `wsindex.paths` (workspace-first, XDG-fallback).
-- The index database — tool-managed, accumulates chunks and embeddings
-  across `index` runs; deduplication reads it before the (expensive)
-  embedding step, which is why re-indexing is incremental. Cannot be
-  safely hand-edited or naively copied. Its location follows the config.
+Every invocation is a fresh process. Two kinds of state outlive it: the
+human-edited `wsindex.toml`, read on every command, and the index
+database, which the tool owns and which cannot be safely hand-edited.
 
 Each command asks the config for the workspace, does one thing, saves if
 it mutated anything, and speaks human: expected failures go to stderr
-and exit with code 1, a traceback in the output is always a bug.
+with exit code 1, and a traceback in the output is always a bug.
 
-The commands live in modules beside this one, grouped by what a person
-came to do, and are registered here rather than decorated in place. That
-keeps the whole surface visible in one list — and keeps every module
-free of an import back to this one.
+Commands live in modules beside this one, grouped by what a person came
+to do, and are registered here rather than decorated in place — so the
+whole surface is one list, and no command module imports this one.
 """
 
 import typer

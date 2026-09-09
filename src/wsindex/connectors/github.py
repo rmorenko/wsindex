@@ -1,24 +1,17 @@
 """GitHub issues and pull requests, through the REST API.
 
-First after the generic fallback because the workspaces this was built
-for live on GitHub, so it can be checked against something real rather
-than described. The API was asked before this was written, and three
-answers are baked in below.
+Three answers from asking the API before this was written:
 
 **An issue and a pull request are one endpoint.** `/issues/{n}` answers
 for both — a PR is an issue with extra fields — so there is no url shape
-to disambiguate and no second code path. `github.com/o/r/pull/7` and
-`github.com/o/r/issues/7` route to the same request.
+to disambiguate and no second code path.
 
-**The body is already markdown.** Nothing is converted; the text stored
-is the text the author wrote.
+**The body is already markdown.** Nothing is converted.
 
 **A private repository answers 404, not 403.** Indistinguishable from a
-document that does not exist, by policy rather than by accident — which
-is why `DocumentNotFound` says "not there, or not visible" and why the
-connector refuses to run anonymously when a token was configured. An
-unauthenticated caller also gets 60 requests an hour, which is another
-reason to notice a missing token early rather than at the 61st fetch.
+document that does not exist, by policy rather than accident — which is
+why `DocumentNotFound` says "not there, or not visible" and why a
+connector configured with a token refuses to run without it.
 """
 
 from __future__ import annotations

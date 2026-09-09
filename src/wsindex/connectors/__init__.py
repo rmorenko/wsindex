@@ -1,41 +1,23 @@
 """Fetching one external document, and deciding who fetches it.
 
 A connector is a *pointed pull*, not a crawler: given a url — one a
-reference in a commit message pointed at (see `wsindex.ingest.link_extract`),
-or one a person
-typed — bring back that document. Nothing walks a wiki space. That
-boundary is what keeps the cost of an external source proportional to
-what the repository actually mentions.
+reference pointed at, or one a person typed — bring back that document.
+Nothing walks a wiki space, which is what keeps the cost of an external
+source proportional to what the repository mentions.
 
-Which connector answers a url is routing, and routing is configuration:
+Which connector answers a url is configuration:
 
     [[connectors]]
     type = "github"
     url_pattern = "https://github.com/myorg/*"
     token_env = "GITHUB_TOKEN"
 
-Secrets never live in the config — the same discipline the S3 backend
-keeps (ADR-7) and `wsindex sync` keeps for remotes. The config names an
-*environment variable*; the value is read at fetch time and never
-written anywhere.
+Secrets never live in the config — the discipline the S3 backend keeps
+(ADR-7). The config names an *environment variable*.
 
-What the probes changed
------------------------
-Each source was asked before any of this was written, and two answers
-shaped the contract:
-
-- **GitHub answers 404 for a private repository you cannot see**, not
-  403 — indistinguishable from a document that does not exist. So
-  `DocumentNotFound` says both, and a connector that was configured with
-  a token env var refuses to run without it rather than producing that
-  same unattributable 404.
-- **An issue and a pull request are one endpoint.** `/issues/{n}`
-  answers for both, so there is no url shape to disambiguate.
-
-Custom connectors come from entry points under `wsindex.connectors` —
-the same seam the language plugins use. `BUILTIN` below is what the
-loader merges into; see `wsindex.connectors.plugins`, and
-`examples/wsindex-connector-notion` for a worked one.
+`DocumentNotFound` is deliberately vague about why: GitHub answers 404
+for a repository you lack access to exactly as for one that does not
+exist, so claiming "no such document" would be a guess.
 """
 
 from __future__ import annotations

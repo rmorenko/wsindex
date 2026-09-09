@@ -1,37 +1,21 @@
 """Workspace configuration: the `wsindex.toml` file, as one live object.
 
-The config is the single source of truth for a workspace: which
-vector-store backend to use, which embedding model, and which
-repositories to index. The TOML layout is also the in-memory form —
 `Config` keeps the parsed document as a dict and exposes one read-only
 property per field, so the file format has a single definition and every
 reader still goes through a typed accessor.
 
-`Config` is a singleton class: `__new__` caches the one instance on the
-class, so `Config()` anywhere in the process returns the same object and
-no subsystem needs the config threaded through its constructor. The first
-construction decides where the document comes from — `Config(path)` reads
-that file, `Config()` discovers one (see `wsindex.paths.find_config`).
-Nothing on disk is not an error: it means the built-in `Config.DEFAULT`
-and `is_default` set. Saying so out loud belongs to whoever has a user to
-say it to — the CLI warns; this module never writes to a stream. No file
-is ever written as a side effect either; only `wsindex init` creates one.
+A singleton class: `__new__` caches the one instance, so `Config()`
+anywhere in the process returns the same object and no subsystem needs
+the config threaded through its constructor. Nothing on disk is not an
+error — it means `DEFAULT` and `is_default` set; saying so out loud
+belongs to whoever has a user to talk to.
 
 What a document is made of lives in `.schema`, what makes one valid in
-`.validate`, and how one is written back out in `.document`. They change
-for different reasons, which is why they are apart.
+`.validate`, how one is written back out in `.document`.
 
-Tests drop the cached instance between cases via `Config.reset()` —
-pytest never reimports modules, so an instance cached on the class
-outlives a test exactly like module-level state would.
-
-Deliberately not a dataclass. A dataclass is a value object: `__eq__` by
-fields, one instance per distinct value. A singleton is an identity
-object: one instance, period. Generating value semantics for a type that
-has exactly one instance is a contradiction, and `__init__` has to be
-hand-written anyway because it must be idempotent — Python calls it on
-every `Config(...)`, including the calls `__new__` answered from the
-cache.
+Not a dataclass, deliberately: a dataclass is a value object, one
+instance per distinct value; a singleton is an identity object. `reset()`
+drops the instance, which is what test isolation needs.
 """
 
 from __future__ import annotations
@@ -358,26 +342,18 @@ class Config:
             url_pattern = "https://github.com/myorg/*"
             token_env = "GITHUB_TOKEN"
 
-        First match wins, which is why order is preserved rather than
-        sorted: a person writing this file expects the specific entry
-        above the catch-all to be the one that answers.
+        First match wins, so order is preserved rather than sorted: a
+        person writing this file expects the specific entry above the
+        catch-all to answer. `token_env` names a variable, never a token.
 
-        `token_env` names an environment variable, never a token. A
-        config file is committed; a credential is not — the same rule
-        the S3 store keeps (ADR-7) and `wsindex sync` keeps for remotes.
+        An entry missing `type` or `url_pattern` is skipped rather than
+        fatal: it routes nothing, and a typo here must not take the
+        workspace down.
 
-        Entries missing `type` or `url_pattern` are skipped: an
-        incomplete one routes nothing, and refusing to load the whole
-        config over it would take the workspace down for a typo in a
-        section nothing else depends on.
-
-        Absent from `DEFAULT` deliberately, unlike every other optional
-        section. `wsindex init` would otherwise write `connectors = []`,
-        and TOML does not let a static array become an array of tables —
-        so the one documented way to add an entry, appending a
-        `[[connectors]]` block, would fail on a freshly initialized
-        workspace. An empty default that blocks the only way to fill it
-        is worse than no default.
+        Absent from `DEFAULT` deliberately. `wsindex init` would
+        otherwise write `connectors = []`, and TOML does not let a static
+        array become an array of tables — so the one documented way to
+        add an entry would fail on a fresh workspace.
         """
         found: list[ConnectorSpec] = []
         for entry in self._data.get("connectors", []):

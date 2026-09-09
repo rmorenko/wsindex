@@ -3,27 +3,18 @@
 Two ways for work to start, because two things cause it: time passes, or
 somebody pushes.
 
-- **A tick.** Every `[server] interval` seconds, do what `wsindex sync`
-  does — pull the repos that have a remote, materialize the snapshots
-  that have connectors, then index. Off unless an interval is
-  configured, because a server that starts doing network work on its own
-  is a surprise, and surprises in this direction cost somebody's rate
-  limit.
-- **A hook.** `POST /hooks/sync` runs the same thing immediately. Any
-  git host can be pointed at it; nothing here parses a provider's
-  payload, because parsing it would mean claiming to support that
-  provider's every event shape. The body is ignored on purpose — the
-  hook says "something changed", and the run is incremental anyway, so
-  the cheapest correct answer to any push is the same one.
+The tick does what `wsindex sync` does, every `[server] interval`
+seconds. Off unless configured — a server that starts doing network work
+on its own spends somebody's rate limit.
 
-Both go through the same lock as `POST /index`, and both decline rather
-than queue when a run is in progress (ADR-10: one writer). A scheduler
-that queued would turn a slow corpus into an ever-growing backlog of
-runs that each make the next one redundant.
+The hook, `POST /hooks/sync`, runs the same thing now. Its body is
+ignored on purpose: parsing a provider's payload would claim support for
+that provider's every event shape, and "something changed" is all an
+incremental run needs.
 
-Threads, not asyncio: the work is `Pipeline.index`, which is CPU-bound
-Python and blocking git. A coroutine would block the event loop and stop
-the server answering searches — the one thing it exists to do.
+Both decline rather than queue when a run is in progress (ADR-10), and
+both run in threads: the work is blocking git and CPU-bound Python, and
+a coroutine would stop the server answering searches.
 """
 
 from __future__ import annotations

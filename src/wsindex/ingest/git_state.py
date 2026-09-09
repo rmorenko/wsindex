@@ -1,55 +1,18 @@
 """Git state for incremental indexing: what changed since the last run.
 
-`VectorStore.delete_chunks` gave the store the ability to forget; this
-module answers the question that makes the ability useful — *which* files
-changed, so `Pipeline.index` can re-chunk only those and delete what
-disappeared. Nothing here imports the pipeline or the config.
-
-Git-only, by decision: a repo that is not a git repository is a
-configuration error with a message, not a silent fall back to a full walk.
-One code path, one model of state — a fallback would double both.
-
-Two things live here, and they are deliberately different in kind:
+Two things live here, deliberately different in kind:
 
 - **The diff** (`diff_since`) is derived: git owns the truth, we only ask.
-- **The state** (`IndexState`) is ours: the commit each repo was last
-  indexed at. It is a *cache*, not intent — the config says which repos to
-  index, this says how far we got. That distinction drives the error
-  policy below.
+- **The state** (`IndexState`) is ours — the commit each repo was last
+  indexed at, plus a fingerprint of the markup that produced it. It is a
+  *cache*, not intent, which is why a missing or unreadable one costs a
+  full pass rather than an error.
 
-Where the state lives is the caller's business, but the intended home is
-`Config.index_dir` — always a local filesystem path, even when the vectors
-themselves sit in S3 (`[store] uri`). Per-machine on purpose: two hosts
-sharing one S3 index may sit on different branches, and a shared "last
-indexed commit" would make each one's diff meaningless. Local state costs
-at worst redundant work, which dedup by `chunk_id` absorbs; shared state
-would cost silently skipped work, which nothing catches.
+Git-only, by decision: a repo that is not a git repository is a
+configuration error with a message, not a silent fall back to a full
+walk. One code path, one model of state.
 
-Error policy follows the intent/cache split. A config that cannot be
-parsed is fatal (see `wsindex.config`) — it is the user's intent and
-guessing would index the wrong thing. A state file that cannot be parsed
-is *not*: it is a cache, so a corrupt or future-versioned one degrades to
-"nothing indexed yet" and the next run rebuilds it. Recoverable by
-construction, and it costs only time.
-
-Subprocess hygiene, since every call here shells out to git:
-
-- Argument lists, never `shell=True`: a repo path with a space or a `;`
-  is a filename, not a command.
-- Plumbing over porcelain where a stable format exists (`rev-parse`,
-  `diff --name-status`, `ls-files`). Porcelain output is meant for humans
-  and may change between git releases. The one exception is
-  `status --porcelain`, which is explicitly documented as the stable
-  machine format and is the only way to see untracked files as well as
-  modified ones (see `has_uncommitted_changes`).
-- `-z` everywhere paths come back: NUL-separated records are immune to
-  git's quoting of unusual filenames (`"a\\nb"`), which the default
-  output would apply and we would then have to unquote by hand.
-- Paths are decoded with `surrogateescape`: git stores bytes, and a
-  filename that is not valid UTF-8 must survive the round trip instead of
-  crashing the run.
-- `GIT_OPTIONAL_LOCKS=0`: every command here is read-only, so none of them
-  should take `.git/index.lock` and race a git the user is running.
+Nothing here imports the pipeline or the config.
 """
 
 from __future__ import annotations

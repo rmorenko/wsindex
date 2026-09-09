@@ -1,32 +1,17 @@
-"""Commits as corpus: messages become chunks, blame becomes edges.
+"""Commit messages as corpus, blame as edges.
 
 A repository's reasoning is not in its code. "Why is dedup before
-embedding" is answered in a commit message and nowhere else — the step-26
-spike confirmed it, on this repository, for that exact question. Indexing
-the code without the messages leaves the most valuable half on the floor.
+embedding" is answered in a commit message and nowhere else, so the
+history is indexed alongside the files.
 
-Two halves, and only the second one costs anything:
+Two halves. Reading the log is cheap — milliseconds for a whole history
+— and each message becomes one chunk under a synthetic path
+(`commits/2026-09-09-abc1234`), because a commit has no file. Blame is
+the expensive half at ~28 ms per file, so it is paid per *indexed* file,
+which the incremental pass already keeps down to what changed.
 
-- **Messages become chunks**, searchable like any other text. `git log`
-  over this repository's whole history takes 23 ms, so there is nothing
-  to optimize and no flag to hide it behind.
-- **Blame becomes links.** `git blame --porcelain` costs ~28 ms per
-  file, so the price is paid per *indexed* file — which the incremental
-  pipeline already keeps down to what changed. A cold pass over 67 files
-  is under two seconds; a one-file re-index is one blame call.
-
-One chunk per commit, on purpose
---------------------------------
-A long message could be windowed like a doc, and is not. The reasoning
-in a commit message is one argument; splitting it across chunks would
-scatter exactly what `wsindex why` is meant to hand back whole.
-
-Which commits
--------------
-Incrementally, the ones the repo gained since the last indexed commit —
-the pipeline already knows that boundary. On a full pass, the most recent
-`MAX_COMMITS`, because a repository's history is unbounded and its
-distant past is not what anyone is asking about.
+An untracked file has no history and simply gets no edges; git says so
+with an error, and that is a normal answer here rather than a failure.
 """
 
 from __future__ import annotations

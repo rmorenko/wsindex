@@ -1,29 +1,17 @@
-"""What a language is, to wsindex: the plugin specification and its registry.
+"""What a language is, as one value the whole pipeline reads.
 
-Until this module a language was spread across four
-unrelated tables — two parser tables, two extractor tables — plus a fifth
-in the walker that nothing else could see. Adding one meant editing three
-files and knowing which; adding one *from outside the package* was simply
-impossible, because the walker's suffix table was a module constant.
+A language used to be spread across four tables in three modules — the
+walker's suffix map, the chunker's parser table, its extractor table,
+the container list — and adding one meant finding all four. A
+`LanguageSpec` is that language: how to recognize its files, how to parse
+them, how to split them.
 
-A `LanguageSpec` is that scattered knowledge as one value: how to
-recognize the file, what to call the language, and (for code and configs)
-which grammar parses it and which extractor turns its tree into spans.
-Register a spec and every stage picks it up — the walker starts selecting
-those files, the chunker starts routing them.
+The registry holds the specs and the tables derived from them. Parsers
+are built lazily and dropped whenever a spec is registered, which is what
+lets plugins arrive after this module is imported.
 
-That is the whole contract a plugin has to satisfy. The loader that finds
-plugins through entry points is `wsindex.ingest.plugins`; this module
-only defines what it will hand over, and validates it. `register` is deliberately strict and
-raises: a malformed spec is a bug in the plugin, and the loader is the
-right place to decide that one bad plugin should be a warning rather than
-a dead workspace.
-
-Grammars stay optional in the way they already were. A spec may name a
-grammar module that is not installed (the `ast` extra is optional); the
-registry then has no parser for it and the chunker falls back to plain
-text windows. Declaring the grammar is a statement of intent, not a
-runtime dependency.
+Loading plugins is `wsindex.ingest.plugins`; this module only defines
+what one may hand over.
 """
 
 from __future__ import annotations

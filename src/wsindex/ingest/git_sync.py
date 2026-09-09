@@ -1,28 +1,17 @@
 """Keeping working copies up to date: clone, fetch, fast-forward.
 
-The piece that makes a workspace self-sufficient: with a `remote` on a
-repo, `wsindex sync` produces the working copy `index` then reads. The
-server's scheduler runs the same thing on a timer; here it is a command
-the user runs.
-
 Separate from `git_state` on purpose. That module *observes* — it asks
 git what changed and never writes. This one *changes the working copy*,
-which is a different kind of risk and deserves its own place. Both run
-their commands through `git_state.run_git`, so there is exactly one
-implementation of "invoke git safely".
+which is a different kind of risk.
 
 The policy on local work is the whole design, and it is deliberately
 timid: **never touch anything the user has not pushed.** Uncommitted
-changes, or local commits the remote does not contain, both mean sync
-declines and says so. A tool that silently discarded either would be
-unusable for the only workflow that matters — a developer's own checkout.
-So the only write this module ever performs is a fast-forward, which by
-definition destroys nothing, and a clone into a directory that did not
-exist.
+changes, or local commits the remote does not have, both mean sync
+declines and says so. The only write it performs is a fast-forward, which
+destroys nothing, and a clone into a directory that did not exist.
 
-That timidity costs nothing downstream: `index` handles a dirty tree by
-falling back to a full pass, so declining to sync degrades
-speed, never correctness.
+That timidity costs nothing downstream: `index` handles a dirty tree with
+a full pass, so declining degrades speed, never correctness.
 """
 
 from __future__ import annotations

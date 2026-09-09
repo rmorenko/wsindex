@@ -1,55 +1,19 @@
 """Materializing external documents into a git snapshot repository.
 
-What a connector fetches does not go into the store. It is written to
-disk as markdown, in a directory that is itself a git repository, and
-every sync is one commit. The store then learns about it the ordinary
-way — the snapshot is a `[[repos]]` entry like any other.
+What a connector fetches is not stored directly. It is written as
+markdown into a directory that is itself a git repository, one commit per
+sync, and `index` then reads that repository like any other checkout —
+the snapshot is a `[[repos]]` entry.
 
-That indirection buys four things at once, and it is why the fetched
-text never touches the store directly:
+That buys incremental indexing for free (a document that did not change
+produces no commit), an honest `file:line` (the line is in a file that
+exists; the url is in the frontmatter), and a readable history of a
+source that often keeps none.
 
-- **The git-only invariant survives.** Everything wsindex indexes is a
-  git working copy, so incremental indexing works here without a single
-  change: a document that did not change
-  produces no commit, so `diff_since` reports nothing and the sync costs
-  no embeddings.
-- **`file:line` stays honest.** A hit points at a line of a file that
-  exists, in a snapshot that can be opened and read. The source's url is
-  in the frontmatter, so the live document is one hop away, but the
-  citation is not a claim about a page that may have changed since.
-- **The git log of the snapshot is the history of the source.** A wiki
-  that keeps no readable history, or a tracker whose history is a list
-  of field changes, becomes `git log -p`.
-- **It is reversible.** The snapshot is files; deleting it costs
-  nothing, and nothing else in the workspace has to know it existed.
-
-The probe behind the third point
---------------------------------
-"Every sync is a commit" is worth nothing if an unchanged document comes
-back different — the log would then record noise at whatever interval
-the sync runs, which is worse than no history at all. So it was
-measured: four real documents fetched twice, several seconds apart — a
-GitHub issue, a raw markdown file, and two HTML pages. All four came
-back byte-identical, text and metadata alike.
-
-So stability is a property of the *sources*, and the one thing that
-could break it is us. That is why the frontmatter carries no fetch
-timestamp: a `fetched_at` field would make every sync a diff, turn the
-log into a heartbeat, and re-embed every document on every run. What is
-recorded is what the source said about the document, and nothing about
-the act of fetching it.
-
-Paths are derived, not stored
------------------------------
-A url maps to a file path by a pure function (`document_path`), so the
-set of files a config *should* produce is known without touching the
-network. That is what makes pruning safe: a document dropped from the
-config is deleted, while a document whose fetch failed this run keeps
-its file. A network blip must not read as "the page was deleted" in a
-history whose whole purpose is to say when things changed.
-
-A url is external input that decides a filename, so `document_path`
-defends itself — see its docstring for what the probe found there.
+It rests on one measured fact: four real documents fetched twice, several
+seconds apart — a GitHub issue, a raw markdown file, two HTML pages —
+came back byte-identical. So the frontmatter carries no fetch timestamp,
+which would make every sync a diff and re-embed everything.
 """
 
 from __future__ import annotations
@@ -147,32 +111,24 @@ def _segment(raw: str) -> str:
 def document_path(url: str) -> PurePosixPath:
     """Where a url's document lives inside the snapshot.
 
-    A pure function of the url, which is what lets the snapshot be
-    reconciled without the network (see the module docstring). The shape
-    mirrors the source — `github.com/org/repo/issues/7.md` — so the
-    directory tree reads like the site it came from and the doc chunker
-    gets a path worth showing in a search hit.
+    Pure, so the files a config should produce are known without the
+    network — which is what makes pruning safe. The shape mirrors the
+    source (`github.com/org/repo/issues/7.md`).
 
-    Four defences, each answering something measured on real and hostile
-    urls:
+    A url is external input that names a file, so four defences, each
+    answering something measured on real and hostile urls:
 
-    - **Traversal.** `https://host/../../etc/passwd` and its
-      percent-encoded twin both reach `_segment`, which drops `..` and
-      turns `%2e%2e` into an ordinary name. Nothing is percent-decoded on
-      the way, so there is no second decoding pass to be tricked.
-    - **Credentials.** `hostname` rather than `netloc`: a url of the form
-      `https://user:token@host/page` would otherwise write the token into
-      a directory name — and this directory is a git repository someone
-      may push.
-    - **Collisions.** The query string is part of the name.
-      `wiki?page=Home` and `wiki?page=Other` are two documents, and
-      dropping the query would have quietly made them one file.
-    - **Length.** A 300-character segment is truncated with a hash of the
-      original appended, so it stays under the filesystem's limit and
-      stays unique.
+    - **Traversal.** `../..` and `%2e%2e` segments are dropped rather
+      than resolved; nothing is percent-decoded, so there is no second
+      decoding pass to trick.
+    - **Credentials.** `hostname`, not `netloc`: `user:token@host` would
+      otherwise write the token into a directory of a git repository.
+    - **Collisions.** The query is part of the name — dropping it made
+      `wiki?page=Home` and `wiki?page=Other` one file.
+    - **Length.** A 300-character segment is truncated with a hash.
 
-    The fragment is dropped on purpose: `#section` names a place inside a
-    document, not another document.
+    The fragment is dropped: `#section` names a place inside a document,
+    not another document.
 
     Args:
         url: The document's url, as configured.

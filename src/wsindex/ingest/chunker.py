@@ -65,29 +65,19 @@ def _chunk_container(
     """Chunk each section as its own language, back in file coordinates.
 
     The recursion is what makes a container cheap: a `<script lang="ts">`
-    block is handed to `chunk_file` as TypeScript and gets the real
-    TypeScript extractor, so nothing here knows anything about
-    TypeScript. Teaching the box a new language teaches it to Vue script
-    blocks at the same time.
+    block is handed to `chunk_file` as TypeScript, so nothing here knows
+    anything about TypeScript.
 
-    Two things are rewritten on the way back:
+    Two things are rewritten on the way back. **Line numbers**, because a
+    section is chunked as if it were a file and would otherwise point at
+    the top of it. And **language**: chunks keep the container's name, or
+    a `.vue` file whose chunks claimed to be TypeScript would be the one
+    thing `--lang vue` could not find. The section's own shape survives
+    in `node_type`.
 
-    - **Line numbers.** A section is chunked as if it were a file, so its
-      chunks start at line 1. The section's own offset is added back, or
-      every hit in a component would point at the top of the file.
-    - **Language.** Chunks keep the *container's* name, not the section's.
-      `lang` answers "what kind of file is this" everywhere else in the
-      index — the walker assigns it from the suffix — and a `.vue` file
-      whose chunks claimed to be TypeScript would be the one thing
-      `--lang vue` could not find. The section's own shape survives in
-      `node_type`, which the sub-chunker filled in.
-
-    What is left over then goes through the same gap pass every language
-    gets. A section covers what is *between* the tags, so `<script>` and
-    `</script>` belong to no section at all — without the sweep those
-    lines would silently fall out of the index, and the invariant that
-    every non-blank line lands in exactly one chunk would hold everywhere
-    but here.
+    The leftovers go through the usual gap pass: a section covers what is
+    *between* the tags, so `<script>` and `</script>` belong to none, and
+    without the sweep those lines would fall out of the index.
 
     Args:
         sections: What the container's splitter returned.

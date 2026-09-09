@@ -234,32 +234,22 @@ def _xml_walk(element: Node, path: list[str], covered: list[bool], *, depth: int
 def xml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Runs of sibling elements, windowed, with the element path as symbol.
 
-    Not "one chunk per top-level element", which is what the sibling
-    extractors above do and what this one cannot: a TOML file has many
-    top-level tables, an XML file has exactly *one* root element. Taken
-    literally that rule produces one chunk per file — measured on Maven's
-    own `pom.xml`, `<project>` is 1287 of its 1306 lines.
+    Not "one chunk per top-level element" like the extractors above: a
+    TOML file has many top-level tables, an XML file has exactly one root.
+    Measured on Maven's own `pom.xml`, `<project>` is 1287 of 1306 lines,
+    so that rule gives one chunk per file.
 
-    One chunk per *child* of the root is the obvious correction and it is
-    wrong at both ends, which is why it was measured on real files before
-    any of this was written:
+    One chunk per *child* of the root is wrong at both ends, and both ends
+    were measured: Tomcat's `web.xml` has 1029 children of four lines
+    each, and Maven's pom has a `<dependencyManagement>` of 514 — most of
+    it past what the embedding model reads.
 
-    - Tomcat's `web.xml` has **1029 children of the root**, four lines
-      each. A thousand embeddings for one file, and not one of them a
-      passage anybody would want returned.
-    - Maven's `pom.xml` has a `<dependencyManagement>` of **514 lines**.
-      One chunk, most of it past what the embedding model reads — the
-      tail is indexed in name only.
+    So the unit is a run of siblings up to `WINDOW_LINES`, the same window
+    the text chunker uses, and any element too big for that is descended
+    into. Result: 47 chunks for Maven's pom, 109 for Tomcat's web.xml, 1
+    for an Android manifest.
 
-    So the unit is a *run* of siblings up to `WINDOW_LINES` long — the
-    same window the text chunker uses, because it encodes the same
-    judgement about how much text one chunk should hold — and any single
-    element too big for that is descended into instead. On the same
-    files: 47 chunks for Maven's pom (median 28 lines), 109 for Tomcat's
-    web.xml (median 40), 1 for an Android manifest.
-
-    Whatever is left — the prolog, comments between elements, an element
-    the walk did not claim — falls to the gap pass, as everywhere else.
+    Whatever is left falls to the gap pass, as everywhere else.
     """
     spans: list[Span] = []
     for top in _xml_elements(root):

@@ -1,30 +1,15 @@
 """One extractor for the languages shaped like "a class holds methods".
 
-C#, Kotlin, PHP and Ruby differ in almost everything except the shape
-that matters here: something optional wraps the file (a namespace, a
-module), types hold members, and some declarations stand alone. Writing
-that walk four times would have been four chances to get the gap pass
-subtly wrong — the bug that shows up as a line silently missing from the
-index, or counted twice.
+Python, Java, Rust, TypeScript, C#, Kotlin, PHP and Ruby differ in almost
+everything except the shape that matters here: something optional wraps
+the file, types hold members, and some declarations stand alone. Writing
+that walk eight times would have been eight chances to get the gap pass
+subtly wrong — the bug that shows up as a line missing from the index.
 
 So the walk is written once and each language supplies a `NestedPolicy`:
-which node types are containers, which are types, which are members, and
-what separator the language writes between a type and its method. The
-policy is data; the only code per language is the module that declares it.
-
-The three roles, and why the distinction earns its keep:
-
-- **Containers** (`namespace`, `module`) hold declarations but are not
-  worth a chunk of their own. The walk descends and their braces fall to
-  the gap pass. Without this a C#-style file — one namespace wrapping
-  everything — would yield exactly one chunk.
-- **Types** (`class`, `object`, `trait`) get the python treatment:
-  each member becomes its own chunk named `Type<sep>member`, and whatever
-  class lines nothing claimed (the header, fields, access modifiers)
-  become one more chunk carrying the type name, so they stay findable.
-- **Standalone** (`interface`, `enum`, a top-level function) is claimed
-  whole. A node type may be standalone *and* a member: a Ruby `def` is a
-  method inside a class and a function outside one.
+which node types are containers, types and members, what separates a type
+from its member, what wraps a definition and what precedes it. The policy
+is data; the only code per language is the module that declares it.
 
 Deliberately not handled: a type nested inside another type. Its members
 fall into the outer type's remainder chunk, which is what python already

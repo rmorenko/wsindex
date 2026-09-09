@@ -1,35 +1,22 @@
 """Finding language plugins: entry points in, registered languages out.
 
-`LanguageSpec` says what a plugin must hand over; this is how a plugin
-wsindex has never heard of gets to hand it over at all.
+A distribution advertises objects for other packages to find by
+declaring entry points in its build config:
 
-The mechanism is Python's own. A distribution advertises objects for
-other packages to find by declaring *entry points* in its build config:
-
-    # in the plugin's pyproject.toml
     [project.entry-points."wsindex.languages"]
-    go = "wsindex_lang_go:GO"
+    lua = "wsindex_lang_lua:LANGUAGES"
 
-Nothing about that is dynamic discovery in the "scan the filesystem"
-sense. The build backend copies those lines into the installed
-distribution's metadata (`*.dist-info/entry_points.txt`), and
-`importlib.metadata.entry_points` reads the metadata of everything on
-`sys.path`. So a plugin becomes visible by being *installed*, not by
-being imported by us or listed in our config — which is the point: the
-core has no list of plugins to keep up to date.
+The build backend copies those into the installed distribution's
+metadata, and `importlib.metadata` reads the metadata of everything on
+`sys.path` — so a plugin becomes visible by being *installed*, not by
+being listed in our config.
 
-`value` is `module:attribute`, and `.load()` imports the module and
-returns the attribute. That attribute may be one `LanguageSpec` or an
-iterable of them, so a plugin covering several dialects needs one entry
-point rather than one per language.
+The advertised object may be one `LanguageSpec` or an iterable of them,
+so a plugin covering several dialects needs one entry point.
 
-A broken plugin is a warning and a skip, never an exception. Someone
+A broken plugin is a warning and a skip, never an exception: someone
 else's package failing to import must not cost the user their workspace,
-and the failure modes are all things the core cannot fix: a plugin built
-against an older wsindex, a missing transitive dependency, two plugins
-claiming `.go`. Warnings go through `warnings.warn` rather than to
-stderr, because this is library code — the same discipline `config` keeps
-about not owning a stream (`wsindex.cli` is what has a user to talk to).
+and every failure mode here is one the core cannot fix.
 """
 
 from __future__ import annotations

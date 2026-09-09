@@ -1,40 +1,21 @@
 """HTTP over the same Pipeline: search, index, status.
 
-Deliberately the smallest thing that can be called a server. Every
-endpoint is a call into the library and a rendering of what it returned
-— there is no indexing code here, no chunking, no store access that
-`Pipeline` does not already do. ADR-10
-puts it plainly: an endpoint that cannot be expressed as a library call
-means the library is missing something, not that the server should grow
-it.
+The smallest thing that can be called a server: every endpoint is a call
+into the library and a rendering of what it returned. ADR-10 draws the
+line — an endpoint that cannot be written that way means the library is
+missing something.
 
-Which is why the contract mirrors the CLI's. `GET /search?q=...&k=&repo=`
-is `wsindex search --repo`; `POST /index` is `wsindex index`. Two
-interfaces over one engine stay honest only while they say the same
-things, and the cheapest way to keep them saying the same things is to
-give them the same words.
+The contract mirrors the CLI's, down to the words: `GET /search?q=&repo=`
+is `wsindex search --repo`. Two interfaces over one engine stay honest
+only while they say the same things.
 
-Authentication
---------------
-A bearer token, named by the config as an environment variable and never
-written in it — the rule connectors keep and the S3 store keeps (ADR-7).
-With `token_env` set and the variable empty the server refuses to start:
-a search index over private repositories is not a thing to begin serving
-by accident. With no `token_env` at all the
-server is open, which is a decision a person has to write down.
+Authentication is a bearer token named by the config as an environment
+variable. With `token_env` set and the variable empty the server refuses
+to start; with no `token_env` it is open, which someone has to write down.
 
-State
------
-One `Pipeline`, built once at startup and shared. That is safe for reads
-because `Pipeline.search` refreshes the store first (ADR-10), and it is
-what makes a request cheap: building a pipeline means loading an
-embedding model.
-
-Writes are serialized by a lock. Not for correctness — concurrent writers
-were measured losing nothing (ADR-10) — but because two indexing
-runs of the same repo do the same work twice and neither shortens the
-other's next pass. One at a time, and the second caller is told the
-first is running rather than made to wait.
+One Pipeline, built at startup and shared — safe for reads because
+`Pipeline.search` refreshes the store first. Writes take a lock that
+refuses rather than queues: two indexing runs do the same work twice.
 """
 
 from __future__ import annotations

@@ -186,15 +186,15 @@ class Pipeline:
     def index(self, *, progress: Callable[[str], None] | None = None) -> IndexReport:
         """Index every repo into its own dataset (dataset name = repo id).
 
-        Incremental against git. A repo goes down the fast path when it
-        has been indexed before *and* its working tree is clean; then
-        only the files git reports as changed since that commit are read,
-        and the chunks those files no longer produce are deleted.
+        Incremental against git: a repo goes down the fast path when it
+        has been indexed before *and* its working tree is clean. Then only
+        the files git reports as changed are read, and the chunks they no
+        longer produce are deleted.
 
         Args:
             progress: Called with each repo id as that repo is reached,
-                so a caller can show that seconds of silence are work.
-                None keeps the run silent, which is what a pipe wants.
+                so a caller can show that silence is work. None keeps the
+                run silent, which is what a pipe wants.
 
         A dirty working tree forces a full pass, and the run records no
         new commit for that repo. This is not pessimism, it is the only
