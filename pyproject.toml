@@ -29,6 +29,8 @@ dependencies = [
   "lancedb>=0.37.1",
   "numpy>=2.4,<3",
   "platformdirs>=4,<5",
+  # Typer ships it today, but the CLI imports it directly now.
+  "rich>=13,<16",
   "tomli-w>=1.2,<2",
   "typer>=0.27,<1",
 ]
@@ -43,6 +45,8 @@ server = [
   "uvicorn>=0.34,<1",
   "python-multipart>=0.0.20,<1",
 ]
+shell = ["prompt-toolkit>=3.0,<4"]
+mcp = ["mcp>=1.2,<2"]
 ast = [
   "tree-sitter>=0.26,<1",
   "tree-sitter-c-sharp>=0.23,<1",

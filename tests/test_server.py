@@ -514,3 +514,42 @@ def test_the_hook_says_which_path_is_not_a_checkout(client: TestClient, workspac
 
     assert response.status_code == 400
     assert "git repos only" in response.json()["detail"]
+
+
+# --- MCP over the other transport -----------------------------------------
+
+
+def test_the_mcp_endpoint_is_where_it_is_documented(client: TestClient) -> None:
+    # Regression, found against a real client: the SDK's sub-app routes
+    # `/mcp` of its own, so mounting it at `/mcp` naively puts the
+    # endpoint at `/mcp/mcp` — and the client reports "Session
+    # terminated", which reads as a protocol fault rather than a 404.
+    response = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+
+    assert response.status_code != 404
+    # And nothing is served one level deeper, which is where the bug put it.
+    assert client.post("/mcp/mcp", json={}).status_code == 404
+
+
+def test_a_workspace_without_the_mcp_extra_still_serves(
+    pipeline: Pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An optional adapter that is missing must cost its own endpoint, not
+    # the server.
+    import builtins
+
+    real_import = builtins.__import__
+
+    def refuse(name: str, *args: object, **kwargs: object) -> Any:
+        if name == "wsindex.mcp_server":
+            raise ImportError("no mcp extra here")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+    with TestClient(create_app(pipeline_factory=lambda: pipeline)) as client:
+        assert client.get("/healthz").json() == {"status": "ok"}
+        assert client.post("/mcp", json={}).status_code == 404

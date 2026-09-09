@@ -411,6 +411,48 @@ report readable — and it is also why deleting the config that published a
 port makes the code reading it drift again, with nothing to update by
 hand. See [ADR-9](docs/adr/adr-009-links-as-entities.md).
 
+## Asking many questions at once
+
+Most of a `wsindex search` is spent before it searches anything: loading
+the embedding model, opening the store. `wsindex shell` pays that once.
+
+```bash
+uv sync --extra shell
+uv run wsindex shell
+```
+
+```
+wsindex> how are chunks deduplicated --lang python
+  1  0.71  wsindex/src/wsindex/store/lancedb.py  171-209  add_chunks
+  2  0.63  wsindex/tests/test_lancedb_store.py    90-101  test_duplicates…
+wsindex> 1            # show that hit in full, highlighted
+wsindex> :open 1      # and in $EDITOR, at the right line
+```
+
+Arrow keys walk the history, Tab completes flags and repo ids, and the
+query flags are the ones `wsindex search` takes — the shell is another
+adapter over the same library, so `--lang python` means the same thing in
+both.
+
+## Search from an agent
+
+An agent client speaks MCP, so the answer to "is there an IDE plugin" is
+that no plugin has to exist:
+
+```bash
+uv sync --extra mcp
+uv run wsindex mcp        # stdio; point a client's command at this
+```
+
+Three tools — `search`, `refs` and `why` — the same three commands worth
+calling from outside. `index` is deliberately not one of them: a tool an
+agent may call again without thinking should not be minutes of CPU and
+somebody's git remotes.
+
+A workspace already running `wsindex serve` offers the same tools over
+HTTP at `/mcp`, from the same tool code. Two transports, one
+implementation.
+
 ## Running it as a server
 
 The same engine behind HTTP, for a workspace more than one person
@@ -579,6 +621,8 @@ pair) is recorded in [ADR-7](docs/adr/adr-007-post-mvp-storage.md).
 | Extra    | Enables                                                                       | Without it                                                               |
 | -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `ml`     | `sentence-transformers` embeddings (real semantic search)                     | `--provider fake`: deterministic pseudo-vectors, exact-text matches only |
+| `shell`  | `wsindex shell`: one loaded model, many questions (prompt-toolkit)            | a fresh process and a fresh model per search                             |
+| `mcp`    | `wsindex mcp`: the index as tools for an agent client                         | search from the CLI, HTTP or shell                                       |
 | `server` | `wsindex serve`: HTTP API, scheduler and admin page (FastAPI)                 | search from the CLI only                                                 |
 | `ast`    | tree-sitter chunking for py/rs/ts/java code and toml/yaml/json/xml/Dockerfile | sliding-window text chunks for everything                                |
 

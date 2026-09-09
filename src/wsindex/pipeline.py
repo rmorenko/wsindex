@@ -18,6 +18,7 @@ step 20: it used to only ever add, so a file that shrank or vanished
 left its old chunks in the index forever.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -117,13 +118,18 @@ class Pipeline:
     reranker: Reranker | None = None
     links: LinkStore | None = None
 
-    def index(self) -> IndexReport:
+    def index(self, *, progress: Callable[[str], None] | None = None) -> IndexReport:
         """Index every repo into its own dataset (dataset name = repo id).
 
         Incremental against git. A repo goes down the fast path when it
         has been indexed before *and* its working tree is clean; then
         only the files git reports as changed since that commit are read,
         and the chunks those files no longer produce are deleted.
+
+        Args:
+            progress: Called with each repo id as that repo is reached,
+                so a caller can show that seconds of silence are work.
+                None keeps the run silent, which is what a pipe wants.
 
         A dirty working tree forces a full pass, and the run records no
         new commit for that repo. This is not pessimism, it is the only
@@ -159,6 +165,11 @@ class Pipeline:
         missing_repos: list[str] = []
         full_repos: list[str] = []
         for repo in config.repos:
+            # The engine says *who* is being read; what to draw with that
+            # is the caller's business (see `wsindex.ui`). A plain
+            # callable rather than an event system: one caller, one fact.
+            if progress is not None:
+                progress(repo.id)
             root = Path(repo.path)
             if not root.is_dir():
                 missing_repos.append(repo.id)

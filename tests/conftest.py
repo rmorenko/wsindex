@@ -32,3 +32,13 @@ def _isolate_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     Config.reset()
     yield
     Config.reset()
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """One event loop implementation for the async tests (MCP's tools).
+
+    asyncio only: trio is not a dependency, and running every async test
+    twice would double the suite for no claim it does not already make.
+    """
+    return "asyncio"

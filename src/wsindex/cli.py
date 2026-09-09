@@ -49,6 +49,8 @@ from wsindex.pipeline import Pipeline
 from wsindex.rank.reranker import CrossEncoderReranker
 from wsindex.snapshot import materialize
 from wsindex.store import LanceDBStore, VectorStore
+from wsindex.ui import progress as ui_progress
+from wsindex.ui import render_hits
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -284,7 +286,8 @@ def index() -> None:
     """
     pipeline = _build_pipeline()
     try:
-        report = pipeline.index()
+        with ui_progress("indexing") as report_repo:
+            report = pipeline.index(progress=report_repo)
     except NotAGitRepositoryError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -363,13 +366,7 @@ def search(
     if not hits:
         typer.echo("no results")
         return
-    for hit in hits:
-        meta = hit.metadata
-        first_line = str(meta["text"]).splitlines()[0]
-        typer.echo(
-            f"{meta['repo']}/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
-            f"  {hit.score:.3f}  {first_line}"
-        )
+    render_hits(hits)
 
 
 @app.command()
@@ -615,6 +612,57 @@ def fetch(url: str) -> None:
         typer.echo(f"{key}: {value}")
     typer.echo("")
     typer.echo(document.text)
+
+
+@app.command()
+def shell() -> None:
+    """Ask many questions without reloading the model each time.
+
+    A `wsindex search` spends most of its seconds before it searches
+    anything — loading the embedding model, opening the store. Here that
+    is paid once. Arrow keys walk the history, Tab completes repo ids and
+    flags, a number opens a hit in full, and `:open <n>` sends it to
+    `$EDITOR` at the right line. `:help` for the rest.
+    """
+    config = _config()
+    _require_config_file(config)
+    try:
+        from wsindex import shell as shell_module
+    except ImportError as exc:  # pragma: no cover - depends on the install
+        typer.echo(
+            "error: the shell needs the `shell` extra — `uv sync --extra shell` (prompt-toolkit)",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+    shell_module.run(_build_pipeline(), history_dir=config.index_dir)
+
+
+@app.command()
+def mcp() -> None:
+    """Serve the workspace to an agent client over MCP (stdio).
+
+    The answer to "is there an IDE plugin": an agent client speaks MCP
+    already, so pointing it at this command gives it `search`, `refs` and
+    `why` over the workspace with no plugin to install. Configure it as
+    the command to run; the protocol is on stdin and stdout, so nothing
+    else may be printed there.
+
+    A workspace already running `wsindex serve` can offer the same tools
+    over HTTP instead — same tool code, other transport.
+    """
+    config = _config()
+    _require_config_file(config)
+    try:
+        from wsindex.mcp_server import build
+    except ImportError as exc:  # pragma: no cover - depends on the install
+        typer.echo(
+            "error: MCP needs the `mcp` extra — `uv sync --extra mcp`",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+    # Nothing on stdout before this: the transport owns that stream, and
+    # a friendly banner would be a protocol error.
+    build(_build_pipeline()).run(transport="stdio")
 
 
 @app.command()

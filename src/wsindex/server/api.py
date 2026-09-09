@@ -296,7 +296,56 @@ def create_app(
 
     mount_scheduler(app, guarded)
     mount_admin(app, guarded)
+    _mount_mcp(app)
     return app
+
+
+def _mount_mcp(app: FastAPI) -> None:
+    """Offer the same tools over streamable HTTP, when the extra is here.
+
+    The plan's own words for this step: two transports, one set of tool
+    code. `wsindex mcp` runs the server over stdio for an editor that
+    spawns it; a workspace that already has this one running gets `/mcp`
+    for free, and neither transport has tool code of its own.
+
+    Silently skipped without the `mcp` extra — a server missing an
+    optional adapter should serve everything else, not refuse to start.
+    """
+    try:
+        from wsindex.mcp_server import build
+    except ImportError:  # pragma: no cover - depends on the install
+        return
+    tools = build(app.state.pipeline)
+    # The sub-app routes `/mcp` of its own, so mounting it at `/mcp`
+    # without this puts the endpoint at `/mcp/mcp` — and a client asking
+    # the documented address gets "Session terminated", which reads as a
+    # protocol fault rather than a 404. Measured against a real client.
+    tools.settings.streamable_http_path = "/"
+    # Mounted rather than re-routed: the SDK owns the session handling,
+    # the event stream and the protocol version negotiation, and
+    # re-implementing any of that here would be a second protocol.
+    app.mount("/mcp", tools.streamable_http_app())
+    app.router.lifespan_context = _with_session_manager(
+        app.router.lifespan_context, tools.session_manager.run
+    )
+
+
+def _with_session_manager(outer: Any, inner: Any) -> Any:
+    """Run the MCP session manager for the app's lifetime, inside `outer`.
+
+    The streamable-HTTP transport keeps state per session and needs its
+    task group running — mounting the app without this gives a 500 on
+    the first call rather than at startup, which is the kind of failure
+    that reaches production.
+    """
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def lifespan(scope: FastAPI) -> Any:
+        async with inner(), outer(scope):
+            yield
+
+    return lifespan
 
 
 __all__ = ["Busy", "RunLog", "Writer", "create_app"]
