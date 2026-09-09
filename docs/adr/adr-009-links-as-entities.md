@@ -130,10 +130,32 @@ What we owe:
 - A declaration source for (4). Until then the dangling detector has
   exactly one usable rule — the value match — and that is the one that
   ships.
-- Link lifetimes have to be handled at the same place chunk lifetimes
-  are. `Pipeline.index` already deletes the chunks a changed file no
-  longer produces (step 22); links keyed by those ids need the same
-  subtraction, or the store fills with edges pointing at nothing.
+
+- ~~Link lifetimes have to be handled at the same place chunk lifetimes
+  are.~~ **Paid.** `LinkStore.delete_by_source` is called from
+  `Pipeline._apply` with the same `stale` set that feeds
+  `delete_chunks`, and an end-to-end test asserts every link's source is
+  still a live chunk after a rewrite.
+
+  Building it changed one thing in this ADR. Resolution was going to
+  happen at write time, but that is impossible in an incremental
+  indexer: re-indexing one changed source file gives no access to config
+  files nobody touched. So **both sides are links** — code emits
+  `READS_KEY`, configuration emits `DECLARES` — and "dangling" is a
+  query over whatever is stored right now. That turned out to be the
+  better design for its own sake: delete the config publishing a port
+  and its `DECLARES` links die with its chunks, so the code reading it
+  becomes dangling on the next query, with nothing to update by hand.
+  The lifetime rule and the drift feature are one mechanism.
+
+  Also revised: the extractor reads chunk *text*, not the parse tree.
+  The value rule turned out not to need a parse — a `host:port` in a
+  string is recognisable in text, and the chunks are already in hand, so
+  this is cheaper than "a second visitor over the same parse", not more
+  expensive. It matches ports in comments too, which for a drift
+  detector is a feature. A rule that genuinely needs the tree (calls,
+  imports) is when the tree gets threaded through.
+
 - Ambiguous code → code edges must be labelled ambiguous wherever they
   surface. `wsindex refs` (step 28) showing a 50/50 guess as a fact
   would be worse than showing nothing.

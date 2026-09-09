@@ -92,6 +92,29 @@ Declining costs speed and not correctness: `index` still runs, and a
 dirty tree simply gets the full pass. Use `--no-index` to update working
 copies without indexing.
 
+## Drift between code and configuration
+
+While indexing, wsindex notes two things: ports that code expects to
+reach, and ports that configuration publishes. A reference nothing
+answers is reported — that is the only automatic evidence that the two
+have grown apart:
+
+```
+$ uv run wsindex index
+files: 2  chunks: 3  written: 3  deleted: 0
+drift: 1 unresolved config reference(s), first at svc/client.py:1 -> 8080
+```
+
+This repository's own history is the test case: `config.py` once
+defaulted to `http://localhost:8080` while `docker-compose.yml` published
+the service on 8000. Nothing failed; it was found by hand, later.
+
+The links live in `links.db` beside the index and are keyed by chunk, so
+they are deleted exactly when their chunk is. That is what keeps the
+report readable — and it is also why deleting the config that published a
+port makes the code reading it drift again, with nothing to update by
+hand. See [ADR-9](docs/adr/adr-009-links-as-entities.md).
+
 ## Reclaiming space
 
 Deleting a chunk hides it immediately but does not free its bytes, and

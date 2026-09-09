@@ -31,6 +31,8 @@ from wsindex.ingest import (
     has_uncommitted_changes,
     inspect_file,
 )
+from wsindex.ingest.link_extract import links_for
+from wsindex.links import LinkStore
 from wsindex.model import Chunk, Hit, SearchFilter
 from wsindex.rank.reranker import Reranker
 from wsindex.store import VectorStore
@@ -97,11 +99,16 @@ class Pipeline:
         reranker: Optional second stage of the search funnel. Present
             means `search` over-fetches candidates and re-scores them;
             None means the store's own ranking is the answer.
+        links: Where code-to-config edges are recorded, or None to skip
+            link extraction entirely. When present, `index` writes the
+            links a file yields and — this is the part that matters —
+            deletes the links of every chunk it deletes (ADR-9).
     """
 
     store: VectorStore
     state_dir: Path
     reranker: Reranker | None = None
+    links: LinkStore | None = None
 
     def index(self) -> IndexReport:
         """Index every repo into its own dataset (dataset name = repo id).
@@ -253,9 +260,17 @@ class Pipeline:
             files += 1
             chunks_count += len(chunks)
             written += self.store.add_chunks(dataset_name=repo.id, chunks=chunks)
+            if self.links is not None:
+                self.links.add_links(links_for(chunks), repo=repo.id, path=walked.rel_path)
 
         stale = sorted(stored - fresh_ids)
         deleted = self.store.delete_chunks(dataset_name=repo.id, ids=stale) if stale else 0
+        if self.links is not None and stale:
+            # The same set, in the same breath. A link that outlives its
+            # chunk is not merely stale: it is indistinguishable from a
+            # real dangling link, so the drift report would fill with
+            # references from code that no longer exists (ADR-9).
+            self.links.delete_by_source(stale)
         return _Totals(files=files, chunks=chunks_count, written=written, deleted=deleted)
 
     def search(

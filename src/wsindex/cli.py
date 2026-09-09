@@ -33,6 +33,7 @@ import typer
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
+from wsindex.links import LinkStore
 from wsindex.model import Kind, SearchFilter
 from wsindex.paths import (
     ConfigLocation,
@@ -112,9 +113,15 @@ def _build_pipeline() -> Pipeline:
     _require_config_file(config)
     store = _build_store(config)
     reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
-    # index_dir, not store_uri: the incremental state is a local, per-machine
-    # note about how far this host got, even when the vectors live in S3.
-    return Pipeline(store=store, state_dir=config.index_dir, reranker=reranker)
+    # index_dir, not store_uri: the incremental state and the link database
+    # are local, per-machine notes about this host, even when the vectors
+    # live in S3.
+    return Pipeline(
+        store=store,
+        state_dir=config.index_dir,
+        reranker=reranker,
+        links=LinkStore(config.index_dir),
+    )
 
 
 def _build_store(config: Config) -> VectorStore:
@@ -250,6 +257,19 @@ def index() -> None:
         )
     if report.missing_repos:
         typer.echo("warning: missing repos: " + ", ".join(report.missing_repos), err=True)
+    if pipeline.links is not None:
+        drift = pipeline.links.dangling()
+        if drift:
+            # Reported, not listed: this is the evidence that code and
+            # configuration have drifted apart (ADR-9), and a count is
+            # enough to send someone looking. Listing them is `wsindex
+            # refs`/`why` territory (step 28).
+            first = drift[0]
+            typer.echo(
+                f"drift: {len(drift)} unresolved config reference(s), "
+                f"first at {first.repo}/{first.path}:{first.line} -> {first.name}",
+                err=True,
+            )
 
 
 @app.command()
