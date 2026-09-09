@@ -137,8 +137,8 @@ Measured on the acceptance corpus (149 files, 3458 chunks, real model):
 
 | Scenario           | Files read | Seconds  |
 | ------------------ | ---------- | -------- |
-| cold (first index) | 149        | 7.6      |
-| no changes         | 0          | **0.18** |
+| cold (first index) | 149        | 4.5      |
+| no changes         | 0          | **0.15** |
 | one changed file   | 1          | **0.24** |
 
 Two conditions put a repo on that fast path: it must be a git repository
@@ -501,26 +501,26 @@ opening the index to whoever can reach the port.
 
 ## Reclaiming space
 
-Deleting a chunk hides it immediately but does not free its bytes, and
-every write adds a version — so the index grows even when the workspace
-does not. `wsindex compact` is the pass that shrinks it:
+Deleting a chunk hides it immediately but does not free its bytes, so an
+index that is edited often grows. `wsindex compact` is the pass that
+shrinks it:
 
+```console
+$ wsindex compact
+reclaimed 0.1 MB (1.7 MB -> 1.6 MB); 21 -> 2 versions
 ```
-$ uv run wsindex compact
-reclaimed 2.8 MB (9.3 MB -> 6.5 MB); 160 -> 2 versions
-```
 
-That is the acceptance corpus after a cold index and five incremental
-runs: 30% reclaimed in 0.1s, all 3458 chunks still searchable. Most of
-those 160 versions come from the cold index alone — chunks are written
-per file, so a 149-file repo leaves ~149 versions behind. Compaction is
-worth running even on an index that was never edited.
+Manual on purpose, because it is the one command that throws history
+away: until it runs the store can be rolled back to an earlier version,
+and afterwards it cannot. Use `--keep-days` when something else may be
+reading the same store.
 
-It is deliberately not part of `index`: it is the one command that
-discards history, since a store that still holds old versions can be
-rolled back and a compacted one cannot. Pass `--keep-days N` when
-something else may be reading the same store — a search that began
-before the pass would otherwise be reading a version it removes.
+How much it buys depends on how much was written. Chunks reach the store
+in batches of a couple of thousand rather than one write per file, so a
+cold index of 3458 chunks leaves 4 versions rather than 149 — and a fresh
+index is already as compact and as fast to search as a compacted one
+(2.4 ms per search against 2.3 ms). Compaction earns its keep on an index
+that has been re-indexed many times, not on a new one.
 
 ## Front-end components
 

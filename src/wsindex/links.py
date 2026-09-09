@@ -169,6 +169,10 @@ class LinkStore:
         # server's one-writer lock (ADR-10). The default exists to catch
         # accidental sharing; this sharing is the design.
         self._db = sqlite3.connect(self.path, check_same_thread=False)
+        # WAL: a reader no longer blocks the writer, and a crash mid-write
+        # leaves the database usable. Costs one extra file beside the
+        # database; the default journal locks the whole file per write.
+        self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(
             """
             CREATE TABLE IF NOT EXISTS links (

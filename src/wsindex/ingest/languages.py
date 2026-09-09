@@ -16,6 +16,7 @@ what one may hand over.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -138,17 +139,29 @@ class LanguageRegistry:
         self._specs: dict[str, LanguageSpec] = {}
         self._parsers: dict[str, Parser] | None = None
         self._pending_plugins = plugins
+        self._plugin_lock = threading.Lock()
 
     def _ensure_plugins(self) -> None:
-        """Load installed plugins once, before the first question."""
+        """Load installed plugins once, before the first question.
+
+        Locked, because the flag alone is check-then-act. The window is
+        two bytecodes wide — the flag is cleared before the work, not
+        after — but a second loader would report a collision with the
+        first one's registrations, and a lock taken once per process
+        costs nothing.
+        """
         if not self._pending_plugins:
             return
-        # Cleared first: `load_plugins` calls `register`, and a plugin
-        # importing wsindex must not send us back around this loop.
-        self._pending_plugins = False
-        from wsindex.ingest.plugins import load_plugins
+        with self._plugin_lock:
+            if not self._pending_plugins:
+                return
+            # Cleared inside the lock and first: `load_plugins` calls
+            # `register`, and a plugin importing wsindex must not send us
+            # back around this loop.
+            self._pending_plugins = False
+            from wsindex.ingest.plugins import load_plugins
 
-        load_plugins(self)
+            load_plugins(self)
 
     def register(self, spec: LanguageSpec) -> None:
         """Add a language, rejecting anything that could not work.

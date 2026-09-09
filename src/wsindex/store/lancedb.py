@@ -409,7 +409,15 @@ class LanceDBStore(VectorStore):
             table.checkout_latest()  # type: ignore[no-untyped-call]
         # And the registry cache above it: moving the table handle
         # forward means nothing while a dict remembers the old answer.
-        self._known_datasets.clear()
+        #
+        # Replaced, not emptied. `_get_datasets` hands out this very
+        # object, so clearing it empties a dict another thread is already
+        # reading — and that thread then finds a dataset missing that is
+        # not. Measured: widen the window to 2 ms and 2805 of 2868
+        # concurrent searches fail with "Dataset is not present". Binding
+        # a new dict is one atomic store; the other thread keeps reading
+        # the old, complete one.
+        self._known_datasets = {}
 
     def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
         """Merge small files and drop old versions, on every table.

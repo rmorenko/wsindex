@@ -30,7 +30,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from wsindex.config import Config
+from wsindex.config import Config, Repository
 from wsindex.embed import SentenceTransformerEmbedder
 from wsindex.model import Hit
 from wsindex.pipeline import IndexReport, Pipeline
@@ -115,7 +115,7 @@ def make_config(corpus: Path, repo_id: str) -> Config:
     # `Config.default` replaces the process-wide instance, which is exactly
     # what this script wants: it never reads a real workspace config.
     config = Config.default("acceptance")
-    config.add_repo(repo_id, path=str(corpus))
+    config.add_repo(Repository(id=repo_id, path=str(corpus)))
     return config
 
 
@@ -325,7 +325,7 @@ def main() -> None:
     # Installs the acceptance config first, so the embedder picks its model
     # up from it — same source the two backends read everything else from.
     make_config(corpus, "corpus")
-    embedder = SentenceTransformerEmbedder()
+    embedder = SentenceTransformerEmbedder(Config().model)
     incremental: IncrementalRuns | None = None
     with tempfile.TemporaryDirectory() as tmp:
         config = make_config(corpus, "corpus")

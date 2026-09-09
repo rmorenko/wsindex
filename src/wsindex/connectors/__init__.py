@@ -23,6 +23,7 @@ exist, so claiming "no such document" would be a guess.
 from __future__ import annotations
 
 import os
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -174,6 +175,14 @@ each call site."""
 
 
 _plugins_loaded = False
+_plugin_lock = threading.Lock()
+"""Held while plugins load. The flag alone is check-then-act, and the
+window between reading it and setting it is a couple of bytecodes wide —
+narrow enough that four threads racing it never hit it in a measurement,
+and real enough to close for the price of one uncontended acquire per
+process. Two threads that did hit it would both load, and the second
+would report every type as "already registered by another plugin": a
+conflict that does not exist."""
 
 
 def _ensure_plugins() -> None:
@@ -194,12 +203,15 @@ def _ensure_plugins() -> None:
     global _plugins_loaded
     if _plugins_loaded:
         return
-    # Set first: a plugin's import may reach back into this module, and
-    # once round the loop is enough.
-    _plugins_loaded = True
-    from wsindex.connectors.plugins import load_connectors
+    with _plugin_lock:
+        if _plugins_loaded:
+            return
+        # Set inside the lock and before loading: a plugin's import may
+        # reach back into this module, and once round the loop is enough.
+        _plugins_loaded = True
+        from wsindex.connectors.plugins import load_connectors
 
-    load_connectors(BUILTIN)
+        load_connectors(BUILTIN)
 
 
 def route(
