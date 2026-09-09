@@ -113,6 +113,61 @@ rolled back and a compacted one cannot. Pass `--keep-days N` when
 something else may be reading the same store — a search that began
 before the pass would otherwise be reading a version it removes.
 
+## Teaching it a new language
+
+The languages above are what wsindex ships with, not what it can index. A
+language is one `LanguageSpec` — how to recognize its files, and how to
+split them — and an installed package can supply one without any change
+to wsindex:
+
+```toml
+# in your plugin's pyproject.toml
+[project.entry-points."wsindex.languages"]
+go = "wsindex_lang_go:LANGUAGES"
+```
+
+```python
+from wsindex.ingest import GrammarSpec, LanguageSpec
+from wsindex.ingest.ast import Span, def_span, symbol_name
+
+
+def go_spans(root, lines, covered) -> list[Span]:
+    """Which parts of the tree deserve a chunk of their own."""
+    spans = []
+    for child in root.named_children:
+        if child.type == "function_declaration":
+            name = symbol_name(child)
+            if name is not None:
+                spans.append(def_span(child, covered=covered, symbol=name, node_type=child.type))
+    return spans
+
+
+LANGUAGES = (
+    LanguageSpec(
+        name="go",
+        kind=Kind.CODE,
+        suffixes=(".go",),
+        grammar=GrammarSpec(module="tree_sitter_go", getter="language"),
+        spans=go_spans,
+    ),
+)
+```
+
+Install it and the walker starts selecting `.go` files while the chunker
+routes them through the grammar. Whatever your extractor does not claim
+becomes a "gap" chunk, so every non-blank line is indexed exactly once
+either way. A broken plugin is a warning and a skip, never a crash.
+
+[`examples/wsindex-lang-go/`](examples/wsindex-lang-go/) is a complete,
+installable plugin — functions, methods, named types, and Go doc comments
+attached to what they document — with a
+[guide for plugin authors](examples/wsindex-lang-go/README.md):
+
+```bash
+uv pip install -e examples/wsindex-lang-go
+uv run wsindex index          # .go files are now indexed
+```
+
 ## Storage
 
 The vector index is an embedded [LanceDB](https://github.com/lancedb/lancedb)

@@ -46,9 +46,14 @@ def test_doc_markdown_produces_sections() -> None:
 
 
 def test_code_falls_back_to_plain_windows() -> None:
-    # "go" on purpose: a language no grammar is registered for.
+    # An invented name, not a real language: this used to say "go", which
+    # stopped being true the moment examples/wsindex-lang-go was installed.
+    # A core test must not depend on which plugins the machine happens to
+    # have, so the precondition is asserted rather than assumed.
+    lang = "nolang-for-this-test"
+    assert REGISTRY.parser(lang) is None
     code = "func f() int {\n\treturn 1\n}\n"
-    chunks = chunk_file(code, repo=REPO, path="src/m.go", lang="go", kind=Kind.CODE)
+    chunks = chunk_file(code, repo=REPO, path="src/m.nolang", lang=lang, kind=Kind.CODE)
     assert len(chunks) == 1
     assert chunks[0].node_type is None
     assert chunks[0].symbol is None

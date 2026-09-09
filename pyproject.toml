@@ -158,6 +158,15 @@ cmd = "pytest --cov --cov-report=term-missing"
 help = "Run the wsindex CLI"
 cmd = "wsindex"
 
+[tool.poe.tasks.example-plugin]
+help = "Install the example Go plugin and run its tests (examples/wsindex-lang-go)"
+interpreter = "bash"
+shell = """
+set -eu -o pipefail
+uv pip install -q -e examples/wsindex-lang-go
+pytest examples/wsindex-lang-go/tests
+"""
+
 [tool.poe.tasks.acceptance]
 help = "Full MVP acceptance on a real corpus, writes acceptance_report.md"
 cmd = "python scripts/acceptance.py"
