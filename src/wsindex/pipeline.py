@@ -54,6 +54,71 @@ class _Totals:
 
 
 @dataclass(frozen=True, kw_only=True)
+class _History:
+    """What indexing one repo's commit messages produced.
+
+    Attributes:
+        written: Message chunks the store actually wrote.
+        ids: Their chunk ids, which count as fresh (see `_index_commits`).
+        by_sha: Commit sha -> its chunk id, which is what a blame edge
+            needs to point at the message that explains a line.
+    """
+
+    written: int
+    ids: set[str]
+    by_sha: dict[str, str]
+
+
+@dataclass(frozen=True, kw_only=True)
+class _Written:
+    """Running totals over the files of one repo."""
+
+    files: int = 0
+    chunks: int = 0
+    written: int = 0
+    ids: frozenset[str] = frozenset()
+
+    def add(self, *, chunks: int, written: int, ids: set[str]) -> "_Written":
+        """This plus one more file."""
+        return _Written(
+            files=self.files + 1,
+            chunks=self.chunks + chunks,
+            written=self.written + written,
+            ids=self.ids | ids,
+        )
+
+
+def _selection(
+    repo: Repository, *, root: Path, changed: tuple[str, ...], deleted: tuple[str, ...]
+) -> tuple[list[WalkedFile], list[str]]:
+    """Split the changed paths into what to read and what to forget.
+
+    A path that changed into something unindexable — renamed to a `.png`,
+    grown past the size limit, turned binary — is a deletion as far as the
+    store is concerned, which is why it joins the second list rather than
+    being skipped.
+
+    Args:
+        repo: The repo, for its own `ignore` and `formats` markup.
+        root: Repository root.
+        changed: Paths git reports as added or modified.
+        deleted: Paths git reports as gone.
+
+    Returns:
+        The files worth reading, and the paths whose chunks must go.
+    """
+    indexable: list[WalkedFile] = []
+    forget: list[str] = list(deleted)
+    for rel_path in changed:
+        walked = inspect_file(root, rel_path, ignore=repo.ignore, formats=repo.formats)
+        if walked is None:
+            forget.append(rel_path)
+            continue
+        indexable.append(walked)
+    return indexable, forget
+
+
+@dataclass(frozen=True, kw_only=True)
 class IndexReport:
     """Immutable summary of one index() run, totals across all repos.
 
@@ -179,7 +244,7 @@ class Pipeline:
             if diff.full:
                 full_repos.append(repo.id)
             if diff.full or diff.changed or diff.deleted:
-                totals = self._apply(repo, root=root, diff=diff, config=config)
+                totals = self._index_repo(repo, root=root, diff=diff, config=config)
                 files += totals.files
                 chunks_count += totals.chunks
                 written += totals.written
@@ -236,14 +301,16 @@ class Pipeline:
         since = None if dirty or remarked else state.commits.get(repo.id)
         return diff_since(root, since=since), dirty
 
-    def _apply(self, repo: Repository, *, root: Path, diff: RepoDiff, config: Config) -> _Totals:
-        """Chunk what changed, then delete what the tree no longer produces.
+    def _index_repo(
+        self, repo: Repository, *, root: Path, diff: RepoDiff, config: Config
+    ) -> _Totals:
+        """Index what changed in one repo, then forget what it no longer holds.
 
-        The two halves are one thought: `add_chunks` makes the store hold
-        everything the current tree says it should, and the delete below
-        removes everything in scope that the tree did not just produce.
-        A file that lost its tail, a file that was deleted, a file that
-        stopped being indexable — all three are the same subtraction.
+        Four steps, in the only order they work in: decide what to read,
+        note what the store holds now, write, subtract. Reading the
+        stored ids *before* writing is what makes the last step mean
+        "what was here when we started" — after the write the new ids
+        would cancel out and the intent would be invisible.
 
         Args:
             repo: The repo being indexed; its id names the dataset.
@@ -252,40 +319,41 @@ class Pipeline:
                 delete from "the paths listed here" to "the whole
                 dataset", which is what makes a full pass also clean up
                 files that vanished while nobody was watching.
+            config: The workspace, for its reference templates.
 
         Returns:
             Totals for this repo.
         """
-        indexable: list[WalkedFile] = []
-        forget: list[str] = list(diff.deleted)
-        for rel_path in diff.changed:
-            # The repo's own markup, not the workspace's: what to index
-            # is a property of this repository.
-            walked = inspect_file(root, rel_path, ignore=repo.ignore, formats=repo.formats)
-            if walked is None:
-                # It changed into something we do not index — renamed to
-                # a .png, grown past the size limit, turned binary. Its
-                # old chunks have to go, which is exactly "deleted" to us.
-                forget.append(rel_path)
-                continue
-            indexable.append(walked)
-
-        # Read the stored ids BEFORE writing, so the set means "what was
-        # here when we started". Reading after would work too (the new
-        # ids cancel out), but the intent would be harder to see.
-        scope = None if diff.full else [*(w.rel_path for w in indexable), *forget]
+        indexable, forget = _selection(repo, root=root, changed=diff.changed, deleted=diff.deleted)
+        scope = None if diff.full else [*(walked.rel_path for walked in indexable), *forget]
         stored = self.store.chunk_ids(dataset_name=repo.id, paths=scope)
 
-        # Commits first: their chunk ids are what blame edges point at,
-        # and `git log` over a whole history costs milliseconds.
-        commits = read_commits(root, since=diff.since)
+        history = self._index_commits(repo, root=root, since=diff.since, config=config)
+        files = self._index_files(repo, root=root, walked=indexable, history=history, config=config)
+        deleted = self._forget(repo, stale=sorted(stored - files.ids - history.ids))
+        return _Totals(
+            files=files.files,
+            chunks=files.chunks,
+            written=files.written,
+            deleted=deleted,
+            commits=history.written,
+        )
+
+    def _index_commits(
+        self, repo: Repository, *, root: Path, since: str | None, config: Config
+    ) -> _History:
+        """Index the repo's commit messages, and note where each one landed.
+
+        Before the files, because blame edges point at these chunk ids
+        and `git log` over a whole history costs milliseconds.
+        """
+        commits = read_commits(root, since=since)
         messages = commit_chunks(commits, repo=repo.id)
         # Keyed off the chunk's symbol rather than zipping: `commit_chunks`
         # drops commits with an empty message, so the two lists are not
         # guaranteed to line up.
-        by_short = {m.symbol: m.id for m in messages}
-        commit_ids = {c.sha: by_short[c.short] for c in commits if c.short in by_short}
-        written_commits = self.store.add_chunks(dataset_name=repo.id, chunks=messages)
+        by_short = {message.symbol: message.id for message in messages}
+        written = self.store.add_chunks(dataset_name=repo.id, chunks=messages)
         if self.links is not None and messages:
             # A commit message is where a ticket gets named, so the
             # outward references live here more than anywhere.
@@ -294,60 +362,88 @@ class Pipeline:
                 repo=repo.id,
                 path="commits",
             )
-
-        files = chunks_count = written = 0
-        fresh_ids: set[str] = set()
-        for walked in indexable:
-            chunks: list[Chunk] = chunk_file(
-                (root / walked.rel_path).read_text(encoding="utf-8", errors="replace"),
-                SourceFile(
-                    repo=repo.id,
-                    path=walked.rel_path,
-                    lang=walked.lang,
-                    kind=walked.kind,
-                ),
-            )
-            fresh_ids.update(chunk.id for chunk in chunks)
-            files += 1
-            chunks_count += len(chunks)
-            written += self.store.add_chunks(dataset_name=repo.id, chunks=chunks)
-            if self.links is not None:
-                self.links.add_links(
-                    links_for(chunks, references=config.references),
-                    repo=repo.id,
-                    path=walked.rel_path,
-                )
-                # Blame is the expensive half of commit indexing
-                # (~28 ms/file), so
-                # it is paid per *indexed* file — which the incremental
-                # path already keeps down to what changed.
-                self.links.add_links(
-                    blame_links(root, rel_path=walked.rel_path, chunks=chunks, known=commit_ids),
-                    repo=repo.id,
-                    path=walked.rel_path,
-                )
-
-        # Commit chunks are never stale: a commit is immutable, so the
-        # chunk it produced can only ever be re-derived identically. They
-        # must still be counted as fresh, or a full pass — whose `stored`
-        # covers the whole dataset — would reap every one of them.
-        fresh_ids.update(m.id for m in messages)
-
-        stale = sorted(stored - fresh_ids)
-        deleted = self.store.delete_chunks(dataset_name=repo.id, ids=stale) if stale else 0
-        if self.links is not None and stale:
-            # The same set, in the same breath. A link that outlives its
-            # chunk is not merely stale: it is indistinguishable from a
-            # real dangling link, so the drift report would fill with
-            # references from code that no longer exists (ADR-9).
-            self.links.delete_by_source(stale)
-        return _Totals(
-            files=files,
-            chunks=chunks_count,
+        return _History(
             written=written,
-            deleted=deleted,
-            commits=written_commits,
+            # Commit chunks are never stale: a commit is immutable, so
+            # the chunk it produced can only be re-derived identically.
+            # They still count as fresh, or a full pass — whose `stored`
+            # covers the whole dataset — would reap every one of them.
+            ids={message.id for message in messages},
+            by_sha={c.sha: by_short[c.short] for c in commits if c.short in by_short},
         )
+
+    def _index_files(
+        self,
+        repo: Repository,
+        *,
+        root: Path,
+        walked: list[WalkedFile],
+        history: _History,
+        config: Config,
+    ) -> _Written:
+        """Chunk, store and link every file that is worth reading."""
+        totals = _Written()
+        for entry in walked:
+            source = SourceFile(repo=repo.id, path=entry.rel_path, lang=entry.lang, kind=entry.kind)
+            text = (root / entry.rel_path).read_text(encoding="utf-8", errors="replace")
+            chunks: list[Chunk] = chunk_file(text, source)
+            totals = totals.add(
+                chunks=len(chunks),
+                written=self.store.add_chunks(dataset_name=repo.id, chunks=chunks),
+                ids={chunk.id for chunk in chunks},
+            )
+            self._link(
+                chunks,
+                root=root,
+                source=source,
+                history=history,
+                references=config.references,
+            )
+        return totals
+
+    def _link(
+        self,
+        chunks: list[Chunk],
+        *,
+        root: Path,
+        source: SourceFile,
+        history: _History,
+        references: dict[str, str],
+    ) -> None:
+        """Record what one file's chunks name, and who wrote their lines.
+
+        The repo id comes from `source`, which already carries it — a
+        separate parameter for the same value is one more thing that can
+        disagree with itself.
+        """
+        if self.links is None:
+            return
+        self.links.add_links(
+            links_for(chunks, references=references), repo=source.repo, path=source.path
+        )
+        # Blame is the expensive half (~28 ms/file), so it is paid per
+        # *indexed* file — which the incremental path already keeps down
+        # to what changed.
+        self.links.add_links(
+            blame_links(root, rel_path=source.path, chunks=chunks, known=history.by_sha),
+            repo=source.repo,
+            path=source.path,
+        )
+
+    def _forget(self, repo: Repository, *, stale: list[str]) -> int:
+        """Delete chunks the tree no longer produces, and their links.
+
+        The same set, in the same breath. A link that outlives its chunk
+        is not merely stale: it is indistinguishable from a real dangling
+        link, so the drift report would fill with references from code
+        that no longer exists (ADR-9).
+        """
+        if not stale:
+            return 0
+        deleted = self.store.delete_chunks(dataset_name=repo.id, ids=stale)
+        if self.links is not None:
+            self.links.delete_by_source(stale)
+        return deleted
 
     def search(
         self,

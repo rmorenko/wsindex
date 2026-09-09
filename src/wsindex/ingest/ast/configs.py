@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -49,44 +50,49 @@ def toml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     return spans
 
 
+def _descend(nodes: Iterable[Node], *path: str) -> Iterator[Node]:
+    """Children reached by following a chain of node types.
+
+    `_descend(root.named_children, "block_node", "block_mapping", "pair")`
+    reads the way the tree is shaped. Written out as four nested loops it
+    was the deepest code in the package, and none of that depth was about
+    yaml — only about walking.
+    """
+    if not path:
+        yield from nodes
+        return
+    wanted, rest = path[0], path[1:]
+    for node in nodes:
+        for child in node.named_children:
+            if child.type == wanted:
+                yield from _descend([child], *rest) if rest else iter([child])
+
+
 def yaml_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Top-level mapping pairs of every document in the stream."""
     spans: list[Span] = []
-    for document in root.named_children:
-        for block_node in document.named_children:
-            for mapping in block_node.named_children:
-                if mapping.type != "block_mapping":
-                    continue
-                for pair in mapping.named_children:
-                    if pair.type != "block_mapping_pair":
-                        continue
-                    symbol: str | None = None
-                    key = pair.child_by_field_name("key")
-                    if key is not None and key.text is not None:
-                        symbol = key.text.decode()
-                    spans.append(
-                        _config_span(pair, lines, covered, symbol=symbol, node_type=pair.type)
-                    )
+    for pair in _descend(root.named_children, "block_node", "block_mapping", "block_mapping_pair"):
+        key = pair.child_by_field_name("key")
+        symbol = key.text.decode() if key is not None and key.text is not None else None
+        spans.append(_config_span(pair, lines, covered, symbol=symbol, node_type=pair.type))
     return spans
+
+
+def _json_key(pair: Node) -> str | None:
+    """The key of a json pair, without its quotes."""
+    key = pair.child_by_field_name("key")
+    if key is None:
+        return None
+    content = next((c for c in key.named_children if c.type == "string_content"), None)
+    return content.text.decode() if content is not None and content.text is not None else None
 
 
 def json_spans(root: Node, lines: list[str], covered: list[bool]) -> list[Span]:
     """Top-level object pairs; a top-level array yields no spans (gaps take over)."""
-    spans: list[Span] = []
-    for top in root.named_children:
-        if top.type != "object":
-            continue
-        for pair in top.named_children:
-            if pair.type != "pair":
-                continue
-            symbol: str | None = None
-            key = pair.child_by_field_name("key")
-            if key is not None:
-                content = next((c for c in key.named_children if c.type == "string_content"), None)
-                if content is not None and content.text is not None:
-                    symbol = content.text.decode()
-            spans.append(_config_span(pair, lines, covered, symbol=symbol, node_type=pair.type))
-    return spans
+    return [
+        _config_span(pair, lines, covered, symbol=_json_key(pair), node_type=pair.type)
+        for pair in _descend([root], "object", "pair")
+    ]
 
 
 def _stage_symbol(node: Node) -> str | None:

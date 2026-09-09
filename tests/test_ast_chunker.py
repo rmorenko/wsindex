@@ -1,6 +1,6 @@
 """Tests for the code AST chunkers: per-language sample shapes, the
-_extend_back prelude walk, and properties shared by every language
-(coverage invariant, verbatim slices, metadata).
+prelude walk that attaches attributes and doc comments, and properties
+shared by every language (coverage invariant, verbatim slices, metadata).
 
 Parser-dependent tests skip themselves on a base install (no `ast` extra),
 including the missing-grammar guard test: it deletes the "python" registry
@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from wsindex.ingest.ast import HAS_TREE_SITTER
-from wsindex.ingest.ast.rust import _extend_back
+from wsindex.ingest.ast.nested import _preamble_start
+from wsindex.ingest.ast.rust import POLICY as RUST_POLICY
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Chunk, Kind, SourceFile
@@ -147,26 +148,26 @@ def _rust_children(source: str) -> "list[Node]":
     return parser.parse(source.encode()).root_node.named_children
 
 
-def test_extend_back_attaches_contiguous_prelude_chain() -> None:
+def test_preamble_attaches_contiguous_prelude_chain() -> None:
     children = _rust_children("/// Doc.\n#[derive(Debug)]\nstruct S;\n")
     # struct at index 2 starts on line 3; the chain reaches back to line 1.
-    assert _extend_back(children, index=2, start_line=3) == 1
+    assert _preamble_start(children, index=2, start=3, policy=RUST_POLICY) == 1
 
 
-def test_extend_back_stops_at_a_blank_line() -> None:
+def test_preamble_stops_at_a_blank_line() -> None:
     children = _rust_children("/// Far doc.\n\n#[derive(Debug)]\nstruct S;\n")
     # The attribute (line 3) is adjacent, the doc comment (line 1) is not.
-    assert _extend_back(children, index=2, start_line=4) == 3
+    assert _preamble_start(children, index=2, start=4, policy=RUST_POLICY) == 3
 
 
-def test_extend_back_ignores_non_prelude_siblings() -> None:
+def test_preamble_ignores_non_prelude_siblings() -> None:
     children = _rust_children("use std::fmt;\nstruct S;\n")
-    assert _extend_back(children, index=1, start_line=2) == 2
+    assert _preamble_start(children, index=1, start=2, policy=RUST_POLICY) == 2
 
 
-def test_extend_back_with_nothing_before_the_definition() -> None:
+def test_preamble_with_nothing_before_the_definition() -> None:
     children = _rust_children("struct S;\n")
-    assert _extend_back(children, index=0, start_line=1) == 1
+    assert _preamble_start(children, index=0, start=1, policy=RUST_POLICY) == 1
 
 
 RUST = """\
