@@ -46,6 +46,7 @@ from typing import Any, ClassVar
 
 import tomli_w
 
+from wsindex.connectors import ConnectorSpec
 from wsindex.paths import ConfigLocation, Mode, find_config, resolve_index_dir
 
 DEFAULT_RANK_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
@@ -404,6 +405,50 @@ class Config:
         """
         raw = self._data.get("references", {})
         return {str(prefix): str(template) for prefix, template in raw.items()}
+
+    @property
+    def connectors(self) -> list[ConnectorSpec]:
+        """External document sources, in routing order.
+
+            [[connectors]]
+            type = "github"
+            url_pattern = "https://github.com/myorg/*"
+            token_env = "GITHUB_TOKEN"
+
+        First match wins, which is why order is preserved rather than
+        sorted: a person writing this file expects the specific entry
+        above the catch-all to be the one that answers.
+
+        `token_env` names an environment variable, never a token. A
+        config file is committed; a credential is not — the same rule
+        the S3 store keeps (ADR-7) and `wsindex sync` keeps for remotes.
+
+        Entries missing `type` or `url_pattern` are skipped: an
+        incomplete one routes nothing, and refusing to load the whole
+        config over it would take the workspace down for a typo in a
+        section nothing else depends on.
+
+        Absent from `DEFAULT` deliberately, unlike every other optional
+        section. `wsindex init` would otherwise write `connectors = []`,
+        and TOML does not let a static array become an array of tables —
+        so the one documented way to add an entry, appending a
+        `[[connectors]]` block, would fail on a freshly initialized
+        workspace. An empty default that blocks the only way to fill it
+        is worse than no default.
+        """
+        found: list[ConnectorSpec] = []
+        for entry in self._data.get("connectors", []):
+            if not entry.get("type") or not entry.get("url_pattern"):
+                continue
+            token_env = entry.get("token_env")
+            found.append(
+                ConnectorSpec(
+                    type=str(entry["type"]),
+                    url_pattern=str(entry["url_pattern"]),
+                    token_env=str(token_env) if token_env else None,
+                )
+            )
+        return found
 
     @property
     def repos(self) -> list[Repository]:

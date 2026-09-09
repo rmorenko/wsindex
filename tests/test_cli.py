@@ -469,3 +469,62 @@ def test_a_config_missing_a_required_section_is_an_error_too(workspace: Path) ->
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 1
     assert "cannot read the wsindex config" in result.output
+
+
+# --- step 29a: wsindex fetch ---------------------------------------------
+
+
+def test_fetch_prints_a_document(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from wsindex.connectors import Document
+
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(
+        config.read_text() + '\n[[connectors]]\ntype = "generic-http"\nurl_pattern = "https://*"\n'
+    )
+    monkeypatch.setattr(
+        "wsindex.connectors.http.GenericHttpConnector.fetch",
+        lambda self, url: Document(
+            url=url, title="Guide", text="body text", metadata={"content_type": "text/html"}
+        ),
+    )
+
+    result = runner.invoke(app, ["fetch", "https://example.invalid/guide"])
+    assert result.exit_code == 0
+    assert "title: Guide" in result.output
+    assert "content_type: text/html" in result.output
+    assert "body text" in result.output
+
+
+def test_fetch_says_when_nothing_claims_the_url(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    result = runner.invoke(app, ["fetch", "https://example.invalid/guide"])
+    assert result.exit_code == 1
+    assert "no connector claims" in result.output
+
+
+def test_fetch_reports_a_connector_error(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from wsindex.connectors import DocumentNotFound
+
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(
+        config.read_text() + '\n[[connectors]]\ntype = "generic-http"\nurl_pattern = "https://*"\n'
+    )
+
+    def missing(self: object, url: str) -> None:
+        raise DocumentNotFound(f"{url} is not there, or not visible")
+
+    monkeypatch.setattr("wsindex.connectors.http.GenericHttpConnector.fetch", missing)
+    result = runner.invoke(app, ["fetch", "https://example.invalid/gone"])
+    assert result.exit_code == 1
+    assert "not there, or not visible" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_fetch_needs_a_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(ENV_OVERRIDE, str(tmp_path / "absent.toml"))
+    result = runner.invoke(app, ["fetch", "https://example.invalid/a"])
+    assert result.exit_code == 1
+    assert "wsindex init" in result.output

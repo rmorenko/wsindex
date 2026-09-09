@@ -172,6 +172,50 @@ rather than noisy: a built-in `[A-Z]+-\d+` rule looks like a Jira key and
 also matches `ADR-7`, `UTF-8` and `ISO-8601` — measured on this
 repository it produced 198 matches and not one was a ticket.
 
+## Fetching what a reference points at
+
+A link says where a document is; a connector goes and gets it. One
+document at a time, by url — nothing walks a wiki space, so the cost of
+an external source stays proportional to what the repository actually
+mentions.
+
+```console
+$ wsindex fetch https://github.com/astral-sh/uv/issues/1
+https://github.com/astral-sh/uv/issues/1
+title: Add basic GitHub Actions CI
+author: charliermarsh
+state: closed
+...
+```
+
+Which connector answers which url is configuration:
+
+```toml
+[[connectors]]
+type = "github"
+url_pattern = "https://github.com/myorg/*"
+token_env = "GITHUB_TOKEN"
+
+[[connectors]]
+type = "generic-http"
+url_pattern = "https://*"
+```
+
+First match wins, in file order — so the specific entry goes above the
+catch-all. `github` fetches an issue or a pull request (one API endpoint
+answers for both) and hands back the body as its author wrote it;
+`generic-http` takes anything already textual, and strips HTML to what a
+reader would see — a documentation page measured here went from 83 KB of
+markup to 6.9 KB of text.
+
+`token_env` names an **environment variable**, never a token. The config
+file gets committed; the secret is read at fetch time and stored nowhere
+— the same rule the S3 backend and `wsindex sync` keep. A connector
+configured with a token env var that is not set refuses to run rather
+than falling back to an anonymous request: GitHub answers 404 for a
+private repository, which would otherwise read as "no such issue" and
+send you looking in the wrong place.
+
 ## Drift between code and configuration
 
 While indexing, wsindex notes two things: ports that code expects to
