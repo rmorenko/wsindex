@@ -31,16 +31,17 @@ two answers shaped the contract:
 - **An issue and a pull request are one endpoint.** `/issues/{n}`
   answers for both, so there is no url shape to disambiguate.
 
-Custom connectors are step 29c: entry points under `wsindex.connectors`,
-the same seam the language plugins use. `BUILTIN` below is what the
-loader will merge into.
+Custom connectors come from entry points under `wsindex.connectors` —
+the same seam the language plugins use (step 24). `BUILTIN` below is what
+the loader merges into; see `wsindex.connectors.plugins`, and
+`examples/wsindex-connector-notion` for a worked one.
 """
 
 from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 
@@ -93,7 +94,7 @@ class ConnectorSpec:
 
     Attributes:
         type: Which connector implementation — a key of `BUILTIN`, or a
-            name a plugin registers (step 29c).
+            name a plugin registers (step 29v).
         url_pattern: Glob the url must match, `*` and `?` as in a shell.
             A glob rather than a regex because these are written by hand
             in a config file, and `https://github.com/myorg/*` is what
@@ -184,11 +185,46 @@ BUILTIN: dict[str, ConnectorFactory] = {}
 """Connector implementations shipped with wsindex, by `type` name.
 
 Filled at the bottom of this module, after the implementations import.
-Step 29c merges plugin entry points into the same map, which is why it
-is a plain dict rather than a set of imports at each call site."""
+Plugin entry points are merged into the same map on first use (step
+29v), which is why it is a plain dict rather than a set of imports at
+each call site."""
 
 
-def route(url: str, specs: Sequence[ConnectorSpec]) -> Connector | None:
+_plugins_loaded = False
+
+
+def _ensure_plugins() -> None:
+    """Load installed connector plugins once, before the first routing.
+
+    Not at import time, which is where this started and where it does
+    not work. A plugin must `from wsindex.connectors import Connector` at
+    module level to subclass it; if importing that package ended by
+    importing plugins, a program that imported the *plugin* first would
+    re-enter it half-executed and the entry point would resolve to
+    nothing. The loader would report it — "import failed, partially
+    initialized module" — and skip, which is a silently disabled plugin
+    dressed up as a warning nobody reads.
+
+    Deferring to the first `route` breaks the cycle: by the time a url
+    needs a connector, every module involved has finished importing.
+    """
+    global _plugins_loaded
+    if _plugins_loaded:
+        return
+    # Set first: a plugin's import may reach back into this module, and
+    # once round the loop is enough.
+    _plugins_loaded = True
+    from wsindex.connectors.plugins import load_connectors
+
+    load_connectors(BUILTIN)
+
+
+def route(
+    url: str,
+    specs: Sequence[ConnectorSpec],
+    *,
+    registry: Mapping[str, ConnectorFactory] | None = None,
+) -> Connector | None:
     """The connector configured to answer this url, or None.
 
     First match wins, in config order — the same rule a routing table
@@ -200,15 +236,22 @@ def route(url: str, specs: Sequence[ConnectorSpec]) -> Connector | None:
     Args:
         url: The url to route.
         specs: `Config.connectors`, in file order.
+        registry: Type name -> implementation; defaults to the
+            process-wide `BUILTIN`, which is what every caller wants.
+            Injectable for the same reason `load_connectors` takes one:
+            a test that routed through the global table would have to
+            mutate it.
 
     Returns:
         A connector bound to the winning spec, or None when nothing
         claims the url or the claimant does not understand it.
     """
+    if registry is None:
+        _ensure_plugins()
     for spec in specs:
         if not spec.matches(url):
             continue
-        factory = BUILTIN.get(spec.type)
+        factory = (BUILTIN if registry is None else registry).get(spec.type)
         if factory is None:
             continue
         connector = factory(spec)
@@ -230,10 +273,20 @@ BUILTIN.update(
     }
 )
 
+SHIPPED = frozenset(BUILTIN)
+"""The type names that came in the box, frozen before any plugin loads.
+
+A separate name from `BUILTIN` because the two answer different
+questions: `BUILTIN` is "what can this process route to", which grows
+with what is installed, and this is "what does wsindex itself claim",
+which does not. A plugin may not take one of these — see
+`wsindex.connectors.plugins`."""
+
 __all__ = [
     "BUILTIN",
     "Connector",
     "ConnectorError",
+    "ConnectorFactory",
     "ConnectorSpec",
     "Document",
     "DocumentNotFound",

@@ -18,7 +18,7 @@ import pytest
 
 from wsindex.config import Config
 from wsindex.connectors import (
-    BUILTIN,
+    SHIPPED,
     ConnectorError,
     ConnectorSpec,
     DocumentNotFound,
@@ -69,7 +69,7 @@ def test_the_builtins_are_the_two_that_were_probed() -> None:
     # The plan names five out of the box. Only these two could be probed
     # against something real without an instance and a token, and the
     # stage's own rule is probes before code.
-    assert set(BUILTIN) == {"generic-http", "github"}
+    assert {"generic-http", "github"} == SHIPPED
 
 
 # --- tokens: named in the config, valued in the environment --------------

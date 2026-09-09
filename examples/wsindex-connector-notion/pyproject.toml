@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wsindex-connector-notion"
+version = "0.1.0"
+description = "Notion support for wsindex, as a worked example of a connector plugin."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "WSIndex contributors" }]
+keywords = ["wsindex", "plugin", "connector", "notion"]
+
+# Nothing but the standard library. A connector needs an HTTP client and
+# a JSON parser, and Python ships both — the transport inside wsindex is
+# private on purpose, so a plugin owns its own.
+#
+# A plugin published to PyPI would also declare `wsindex>=0.1` here. This
+# one does not, so that `uv pip install -e examples/wsindex-connector-notion`
+# works inside the wsindex repo without resolving wsindex from an index
+# it is not published to.
+dependencies = []
+
+# The whole integration surface. hatchling copies this into
+# wsindex_connector_notion-0.1.0.dist-info/entry_points.txt at install
+# time, and wsindex reads it back with importlib.metadata — see
+# wsindex.connectors.plugins. The name on the left is the `type` a
+# [[connectors]] entry asks for.
+[project.entry-points."wsindex.connectors"]
+notion = "wsindex_connector_notion:NotionConnector"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wsindex_connector_notion"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

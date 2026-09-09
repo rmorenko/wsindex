@@ -12,12 +12,11 @@ them. The spec types are re-exported here because that is the surface a
 plugin imports; the extractor toolkit it writes `spans` with lives in
 `wsindex.ingest.ast`.
 
-Assembling the stage is this module's last act: once the built-in
-languages and the plugin loader are both importable, `load_plugins` runs
-so that an installed plugin is live for anything that imports wsindex.
-Doing it here rather than in `languages` keeps that module free of the
-discovery machinery — and avoids the import cycle, since `plugins` needs
-`LanguageSpec`.
+Plugins are not loaded here, and not at import time at all. `REGISTRY`
+loads them the first time it is asked a question — see
+`LanguageRegistry._ensure_plugins` for why the cycle that made that
+necessary is unavoidable: a plugin must import wsindex to build what it
+registers, so wsindex must not import plugins on its way up.
 """
 
 from wsindex.ingest.chunker import chunk_file
@@ -65,6 +64,3 @@ __all__ = [
     "load_plugins",
     "sync_repo",
 ]
-
-
-load_plugins(REGISTRY)

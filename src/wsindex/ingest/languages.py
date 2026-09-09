@@ -126,11 +126,41 @@ class LanguageRegistry:
     registered. That ordering is what lets step 24 load plugins after
     this module is imported: nothing has been computed from the specs
     until something asks.
+
+    Plugins are loaded on the same terms, and for a sharper reason than
+    tidiness. A plugin has to `import wsindex...` at module level to
+    subclass or build what it registers. If the import of wsindex ended
+    by loading plugins, then a program that imported the *plugin* first
+    would re-enter it while it was still half-executed, and the entry
+    point would resolve to nothing — a silently disabled plugin, which
+    is the exact failure the loader exists to prevent. Deferring to
+    first use breaks the cycle: by the time anything asks this registry
+    a question, every module involved has finished importing.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, plugins: bool = False) -> None:
+        """Build a registry.
+
+        Args:
+            plugins: Load installed language plugins on first use. True
+                for the process-wide `REGISTRY` and false everywhere
+                else — a throwaway registry in a test must contain only
+                what the test put in it.
+        """
         self._specs: dict[str, LanguageSpec] = {}
         self._parsers: dict[str, Parser] | None = None
+        self._pending_plugins = plugins
+
+    def _ensure_plugins(self) -> None:
+        """Load installed plugins once, before the first question."""
+        if not self._pending_plugins:
+            return
+        # Cleared first: `load_plugins` calls `register`, and a plugin
+        # importing wsindex must not send us back around this loop.
+        self._pending_plugins = False
+        from wsindex.ingest.plugins import load_plugins
+
+        load_plugins(self)
 
     def register(self, spec: LanguageSpec) -> None:
         """Add a language, rejecting anything that could not work.
@@ -203,10 +233,12 @@ class LanguageRegistry:
     @property
     def specs(self) -> tuple[LanguageSpec, ...]:
         """Every registered language, in registration order."""
+        self._ensure_plugins()
         return tuple(self._specs.values())
 
     def get(self, name: str) -> LanguageSpec | None:
         """The spec registered under `name`, or None."""
+        self._ensure_plugins()
         return self._specs.get(name)
 
     def match(self, path: Path) -> LanguageSpec | None:
@@ -221,6 +253,7 @@ class LanguageRegistry:
         Returns:
             The matching spec, or None when no language claims the file.
         """
+        self._ensure_plugins()
         suffix = path.suffix.lower()
         for spec in self._specs.values():
             if suffix and suffix in spec.suffixes:
@@ -237,10 +270,12 @@ class LanguageRegistry:
         optional `ast` extra, so a spec can name one that is not
         installed. The chunker falls back to text windows.
         """
+        self._ensure_plugins()
         return self._build_parsers().get(name)
 
     def extractor(self, name: str) -> SpanExtractor | None:
         """The span extractor for a language, or None if it has none."""
+        self._ensure_plugins()
         spec = self._specs.get(name)
         return spec.spans if spec is not None else None
 
@@ -284,7 +319,7 @@ __all__ = [
     "SpanExtractor",
 ]
 
-REGISTRY = LanguageRegistry()
+REGISTRY = LanguageRegistry(plugins=True)
 """The process-wide registry. Step 24's plugin loader appends to it."""
 
 

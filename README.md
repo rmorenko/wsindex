@@ -216,6 +216,45 @@ than falling back to an anonymous request: GitHub answers 404 for a
 private repository, which would otherwise read as "no such issue" and
 send you looking in the wrong place.
 
+## Teaching it a new source
+
+The two connectors above are what wsindex ships with, not what it can
+fetch. A source is one `Connector` subclass, and an installed package can
+supply one without any change to wsindex — the same seam the language
+plugins use. The name on the left is the `type` a config entry asks for:
+
+```toml
+# in your plugin's pyproject.toml
+[project.entry-points."wsindex.connectors"]
+notion = "wsindex_connector_notion:NotionConnector"
+```
+
+```python
+from wsindex.connectors import Connector, Document
+
+
+class NotionConnector(Connector):
+    def matches(self, url: str) -> bool:
+        """Narrower than the config's pattern: what you can really fetch."""
+        return page_id(url) is not None
+
+    def fetch(self, url: str) -> Document:
+        """Whatever the source speaks, turned into text."""
+```
+
+`matches` and `fetch` are separate so a url can be routed without
+anything being requested over the network, and a connector that says no
+lets the router fall through to a generic entry. A plugin may not take a
+name that already exists — `github` means the built-in, and a config that
+says so must keep meaning it. A broken plugin is a warning and a skip,
+never a crash.
+
+[`examples/wsindex-connector-notion`](examples/wsindex-connector-notion/)
+is the worked one, and it is Notion because Notion's API returns neither
+markdown nor text: a page is a tree of blocks, so the connector has to
+rebuild the document rather than pass it along. That is the case most
+real sources are, and the one the built-ins do not exercise.
+
 ## Keeping a snapshot of what you fetch
 
 A fetched document does not go into the index directly. It is written to

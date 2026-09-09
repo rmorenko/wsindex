@@ -168,12 +168,12 @@ help = "Run the wsindex CLI"
 cmd = "wsindex"
 
 [tool.poe.tasks.example-plugin]
-help = "Install the example Lua plugin and run its tests (examples/wsindex-lang-lua)"
+help = "Install both example plugins (language, connector) and run their tests"
 interpreter = "bash"
 shell = """
 set -eu -o pipefail
-uv pip install -q -e examples/wsindex-lang-lua
-pytest examples/wsindex-lang-lua/tests
+uv pip install -q -e examples/wsindex-lang-lua -e examples/wsindex-connector-notion
+pytest examples/wsindex-lang-lua/tests examples/wsindex-connector-notion/tests
 """
 
 [tool.poe.tasks.acceptance]
