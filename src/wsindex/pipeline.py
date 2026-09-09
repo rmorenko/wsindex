@@ -183,7 +183,7 @@ class Pipeline:
                 # dirty tree records nothing: we indexed content that no
                 # commit describes, and claiming HEAD would make the next
                 # run skip those same changes forever.
-                state = state.with_commit(repo.id, diff.head)
+                state = state.with_commit(repo.id, diff.head, markup=repo.markup_key)
                 state.save(self.state_dir)
         return IndexReport(
             files=files,
@@ -207,6 +207,8 @@ class Pipeline:
         - *May HEAD be recorded as indexed?* Whenever the tree is clean,
           full pass or not. This is what puts a freshly indexed repo onto
           the fast path for the next run.
+        - *Is the markup the same one that produced the index?* A commit
+          says nothing about which files the config selected from it.
 
         Returns:
             The diff to apply, and whether the working tree is dirty.
@@ -215,7 +217,12 @@ class Pipeline:
         # them makes the working tree differ from every commit, so no
         # commit-to-commit diff can describe what we are about to index.
         dirty = has_uncommitted_changes(root)
-        since = None if dirty else state.commits.get(repo.id)
+        # A third question, and the one a live run found missing: *is the
+        # policy the same?* Editing `formats` changes which files this
+        # tree produces while git reports nothing at all, so trusting the
+        # commit alone made a markup change a silent no-op.
+        remarked = state.markup.get(repo.id) != repo.markup_key
+        since = None if dirty or remarked else state.commits.get(repo.id)
         return diff_since(root, since=since), dirty
 
     def _apply(self, repo: Repository, *, root: Path, diff: RepoDiff, config: Config) -> _Totals:
@@ -241,7 +248,9 @@ class Pipeline:
         indexable: list[WalkedFile] = []
         forget: list[str] = list(diff.deleted)
         for rel_path in diff.changed:
-            walked = inspect_file(root, rel_path)
+            # The repo's own markup, not the workspace's: what to index
+            # is a property of this repository (step 17z).
+            walked = inspect_file(root, rel_path, ignore=repo.ignore, formats=repo.formats)
             if walked is None:
                 # It changed into something we do not index — renamed to
                 # a .png, grown past the size limit, turned binary. Its

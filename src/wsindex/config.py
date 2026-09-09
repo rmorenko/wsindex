@@ -38,16 +38,19 @@ including the calls `__new__` answered from the cache.
 from __future__ import annotations
 
 import copy
+import json
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
+from hashlib import blake2b
 from pathlib import Path
 from typing import Any, ClassVar
 
 import tomli_w
 
 from wsindex.connectors import ConnectorSpec
+from wsindex.model import Kind
 from wsindex.paths import ConfigLocation, Mode, find_config, resolve_index_dir
 
 DEFAULT_RANK_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
@@ -104,6 +107,14 @@ class Repository:
         urls: The documents a snapshot repository holds. Meaningless
             without `source`, and rejected there — a url list on a git
             repo is a typo, not a preference.
+        ignore: Path globs this repo excludes, on top of the walker's
+            own pruning. Narrows only — there is no way to widen, by
+            design (see `wsindex.ingest.walker._skip_dir`).
+        formats: Suffix -> (lang, kind) for this repo, overriding the
+            language registry. What to index is a property of a
+            repository: `.component.html` is source in an Angular repo
+            and generated noise in a Python one, and a global table
+            cannot be right for both.
     """
 
     id: str
@@ -111,11 +122,36 @@ class Repository:
     remote: str | None = None
     source: RepoSource | None = None
     urls: tuple[str, ...] = ()
+    ignore: tuple[str, ...] = ()
+    formats: dict[str, tuple[str, Kind]] = field(default_factory=dict)
 
     @property
     def is_snapshot(self) -> bool:
         """True when sync materializes this repo instead of pulling it."""
         return self.source is RepoSource.CONNECTOR
+
+    @property
+    def markup_key(self) -> str:
+        """A fingerprint of what this repo indexes, for the index state.
+
+        The commit alone cannot answer "is the index still right": edit
+        `formats` and the same tree yields a different set of files,
+        while git reports nothing changed at all. Incremental indexing
+        would then skip the repo forever — which it did, until a live run
+        caught it.
+
+        A hash rather than the values, because `state.json` is a cache
+        and a repo may carry fifty globs. Sorted before hashing so
+        reordering the config is not a change.
+        """
+        payload = json.dumps(
+            {
+                "ignore": sorted(self.ignore),
+                "formats": {k: list(v) for k, v in sorted(self.formats.items())},
+            },
+            sort_keys=True,
+        )
+        return blake2b(payload.encode(), digest_size=8).hexdigest()
 
 
 class Config:
@@ -274,6 +310,14 @@ class Config:
                 raise ValueError(f"repo entry needs both 'id' and 'path': {repo!r}")
             cls._validate_repo(repo)
 
+    REPO_KEYS: ClassVar[frozenset[str]] = frozenset(
+        {"id", "path", "remote", "source", "urls", "ignore", "formats"}
+    )
+    """Every key a `[[repos]]` entry may carry. Closed on purpose: a
+    misspelled `ignores` that silently indexed everything is the failure
+    this format is most likely to produce, and the only cheap way to catch
+    it is to refuse what we do not recognize."""
+
     @staticmethod
     def _validate_repo(repo: dict[str, Any]) -> None:
         """Check one `[[repos]]` entry beyond its required keys.
@@ -288,10 +332,18 @@ class Config:
             repo: One parsed repo table.
 
         Raises:
-            ValueError: `source` names no known kind, a snapshot also has
-                a `remote` (two owners for one working copy), or `urls`
-                appear on a repo that is not a snapshot.
+            ValueError: An unknown key, `source` names no known kind, a
+                snapshot also has a `remote` (two owners for one working
+                copy), `urls` appear on a repo that is not a snapshot, or
+                a `formats` entry is malformed.
         """
+        unknown = sorted(set(repo) - Config.REPO_KEYS)
+        if unknown:
+            raise ValueError(
+                f"repo {repo.get('id', '?')!r} has unknown key(s) {', '.join(unknown)} — "
+                f"a repo entry may hold: {', '.join(sorted(Config.REPO_KEYS))}"
+            )
+        Config._validate_formats(repo)
         source = repo.get("source")
         if source is not None:
             # Constructing the enum is the check, as it is for `backend`.
@@ -306,6 +358,39 @@ class Config:
                 f"repo {repo['id']!r} lists 'urls' but has no 'source' — add "
                 'source = "connector" to materialize them'
             )
+
+    @staticmethod
+    def _validate_formats(repo: dict[str, Any]) -> None:
+        """Check the per-repo suffix table, which is all hand-written.
+
+        Every rule below describes a mapping that would otherwise fail
+        silently — a suffix without its dot matches nothing, a `kind` the
+        model does not have selects nothing — and silence here surfaces
+        later as "why is my file not indexed?", the hardest question this
+        tool can be asked.
+
+        Args:
+            repo: One parsed repo table.
+
+        Raises:
+            ValueError: A malformed suffix, a missing `lang`/`kind`, an
+                unknown `kind`, or `commit`, which no file may claim.
+        """
+        for suffix, entry in (repo.get("formats") or {}).items():
+            where = f"repo {repo.get('id', '?')!r}, formats[{suffix!r}]"
+            if not suffix.startswith(".") or len(suffix) < 2:
+                raise ValueError(f"{where}: a suffix must start with a dot, like '.sql'")
+            if not isinstance(entry, dict) or not entry.get("lang") or not entry.get("kind"):
+                raise ValueError(
+                    f"{where}: needs both 'lang' and 'kind', e.g. "
+                    '{ lang = "sql", kind = "code" }'
+                )
+            kind = Kind(entry["kind"])
+            if kind is Kind.COMMIT:
+                # Commit chunks are synthesized from git history and have
+                # no path on disk; a file claiming to be one would collide
+                # with that corpus in every filter that mentions it.
+                raise ValueError(f"{where}: 'commit' is not a file kind — use code, config or doc")
 
     @classmethod
     def default(
@@ -527,6 +612,11 @@ class Config:
                 remote=str(repo["remote"]) if repo.get("remote") else None,
                 source=RepoSource(repo["source"]) if repo.get("source") else None,
                 urls=tuple(str(url) for url in repo.get("urls", [])),
+                ignore=tuple(str(pattern) for pattern in repo.get("ignore", [])),
+                formats={
+                    str(suffix).lower(): (str(entry["lang"]), Kind(entry["kind"]))
+                    for suffix, entry in (repo.get("formats") or {}).items()
+                },
             )
             for repo in self._data["repos"]
         ]
@@ -539,6 +629,7 @@ class Config:
         remote: str | None = None,
         source: RepoSource | None = None,
         urls: Sequence[str] = (),
+        ignore: Sequence[str] = (),
     ) -> None:
         """Register a repository in the document (in memory; `save` is separate).
 
@@ -550,6 +641,9 @@ class Config:
             source: `connector` for a snapshot repo whose files sync
                 materializes; omitted for an ordinary git checkout.
             urls: Documents a snapshot repo holds.
+            ignore: Path globs this repo excludes. `formats` is not here
+                on purpose: a suffix table is a nested mapping nobody
+                types at a shell, and `wsindex.toml` is where it belongs.
 
         Raises:
             ValueError: The id is already registered — ids name datasets,
@@ -569,6 +663,8 @@ class Config:
             entry["source"] = source.value
         if urls:
             entry["urls"] = list(urls)
+        if ignore:
+            entry["ignore"] = list(ignore)
         self._validate_repo(entry)
         self._data["repos"].append(entry)
 
@@ -601,5 +697,33 @@ class Config:
         target = path or self.path
         if target is None:
             raise ValueError("no path to save to: this config was built from defaults")
-        target.write_text(tomli_w.dumps(self._data), encoding="utf-8")
+        target.write_text(self._render(), encoding="utf-8")
         return target
+
+    def _render(self) -> str:
+        """The document as TOML, with repos as `[[repos]]` sections.
+
+        tomli_w decides that per entry by line length: a repo of just an
+        id and a path fits on one line, so it writes `repos = [{...}]` —
+        and a static array cannot take a sub-table. `[repos.formats]`,
+        the documented way to mark up a repository, is then a syntax
+        error on the very file `wsindex add-repo` just wrote.
+
+        The same trap `connectors` fell into (step 29a) and the same
+        rule: whatever a person is told to hand-edit must be a shape they
+        can hand-edit. So the array of tables is written here rather than
+        left to a heuristic, while every value still goes through
+        tomli_w — quoting a key like `".sql"` is not something to
+        reimplement.
+        """
+        parts = [tomli_w.dumps({key: value for key, value in self._data.items() if key != "repos"})]
+        for repo in self._data.get("repos", []):
+            flat = {key: value for key, value in repo.items() if not isinstance(value, dict)}
+            nested = {key: value for key, value in repo.items() if isinstance(value, dict)}
+            parts.append("[[repos]]\n" + tomli_w.dumps(flat))
+            if nested:
+                # Rendered under the `repos` name so the headers come out
+                # as `[repos.formats...]`, which TOML attaches to the
+                # last `[[repos]]` — the entry just written above.
+                parts.append(tomli_w.dumps({"repos": nested}))
+        return "\n".join(parts)

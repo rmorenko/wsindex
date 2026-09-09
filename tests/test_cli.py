@@ -596,7 +596,7 @@ def test_a_repo_cannot_be_both_pulled_and_materialized(workspace: Path) -> None:
 
     assert result.exit_code == 1
     assert "not both" in result.output
-    assert not tomllib.loads((workspace / CONFIG_FILE).read_text())["repos"]
+    assert not tomllib.loads((workspace / CONFIG_FILE).read_text()).get("repos")
 
 
 def test_sync_materializes_a_snapshot_and_index_reads_it(

@@ -58,7 +58,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 STATE_FILE = "state.json"
@@ -138,7 +138,7 @@ class RepoDiff:
 
 @dataclass(frozen=True, kw_only=True)
 class IndexState:
-    """The commit each repo was last indexed at.
+    """The commit each repo was last indexed at, and under which markup.
 
     Frozen, like the rest of the model: `with_commit` returns a new
     state rather than mutating this one, so a half-finished index run
@@ -148,9 +148,17 @@ class IndexState:
         commits: Repo id -> commit sha. A repo absent from the mapping
             has never been indexed; that is the normal first-run state,
             not an error.
+        markup: Repo id -> a fingerprint of the per-repo `ignore` and
+            `formats` in force at that commit. A commit alone does not
+            say what was indexed: change `formats` and the same tree
+            yields different files, while git reports nothing changed.
+            Without this, editing the markup and re-indexing did exactly
+            nothing — measured, not imagined. A repo absent here is one
+            whose markup is unknown, which costs one full pass.
     """
 
     commits: dict[str, str]
+    markup: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, index_dir: Path) -> IndexState:
@@ -181,13 +189,29 @@ class IndexState:
         commits = raw.get("commits")
         if not isinstance(commits, dict):
             return cls(commits={})
+        markup = raw.get("markup")
         # Values are re-typed rather than trusted: a hand-edited file
         # could hold a number where a sha belongs.
-        return cls(commits={str(k): str(v) for k, v in commits.items()})
+        return cls(
+            commits={str(k): str(v) for k, v in commits.items()},
+            markup=(
+                {str(k): str(v) for k, v in markup.items()} if isinstance(markup, dict) else {}
+            ),
+        )
 
-    def with_commit(self, repo_id: str, commit: str) -> IndexState:
-        """A copy of this state with `repo_id` recorded at `commit`."""
-        return IndexState(commits={**self.commits, repo_id: commit})
+    def with_commit(self, repo_id: str, commit: str, *, markup: str = "") -> IndexState:
+        """A copy of this state with `repo_id` recorded at `commit`.
+
+        Args:
+            repo_id: The repo just indexed.
+            commit: The commit its working tree was at.
+            markup: Fingerprint of the `ignore`/`formats` used, so the
+                next run can tell a changed policy from an unchanged tree.
+        """
+        return IndexState(
+            commits={**self.commits, repo_id: commit},
+            markup={**self.markup, repo_id: markup},
+        )
 
     def save(self, index_dir: Path) -> Path:
         """Write `state.json`, creating `index_dir` if needed.
@@ -205,7 +229,7 @@ class IndexState:
         """
         index_dir.mkdir(parents=True, exist_ok=True)
         path = index_dir / STATE_FILE
-        payload = {"version": STATE_VERSION, "commits": self.commits}
+        payload = {"version": STATE_VERSION, "commits": self.commits, "markup": self.markup}
         tmp = path.with_name(f"{STATE_FILE}.tmp")
         tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
         tmp.replace(path)

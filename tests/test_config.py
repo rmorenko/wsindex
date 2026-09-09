@@ -20,6 +20,7 @@ from wsindex.config import (
     Repository,
     RepoSource,
 )
+from wsindex.model import Kind
 from wsindex.paths import Mode
 
 
@@ -397,3 +398,107 @@ def test_add_repo_refuses_the_same_contradiction() -> None:
     with pytest.raises(ValueError, match="not both"):
         config.add_repo("r", path="p", source=RepoSource.CONNECTOR, remote="u")
     assert not config.repos
+
+
+# --- per-repo markup (step 17z) ------------------------------------------
+
+
+def test_per_repo_markup_round_trips(tmp_path: Path) -> None:
+    path = write(
+        tmp_path,
+        [
+            {
+                "id": "app",
+                "path": "p",
+                "ignore": ["dist/*", "*.min.js"],
+                "formats": {".sql": {"lang": "sql", "kind": "code"}},
+            }
+        ],
+    )
+    repo = Config(path).repos[0]
+    assert repo.ignore == ("dist/*", "*.min.js")
+    assert repo.formats == {".sql": ("sql", Kind.CODE)}
+
+
+def test_an_unknown_repo_key_is_refused(tmp_path: Path) -> None:
+    # The failure this format is most likely to produce: a misspelled
+    # `ignores` that silently indexes everything it was meant to exclude.
+    path = write(tmp_path, [{"id": "app", "path": "p", "ignores": ["dist/*"]}])
+    with pytest.raises(ValueError, match="unknown key"):
+        Config(path)
+
+
+def test_a_suffix_without_its_dot_is_refused(tmp_path: Path) -> None:
+    # ".sql" is a suffix, "sql" matches no file at all.
+    path = write(
+        tmp_path, [{"id": "a", "path": "p", "formats": {"sql": {"lang": "s", "kind": "code"}}}]
+    )
+    with pytest.raises(ValueError, match="start with a dot"):
+        Config(path)
+
+
+def test_a_format_needs_both_lang_and_kind(tmp_path: Path) -> None:
+    path = write(tmp_path, [{"id": "a", "path": "p", "formats": {".sql": {"lang": "sql"}}}])
+    with pytest.raises(ValueError, match="needs both"):
+        Config(path)
+
+
+def test_a_file_may_not_be_marked_as_a_commit(tmp_path: Path) -> None:
+    # Commit chunks come from git history and have no path on disk;
+    # a file claiming that kind would collide with them in every filter.
+    path = write(
+        tmp_path, [{"id": "a", "path": "p", "formats": {".txt": {"lang": "t", "kind": "commit"}}}]
+    )
+    with pytest.raises(ValueError, match="not a file kind"):
+        Config(path)
+
+
+def test_an_unknown_kind_is_refused(tmp_path: Path) -> None:
+    path = write(
+        tmp_path, [{"id": "a", "path": "p", "formats": {".txt": {"lang": "t", "kind": "prose"}}}]
+    )
+    with pytest.raises(ValueError, match="prose"):
+        Config(path)
+
+
+def test_add_repo_records_ignore_globs() -> None:
+    config = Config.default("demo")
+    config.add_repo("app", path="p", ignore=["dist/*"])
+    assert config.repos[0].ignore == ("dist/*",)
+    assert config.to_dict()["repos"][0]["ignore"] == ["dist/*"]
+
+
+def test_a_saved_config_can_be_hand_edited(tmp_path: Path) -> None:
+    # The trap `connectors = []` fell into in step 29a, and `repos` had
+    # been in it from the start: tomli_w writes a short repo entry as
+    # `repos = [{...}]`, and TOML forbids attaching `[[repos]]` or
+    # `[repos.formats]` to a static array. Whatever a person is told to
+    # hand-edit has to be a shape they can hand-edit.
+    config = Config.default("demo")
+    config.add_repo("app", path="p", ignore=["dist/*"])
+    config._data["repos"][0]["formats"] = {".sql": {"lang": "sql", "kind": "code"}}
+    path = config.save(tmp_path / "wsindex.toml")
+
+    text = path.read_text(encoding="utf-8")
+    assert "[[repos]]" in text
+    assert "repos = [" not in text
+    # And the hand-editing itself works: append a second repo by hand.
+    path.write_text(text + '\n[[repos]]\nid = "second"\npath = "q"\n', encoding="utf-8")
+
+    Config.reset()
+    repos = Config(path).repos
+    assert [r.id for r in repos] == ["app", "second"]
+    assert repos[0].formats == {".sql": ("sql", Kind.CODE)}
+
+
+def test_a_config_with_no_repos_leaves_room_for_one(tmp_path: Path) -> None:
+    # `repos = []` would be the same trap: a static empty array cannot
+    # become an array of tables.
+    path = Config.default("demo").save(tmp_path / "wsindex.toml")
+    assert "repos" not in path.read_text(encoding="utf-8")
+
+    path.write_text(
+        path.read_text(encoding="utf-8") + '\n[[repos]]\nid = "a"\npath = "p"\n', encoding="utf-8"
+    )
+    Config.reset()
+    assert [r.id for r in Config(path).repos] == ["a"]

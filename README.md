@@ -38,6 +38,51 @@ wsindex/src/wsindex/ingest/text_chunker.py:107-111  0.598  def chunk_text(text: 
 _(After this README itself gets indexed, it will match its own example
 query too — semantic search is honest like that.)_
 
+## Marking up a repository
+
+What is worth indexing is a property of a repository, not of a
+workspace: in an Angular repo a `.component.html` is source, in a Python
+repo an `.html` is generated noise. Two optional keys per repo say so —
+and deliberately only two, because the third would be the start of a
+rules engine:
+
+```toml
+[[repos]]
+id = "app"
+path = "~/checkouts/app"
+ignore = ["vendor/*", "*.min.js"]
+
+[repos.formats.".sql"]
+lang = "sql"
+kind = "code"
+```
+
+`ignore` takes path globs, matched against the whole repo-relative path;
+`*` crosses directory separators, so `vendor/*` means the whole subtree.
+
+`formats` maps a suffix to a language and a kind, overriding the built-in
+table for this repo alone. **A language with no grammar is the point, not
+a limitation**: the chunker falls back to sliding windows, so marking
+`.sql`, `.proto` or `.tf` makes them searchable immediately, and an AST
+extractor can be bought later for the ones that earn it. Point a suffix
+at a language that *does* have a grammar — `".pom" = { lang = "xml" }` —
+and it gets the syntax tree for free.
+
+Anything wsindex does not recognize in a repo entry is an error rather
+than a shrug: a misspelled `ignores` that silently indexed everything it
+was meant to exclude is the mistake this format invites most.
+
+Changing the markup re-reads the repository on the next `index`, even
+though git reports the tree as unchanged — the index remembers which
+markup produced it, because a commit alone does not say which files were
+selected from it.
+
+Build output is skipped everywhere, no configuration needed:
+`node_modules`, `target`, `dist`, `build`, `out`, `coverage`, `htmlcov`,
+`__pycache__` and every dot-directory. That list is not overridable, which
+is a real limitation: a repository whose `build/` holds source has no way
+to say so. `ignore` narrows, nothing widens.
+
 ## Incremental indexing
 
 `index` asks git what changed since the commit it last indexed, so a

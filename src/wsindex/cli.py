@@ -228,6 +228,10 @@ def add_repo(
         list[str] | None,
         typer.Option("--url", help="Document to materialize (repeat); needs --source connector"),
     ] = None,
+    ignore: Annotated[
+        list[str] | None,
+        typer.Option("--ignore", help="Path glob this repo excludes (repeat)"),
+    ] = None,
 ) -> None:
     """Register a repository; its id becomes the dataset name.
 
@@ -240,11 +244,23 @@ def add_repo(
     fetches each `--url` through the configured connectors, writes it as
     markdown and commits. The two are mutually exclusive — a working copy
     has one owner.
+
+    `--ignore` takes a path glob this repo excludes, on top of what the
+    walker prunes everywhere. The other per-repo key, `formats`, is a
+    suffix table and lives in `wsindex.toml` rather than on a command
+    line.
     """
     config = _config()
     location = _require_config_file(config)
     try:
-        config.add_repo(repo_id, path=path, remote=remote, source=source, urls=url or ())
+        config.add_repo(
+            repo_id,
+            path=path,
+            remote=remote,
+            source=source,
+            urls=url or (),
+            ignore=ignore or (),
+        )
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -280,8 +296,10 @@ def index() -> None:
         # Told, not hidden: this is why the run took seconds instead of
         # milliseconds, and the user is the only one who can fix it.
         typer.echo(
-            "note: full pass for " + ", ".join(report.full_repos) + " (first index, or a dirty "
-            "working tree — commit or stash to go incremental)",
+            "note: full pass for "
+            + ", ".join(report.full_repos)
+            + " — a first index, edited per-repo markup, or uncommitted work "
+            "(a commit-to-commit diff cannot see the last one; commit or stash it)",
             err=True,
         )
     if report.missing_repos:

@@ -237,3 +237,70 @@ def test_inspect_file_returns_lang_and_kind(tmp_path: Path) -> None:
     walked = inspect_file(tmp_path, "mod.py")
     assert walked is not None
     assert (walked.rel_path, walked.lang, walked.kind) == ("mod.py", "python", Kind.CODE)
+
+
+# --- per-repo markup (step 17z) ------------------------------------------
+
+
+def test_a_repo_can_ignore_a_path_glob(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1")
+    (tmp_path / "src" / "app.min.py").write_text("x=1")
+
+    assert inspect_file(tmp_path, "src/app.py", ignore=["*.min.py"]) is not None
+    assert inspect_file(tmp_path, "src/app.min.py", ignore=["*.min.py"]) is None
+
+
+def test_an_ignore_glob_crosses_directories(tmp_path: Path) -> None:
+    # `*` in fnmatch spans separators, so one pattern covers a subtree —
+    # which is what someone writing `vendor/*` means.
+    (tmp_path / "vendor" / "deep").mkdir(parents=True)
+    (tmp_path / "vendor" / "deep" / "mod.py").write_text("x = 1")
+
+    assert inspect_file(tmp_path, "vendor/deep/mod.py", ignore=["vendor/*"]) is None
+
+
+def test_formats_teach_one_repo_a_suffix_the_registry_has_never_heard_of(
+    tmp_path: Path,
+) -> None:
+    # The long tail without a grammar each: mark it, and the chunker's
+    # text fallback does the rest.
+    (tmp_path / "schema.sql").write_text("select 1;")
+    assert inspect_file(tmp_path, "schema.sql") is None
+
+    walked = inspect_file(tmp_path, "schema.sql", formats={".sql": ("sql", Kind.CODE)})
+
+    assert walked is not None
+    assert (walked.lang, walked.kind) == ("sql", Kind.CODE)
+
+
+def test_formats_override_the_registry_for_this_repo_only(tmp_path: Path) -> None:
+    # An Angular repo's `.html` is source; a Python repo's is generated
+    # noise. The override is what lets both be true.
+    (tmp_path / "page.html").write_text("<p>hi</p>")
+
+    overridden = inspect_file(tmp_path, "page.html", formats={".html": ("html", Kind.DOC)})
+    plain = inspect_file(tmp_path, "page.html")
+
+    assert overridden is not None
+    assert overridden.kind is Kind.DOC
+    assert plain is None or plain.kind is not Kind.DOC
+
+
+def test_a_format_override_reuses_an_installed_grammar(tmp_path: Path) -> None:
+    # `.pom` is XML by another name, and pointing it at the xml language
+    # buys the AST extractor with it — no second grammar, no new step.
+    (tmp_path / "deps.pom").write_text("<project><a>1</a></project>")
+
+    walked = inspect_file(tmp_path, "deps.pom", formats={".pom": ("xml", Kind.CONFIG)})
+
+    assert walked is not None
+    assert walked.lang == "xml"
+
+
+def test_build_output_directories_are_pruned(tmp_path: Path) -> None:
+    # Indexing `dist/` means indexing the same code twice, once minified.
+    for name in ("dist", "build", "out", "coverage", "htmlcov"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "mod.py").write_text("x = 1")
+        assert inspect_file(tmp_path, f"{name}/mod.py") is None, name

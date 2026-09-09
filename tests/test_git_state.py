@@ -419,3 +419,23 @@ def test_state_drives_the_next_diff(repo: Path, git: GitRunner, tmp_path: Path) 
     third = diff_since(repo, since=IndexState.load(index_dir).commits.get("repo1"))
     assert third.changed == ("a.py",)
     assert third.head != first.head
+
+
+def test_state_remembers_the_markup_a_commit_was_indexed_under(tmp_path: Path) -> None:
+    state = IndexState(commits={}).with_commit("r", "abc123", markup="deadbeef")
+    state.save(tmp_path)
+
+    assert IndexState.load(tmp_path).markup == {"r": "deadbeef"}
+
+
+def test_a_state_file_from_before_markup_costs_one_full_pass(tmp_path: Path) -> None:
+    # Not an error: an unknown markup is exactly "we do not know what was
+    # indexed", and the honest answer to that is to read the repo again.
+    (tmp_path / STATE_FILE).write_text(
+        json.dumps({"version": STATE_VERSION, "commits": {"r": "abc123"}}), encoding="utf-8"
+    )
+
+    state = IndexState.load(tmp_path)
+
+    assert state.commits == {"r": "abc123"}
+    assert state.markup == {}

@@ -507,3 +507,40 @@ def test_non_git_repo_is_a_config_error(tmp_path: Path, config: Config, pipeline
     config.add_repo("plain", path=str(plain))
     with pytest.raises(NotAGitRepositoryError, match="not a git repository"):
         pipeline.index()
+
+
+def test_changed_markup_re_reads_a_tree_git_calls_unchanged(
+    tmp_path: Path, pipeline: Pipeline, config: Config
+) -> None:
+    # Found live. `formats` decides which files a tree produces, and git
+    # reports nothing when it changes — so trusting the commit alone made
+    # editing the markup a silent no-op: the newly indexable file stayed
+    # invisible until someone deleted the index by hand.
+    (tmp_path / "repo1" / "schema.sql").write_text("CREATE TABLE users (id INT);\n")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path / "repo1", check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "sql"], cwd=tmp_path / "repo1", check=True, capture_output=True
+    )
+    pipeline.index()
+    assert pipeline.index().files == 0  # nothing changed, and nothing was read
+
+    config._data["repos"][0]["formats"] = {".sql": {"lang": "sql", "kind": "code"}}
+    report = pipeline.index()
+
+    assert report.full_repos == ("repo1",)
+    assert report.written == 1
+    # And the run after that is back on the fast path.
+    assert pipeline.index().files == 0
+
+
+def test_a_repo_marked_the_same_way_stays_on_the_fast_path(
+    tmp_path: Path, pipeline: Pipeline, config: Config
+) -> None:
+    # The fingerprint must be about content, not about order: reordering
+    # globs is not a reason to re-embed a repository.
+    config._data["repos"][0]["ignore"] = ["dist/*", "*.min.js"]
+    pipeline.index()
+
+    config._data["repos"][0]["ignore"] = ["*.min.js", "dist/*"]
+
+    assert pipeline.index().full_repos == ()
