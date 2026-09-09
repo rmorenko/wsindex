@@ -17,6 +17,8 @@ The `VectorStore` contract is unchanged: `dataset_name` maps onto the
 """
 
 from collections.abc import Sequence
+from datetime import timedelta
+from pathlib import Path
 from typing import Any, cast
 
 import lancedb
@@ -27,7 +29,7 @@ from lancedb.table import Table
 
 from wsindex.embed.embedder import Embedder
 from wsindex.model import Chunk, Hit, SearchFilter
-from wsindex.store.base import VectorStore
+from wsindex.store.base import CompactReport, VectorStore
 
 
 def _sql_quote(value: str) -> str:
@@ -333,3 +335,63 @@ class LanceDBStore(VectorStore):
         # the stubs as of 0.21+; the cast + ignore is self-cleaning via
         # `warn_unused_ignores` when the stubs catch up.
         return cast("int", result.num_deleted_rows)  # type: ignore[attr-defined]
+
+    def _tables(self) -> tuple[Table, Table]:
+        """Every physical table this store owns; both need housekeeping."""
+        return (self.tbl, self.dataset_table)
+
+    def _versions(self) -> int:
+        """Total historical versions across the store's tables."""
+        return sum(len(table.list_versions()) for table in self._tables())
+
+    def _on_disk_bytes(self) -> int | None:
+        """Bytes the database occupies, or None if that cannot be measured.
+
+        Walking the directory is the only honest measure. The per-version
+        `total_files_size` that `list_versions` reports cannot be summed:
+        Lance is copy-on-write and versions share fragments, so the total
+        would count the same file once per version that references it.
+
+        Returns None for a remote uri (`s3://...`), where listing objects
+        would need a separate storage API this store does not carry.
+        """
+        uri = self.db.uri
+        if "://" in uri:
+            return None
+        root = Path(uri)
+        if not root.is_dir():
+            return None
+        return sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
+
+    def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
+        """Merge small files and drop old versions, on every table.
+
+        Order matters inside LanceDB's `optimize`: compaction writes a
+        NEW, merged version and the versions it replaces stay on disk, so
+        compacting without pruning makes the directory *grow*. Measured
+        in probes/step22v: 20 append batches then 150 deletes left 273 KB,
+        a bare `optimize()` took it to 317 KB, and only pruning brought it
+        to 43 KB. Passing `cleanup_older_than` is therefore not a tuning
+        knob here — it is the half that does the reclaiming.
+
+        `delete_unverified` is left at its default. Files from a failed
+        transaction are only removed once they are a week old, which is
+        what keeps this safe to run while another process might be
+        mid-write; overriding it can corrupt the dataset.
+
+        Args:
+            older_than: Keep versions younger than this; default keeps none.
+
+        Returns:
+            Sizes and version counts either side of the pass.
+        """
+        bytes_before = self._on_disk_bytes()
+        versions_before = self._versions()
+        for table in self._tables():
+            table.optimize(cleanup_older_than=older_than)
+        return CompactReport(
+            bytes_before=bytes_before,
+            bytes_after=self._on_disk_bytes(),
+            versions_before=versions_before,
+            versions_after=self._versions(),
+        )

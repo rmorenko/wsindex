@@ -246,3 +246,76 @@ def test_search_path_glob_filters(workspace: Path) -> None:
     for line in result.output.splitlines():
         if "/" in line and ":" in line:
             assert "src/" in line, f"path filter failed to constrain: {line!r}"
+
+
+# --- step 22в: wsindex compact -------------------------------------------
+
+
+def test_compact_reports_reclaimed_space(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    # Churn the index so there is history to prune: edit, commit, re-index.
+    (workspace / "repo1" / "src" / "main.py").write_text("def g():\n    return 2\n")
+    subprocess.run(["git", "add", "-A"], cwd=workspace / "repo1", check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "edit"], cwd=workspace / "repo1", check=True, capture_output=True
+    )
+    runner.invoke(app, ["index"])
+
+    result = runner.invoke(app, ["compact"])
+
+    assert result.exit_code == 0
+    assert "reclaimed" in result.output
+    assert "versions" in result.output
+
+
+def test_compact_keeps_search_working(workspace: Path) -> None:
+    # Reclaiming space must not cost rows — the guard that matters most.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    runner.invoke(app, ["compact"])
+
+    result = runner.invoke(app, ["search", PY_TEXT, "-k", "3"])
+    assert result.exit_code == 0
+    assert "src/main.py" in result.output
+
+
+def test_compact_keep_days_retains_history(workspace: Path) -> None:
+    # Nothing in a fresh index is a day old, so a one-day window prunes
+    # nothing. This is the escape hatch for a shared store with readers.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+
+    result = runner.invoke(app, ["compact", "--keep-days", "1"])
+
+    assert result.exit_code == 0
+    before, after = (
+        int(n) for n in result.output.split("; ")[1].split(" versions")[0].split(" -> ")
+    )
+    assert after >= before
+
+
+def test_compact_without_a_config_exits_with_a_hint(workspace: Path) -> None:
+    result = runner.invoke(app, ["compact"])
+    assert result.exit_code == 1
+    assert "needs a config file" in result.output
+
+
+def test_compact_says_so_when_size_cannot_be_measured(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A remote store cannot be walked from here. The command must say
+    # that, not print a 0 that reads like "nothing was freed".
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    monkeypatch.setattr("wsindex.store.lancedb.LanceDBStore._on_disk_bytes", lambda self: None)
+
+    result = runner.invoke(app, ["compact"])
+
+    assert result.exit_code == 0
+    assert "not measurable" in result.output
+    assert "reclaimed" not in result.output

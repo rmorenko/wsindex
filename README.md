@@ -63,6 +63,29 @@ re-index and nothing more; and it is per-machine even when the vectors
 sit in shared S3, since two hosts on different branches must not share
 one "last indexed commit".
 
+## Reclaiming space
+
+Deleting a chunk hides it immediately but does not free its bytes, and
+every write adds a version — so the index grows even when the workspace
+does not. `wsindex compact` is the pass that shrinks it:
+
+```
+$ uv run wsindex compact
+reclaimed 2.8 MB (9.3 MB -> 6.5 MB); 160 -> 2 versions
+```
+
+That is the acceptance corpus after a cold index and five incremental
+runs: 30% reclaimed in 0.1s, all 3458 chunks still searchable. Most of
+those 160 versions come from the cold index alone — chunks are written
+per file, so a 149-file repo leaves ~149 versions behind. Compaction is
+worth running even on an index that was never edited.
+
+It is deliberately not part of `index`: it is the one command that
+discards history, since a store that still holds old versions can be
+rolled back and a compacted one cannot. Pass `--keep-days N` when
+something else may be reading the same store — a search that began
+before the pass would otherwise be reading a version it removes.
+
 ## Storage
 
 The vector index is an embedded [LanceDB](https://github.com/lancedb/lancedb)

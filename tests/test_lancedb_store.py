@@ -8,6 +8,7 @@ deterministic tie-breaking, KNN == numpy brute force.
 """
 
 from collections.abc import Sequence
+from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
@@ -479,3 +480,109 @@ def test_chunk_ids_escapes_quotes_in_paths(store: LanceDBStore) -> None:
     chunk = make_chunk("x", path="it's/a.py")
     store.add_chunks("repo", chunks=[chunk])
     assert store.chunk_ids(dataset_name="repo", paths=["it's/a.py"]) == {chunk.id}
+
+
+# --- step 22в: compact, the reclaim half of delete_chunks ----------------
+
+
+def du(root: Path) -> int:
+    return sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
+
+
+def churn(store: LanceDBStore, batches: int = 12, per_batch: int = 10) -> None:
+    """Write many small commits, then delete most of them.
+
+    Reproduces what incremental indexing does over time: every run adds a
+    version, and every delete adds another without freeing anything.
+    """
+    store.create_dataset("repo", metric="cosine")
+    for batch in range(batches):
+        store.add_chunks(
+            "repo",
+            chunks=[
+                make_chunk(f"chunk text {batch}-{i}" * 10, path=f"f{i}.py")
+                for i in range(per_batch)
+            ],
+        )
+    ids = sorted(store.chunk_ids(dataset_name="repo"))
+    store.delete_chunks("repo", ids=ids[: len(ids) // 2])
+
+
+def test_compact_frees_disk(tmp_path: Path) -> None:
+    root = tmp_path / "db"
+    store = LanceDBStore(str(root), embedder=FakeEmbedder(dim=DIM))
+    churn(store)
+    before = du(root)
+
+    report = store.compact()
+
+    assert report.bytes_before == before
+    assert report.bytes_after is not None
+    assert report.bytes_after < before
+    assert report.bytes_freed == before - report.bytes_after
+
+
+def test_compact_collapses_versions(tmp_path: Path) -> None:
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    churn(store)
+
+    report = store.compact()
+
+    # Two tables, one surviving version each: the current one is never removed.
+    assert report.versions_before > report.versions_after
+    assert report.versions_after == 2
+
+
+def test_compact_keeps_the_data_searchable(tmp_path: Path) -> None:
+    # The point of the guard: reclaiming space must not lose rows.
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    churn(store)
+    survivors = store.chunk_ids(dataset_name="repo")
+
+    store.compact()
+
+    assert store.chunk_ids(dataset_name="repo") == survivors
+    assert store.search(dataset_name="repo", query="chunk text", k=3)
+
+
+def test_compact_with_keep_window_retains_history(tmp_path: Path) -> None:
+    # Nothing here is a day old, so a one-day window must prune nothing —
+    # this is what protects a concurrent reader on a shared store.
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    churn(store)
+
+    report = store.compact(older_than=timedelta(days=1))
+
+    assert report.versions_after >= report.versions_before
+
+
+def test_compact_on_an_untouched_store_is_harmless(tmp_path: Path) -> None:
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    report = store.compact()
+    assert report.versions_after >= 1
+    assert report.bytes_after is not None
+
+
+def test_compact_reports_no_size_for_a_remote_uri(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An s3:// prefix cannot be walked from here. Reporting None is the
+    # honest answer; a 0 would read like "nothing was freed".
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    monkeypatch.setattr(type(store.db), "uri", property(lambda self: "s3://bucket/prefix"))
+
+    report = store.compact()
+
+    assert report.bytes_before is None
+    assert report.bytes_after is None
+    assert report.bytes_freed is None
+
+
+def test_on_disk_bytes_is_none_when_the_directory_is_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A local uri that no longer resolves to a directory: measuring is
+    # impossible, and None says so rather than claiming zero bytes.
+    store = LanceDBStore(str(tmp_path / "db"), embedder=FakeEmbedder(dim=DIM))
+    monkeypatch.setattr(type(store.db), "uri", property(lambda self: str(tmp_path / "vanished")))
+    assert store._on_disk_bytes() is None

@@ -9,8 +9,40 @@ incomplete store must fail loudly at construction time.
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import timedelta
 
 from wsindex.model import Chunk, Hit, SearchFilter
+
+
+@dataclass(frozen=True, kw_only=True)
+class CompactReport:
+    """What one housekeeping pass reclaimed.
+
+    Sizes are optional because not every store can measure itself: a
+    local directory can be walked, an `s3://` prefix would need a
+    separate listing API. Reporting None is the honest answer — better
+    than a zero that reads like "nothing was freed".
+
+    Attributes:
+        bytes_before: On-disk size before the pass, or None if the store
+            cannot measure it.
+        bytes_after: Same, after.
+        versions_before: How many historical versions the store held.
+        versions_after: How many it holds now.
+    """
+
+    bytes_before: int | None
+    bytes_after: int | None
+    versions_before: int
+    versions_after: int
+
+    @property
+    def bytes_freed(self) -> int | None:
+        """Space reclaimed, or None when the store could not measure."""
+        if self.bytes_before is None or self.bytes_after is None:
+            return None
+        return self.bytes_before - self.bytes_after
 
 
 class VectorStore(ABC):
@@ -120,9 +152,9 @@ class VectorStore(ABC):
         Deleting an id that is not in the dataset is a no-op; the method just returns 0.
 
         On-disk reclaim is NOT part of this contract — a backend may keep
-        deleted rows physically until a separate housekeeping pass; the
-        row is invisible to `search` immediately, but the storage footprint
-        can drift up until that pass runs.
+        deleted rows physically until a separate housekeeping pass (see
+        `compact`); the row is invisible to `search` immediately, but the
+        storage footprint can drift up until that pass runs.
 
         Args:
             dataset_name: Dataset to delete from.
@@ -134,4 +166,32 @@ class VectorStore(ABC):
         Raises:
             TypeError: when ids is bare string
             ValueError: when unknown dataset
+        """
+
+    @abstractmethod
+    def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
+        """Reclaim the disk that deleted and rewritten chunks still occupy.
+
+        The other half of the promise `delete_chunks` makes above: a
+        delete hides a row immediately but need not free its bytes, and
+        now that incremental indexing deletes on every run, "need not"
+        adds up. Store-wide rather than per dataset — reclaim is a
+        property of the physical storage, and a backend is free to keep
+        every dataset in one place (LanceDBStore does, ADR-7).
+
+        Deliberately not called by `index`. Housekeeping is the user's
+        decision because it is the one operation here that discards
+        history: until it runs, a store keeps its old versions and can be
+        rolled back; afterwards it cannot.
+
+        Args:
+            older_than: Keep versions younger than this. The default
+                keeps none, which is what a user asking to reclaim space
+                means. Raise it above zero when something else may be
+                reading the same store — a search that started before
+                this pass would be reading a version it removes. The
+                current version is never touched.
+
+        Returns:
+            Sizes and version counts either side of the pass.
         """

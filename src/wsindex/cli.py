@@ -24,6 +24,7 @@ having a user to talk to is a property of this module, not of the config
 real file is `_require_config_file`'s.
 """
 
+from datetime import timedelta
 from typing import Annotated, assert_never
 
 import typer
@@ -108,6 +109,22 @@ def _build_pipeline() -> Pipeline:
     """
     config = _config()
     _require_config_file(config)
+    store = _build_store(config)
+    reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
+    # index_dir, not store_uri: the incremental state is a local, per-machine
+    # note about how far this host got, even when the vectors live in S3.
+    return Pipeline(store=store, state_dir=config.index_dir, reranker=reranker)
+
+
+def _build_store(config: Config) -> VectorStore:
+    """Open the workspace store described by the config.
+
+    Split out of `_build_pipeline` because `compact` needs a store and
+    nothing else. It still pays for the embedder: the vector column's
+    width comes from `embedder.dim`, so opening the table without one
+    would mean a second, subtly different way to describe the same
+    schema — the kind of duplication that goes wrong quietly.
+    """
     store: VectorStore
     embedder: Embedder
     match config.backend:
@@ -133,10 +150,7 @@ def _build_pipeline() -> Pipeline:
             store = LanceDBStore(uri=config.store_uri, embedder=embedder)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
-    reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
-    # index_dir, not store_uri: the incremental state is a local, per-machine
-    # note about how far this host got, even when the vectors live in S3.
-    return Pipeline(store=store, state_dir=config.index_dir, reranker=reranker)
+    return store
 
 
 @app.command()
@@ -273,6 +287,54 @@ def search(
             f"{meta['repo']}/{meta['path']}:{meta['start_line']}-{meta['end_line']}"
             f"  {hit.score:.3f}  {first_line}"
         )
+
+
+@app.command()
+def compact(
+    keep_days: Annotated[
+        float,
+        typer.Option(
+            "--keep-days",
+            help="Keep index history younger than this many days (default: keep none)",
+        ),
+    ] = 0.0,
+) -> None:
+    """Reclaim the disk that deleted and rewritten chunks still occupy.
+
+    Deleting a chunk hides it at once but does not free its bytes, and an
+    incremental `index` deletes on every run — so the index grows even
+    when the workspace does not. This is the pass that shrinks it.
+
+    Manual rather than part of `index`, because it is the one command
+    that throws history away: until it runs the store can be rolled back
+    to an earlier version, and afterwards it cannot. Use `--keep-days` if
+    something else may be reading the same store — a search that started
+    before this pass would be reading a version it removes.
+    """
+    config = _config()
+    _require_config_file(config)
+    report = _build_store(config).compact(older_than=timedelta(days=keep_days))
+    versions = f"{report.versions_before} -> {report.versions_after} versions"
+    if report.bytes_freed is None:
+        # A remote store cannot be measured from here; saying so beats
+        # printing a zero that reads like "nothing happened".
+        typer.echo(f"compacted: {versions} (size not measurable for a remote store)")
+        return
+    typer.echo(
+        f"reclaimed {_human_bytes(report.bytes_freed)} "
+        f"({_human_bytes(report.bytes_before or 0)} -> "
+        f"{_human_bytes(report.bytes_after or 0)}); {versions}"
+    )
+
+
+def _human_bytes(size: int) -> str:
+    """Format a byte count the way a person reads it."""
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(value) < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    raise AssertionError("unreachable: the loop returns at GB")  # pragma: no cover
 
 
 @app.command()
