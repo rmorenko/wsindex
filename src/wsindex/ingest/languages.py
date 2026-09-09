@@ -489,6 +489,16 @@ BUILTIN_LANGUAGES: tuple[LanguageSpec, ...] = (
         spans=configs.json_spans,
     ),
     LanguageSpec(
+        name="xml",
+        kind=Kind.CONFIG,
+        suffixes=(".xml",),
+        # `language_xml`, not `language`: the distribution ships two
+        # grammars (XML and DTD) and so has no single default. The only
+        # grammar here whose getter is not the usual name.
+        grammar=GrammarSpec(module="tree_sitter_xml", getter="language_xml"),
+        spans=configs.xml_spans,
+    ),
+    LanguageSpec(
         name="dockerfile",
         kind=Kind.CONFIG,
         filenames=("Dockerfile",),

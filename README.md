@@ -7,9 +7,9 @@
 repositories at once — and answers natural-language questions with exact
 `file:line` locations. Code (Python, JavaScript/JSX, TypeScript/TSX, Java,
 C, C++, C#, Go, Rust, Kotlin, PHP, Ruby), front-end components (Vue,
-Svelte, Angular templates) and configs (TOML, YAML, JSON, Dockerfile) are
-chunked by their syntax trees, docs by headers; every chunk is embedded and
-searched by meaning, not by keywords.
+Svelte, Angular templates) and configs (TOML, YAML, JSON, XML, Dockerfile)
+are chunked by their syntax trees, docs by headers; every chunk is embedded
+and searched by meaning, not by keywords.
 
 ## Quickstart
 
@@ -442,10 +442,10 @@ pair) is recorded in [ADR-7](docs/adr/adr-007-post-mvp-storage.md).
 
 ## Extras
 
-| Extra | Enables                                                                   | Without it                                                               |
-| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `ml`  | `sentence-transformers` embeddings (real semantic search)                 | `--provider fake`: deterministic pseudo-vectors, exact-text matches only |
-| `ast` | tree-sitter chunking for py/rs/ts/java code and toml/yaml/json/Dockerfile | sliding-window text chunks for everything                                |
+| Extra | Enables                                                                       | Without it                                                               |
+| ----- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ml`  | `sentence-transformers` embeddings (real semantic search)                     | `--provider fake`: deterministic pseudo-vectors, exact-text matches only |
+| `ast` | tree-sitter chunking for py/rs/ts/java code and toml/yaml/json/xml/Dockerfile | sliding-window text chunks for everything                                |
 
 Every grammar degrades independently: a language without its grammar falls
 back to plain text chunks, nothing crashes.
