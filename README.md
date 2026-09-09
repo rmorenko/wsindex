@@ -6,9 +6,10 @@
 **WSIndex** is a CLI that semantically indexes a developer workspace — multiple
 repositories at once — and answers natural-language questions with exact
 `file:line` locations. Code (Python, JavaScript/JSX, TypeScript/TSX, Java,
-C, C++, C#, Go, Rust, Kotlin, PHP, Ruby) and configs (TOML, YAML, JSON,
-Dockerfile) are chunked by their syntax trees, docs by headers; every chunk
-is embedded and searched by meaning, not by keywords.
+C, C++, C#, Go, Rust, Kotlin, PHP, Ruby), front-end components (Vue,
+Svelte, Angular templates) and configs (TOML, YAML, JSON, Dockerfile) are
+chunked by their syntax trees, docs by headers; every chunk is embedded and
+searched by meaning, not by keywords.
 
 ## Quickstart
 
@@ -113,6 +114,25 @@ discards history, since a store that still holds old versions can be
 rolled back and a compacted one cannot. Pass `--keep-days N` when
 something else may be reading the same store — a search that began
 before the pass would otherwise be reading a version it removes.
+
+## Front-end components
+
+A `.vue` or `.svelte` file is not one language, it is three: a template,
+a script and a style block. wsindex splits the file and hands each part
+to the language it is actually written in — so a function inside
+`<script lang="ts">` is chunked by the real TypeScript extractor, and is
+found exactly the way a function in a `.ts` file is.
+
+```
+$ uv run wsindex search "how is the title computed" --lang vue
+src/Card.vue:10-12  0.584  export function useTitle(): string {
+```
+
+Line numbers point at the real line of the real file, and chunks keep the
+container's `lang`, so `--lang vue` finds a component's whole contents —
+markup, script and styles alike. Angular needs nothing special:
+`foo.component.html` is a plain HTML file, chunked one top-level element
+at a time.
 
 ## Teaching it a new language
 

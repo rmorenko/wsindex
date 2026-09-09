@@ -38,15 +38,18 @@ from wsindex.ingest.ast import (
     cpp,
     csharp,
     go,
+    html,
     java,
     kotlin,
     php,
     python,
     ruby,
     rust,
+    sfc,
     typescript,
 )
 from wsindex.ingest.ast.core import HAS_TREE_SITTER, SpanExtractor
+from wsindex.ingest.ast.sfc import Section, SectionSplitter
 from wsindex.model import Kind
 
 if TYPE_CHECKING:
@@ -90,6 +93,11 @@ class LanguageSpec:
         grammar: Grammar that parses the language, or None for a language
             chunked as text.
         spans: Extractor turning that grammar's trees into spans, or None.
+        sections: Splitter for a *container* language — one file holding
+            several languages, like a `.vue` component. Given the
+            container's tree it returns the parts, and the chunker
+            recurses into each as its own language. Mutually exclusive
+            with `spans`: a file is either chunked or split, not both.
     """
 
     name: str
@@ -98,11 +106,17 @@ class LanguageSpec:
     filenames: tuple[str, ...] = ()
     grammar: GrammarSpec | None = None
     spans: SpanExtractor | None = None
+    sections: SectionSplitter | None = None
 
     @property
     def is_ast(self) -> bool:
         """True when this language declares an AST chunking path."""
         return self.grammar is not None and self.spans is not None
+
+    @property
+    def is_container(self) -> bool:
+        """True when this language is split into other languages."""
+        return self.grammar is not None and self.sections is not None
 
 
 class LanguageRegistry:
@@ -142,7 +156,16 @@ class LanguageRegistry:
                 raise ValueError(
                     f"{spec.name!r}: suffix {suffix!r} must be lowercase and start with '.'"
                 )
-        if (spec.grammar is None) != (spec.spans is None):
+        if spec.spans is not None and spec.sections is not None:
+            # A container's parts are chunked by their own languages; an
+            # extractor on top of that would claim the same lines twice.
+            raise ValueError(
+                f"{spec.name!r}: give `spans` or `sections`, not both — a container "
+                f"file is split, and its parts are chunked by their own languages"
+            )
+        if spec.sections is not None and spec.grammar is None:
+            raise ValueError(f"{spec.name!r}: `sections` needs a `grammar` to split with")
+        if spec.sections is None and (spec.grammar is None) != (spec.spans is None):
             # One without the other can never run: an extractor needs a
             # tree to read, and a tree nobody reads produces no chunks.
             raise ValueError(
@@ -256,6 +279,8 @@ __all__ = [
     "LanguageSpec",
     # Re-exported from `ast.core`, where it lives so the language modules
     # can name it without importing this registry back.
+    "Section",
+    "SectionSplitter",
     "SpanExtractor",
 ]
 
@@ -378,6 +403,34 @@ BUILTIN_LANGUAGES: tuple[LanguageSpec, ...] = (
         filenames=("Rakefile", "Gemfile"),
         grammar=GrammarSpec(module="tree_sitter_ruby", getter="language"),
         spans=ruby.spans,
+    ),
+    LanguageSpec(
+        name="html",
+        kind=Kind.CODE,
+        # Angular component templates are plain HTML files, so they need
+        # no dialect: `foo.component.html` is matched by `.html` here.
+        suffixes=(".html", ".htm"),
+        grammar=GrammarSpec(module="tree_sitter_html", getter="language"),
+        spans=html.spans,
+    ),
+    LanguageSpec(
+        name="vue",
+        kind=Kind.CODE,
+        suffixes=(".vue",),
+        # A container, not a language: the HTML grammar parses the
+        # skeleton and `sections` hands each part to the language it is
+        # actually written in. See `wsindex.ingest.ast.sfc`.
+        grammar=GrammarSpec(module="tree_sitter_html", getter="language"),
+        sections=sfc.sections,
+    ),
+    LanguageSpec(
+        name="svelte",
+        kind=Kind.CODE,
+        suffixes=(".svelte",),
+        # Same splitter as Vue: the difference between the two is where
+        # the markup sits, not how the file is structured.
+        grammar=GrammarSpec(module="tree_sitter_html", getter="language"),
+        sections=sfc.sections,
     ),
     LanguageSpec(
         name="toml",

@@ -119,14 +119,20 @@ def test_broken_file_does_not_crash() -> None:
     assert isinstance(chunks, list)  # error-tolerant parse, no exception
 
 
-def test_every_parser_has_an_extractor() -> None:
+def test_every_parser_has_an_extractor_or_a_splitter() -> None:
     # This used to be a hand-checked invariant across four parallel
     # tables. `LanguageSpec` carries the grammar and the extractor as one
     # value and `register` refuses one without the other, so the two can
     # no longer drift — this asserts the property still holds end to end.
+    #
+    # Since step 25d a grammar may instead belong to a *container*, whose
+    # parse is used to split the file rather than to chunk it. Those have
+    # a splitter and no extractor, by construction.
     for spec in REGISTRY.specs:
-        if REGISTRY.parser(spec.name) is not None:
-            assert REGISTRY.extractor(spec.name) is not None, spec.name
+        if REGISTRY.parser(spec.name) is None:
+            continue
+        has_path = REGISTRY.extractor(spec.name) is not None or spec.sections is not None
+        assert has_path, spec.name
 
 
 # --- _extend_back (rust prelude look-behind) --------------------------------
