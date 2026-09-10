@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from conftest import needs_grammar
 from wsindex.ingest.ast import HAS_TREE_SITTER
 from wsindex.ingest.ast.nested import _preamble_start
 from wsindex.ingest.ast.rust import POLICY as RUST_POLICY
@@ -22,8 +23,10 @@ if TYPE_CHECKING:
     from tree_sitter import Node
 
 requires_tree_sitter = pytest.mark.skipif(
-    not HAS_TREE_SITTER, reason="needs the ast extra (tree-sitter)"
+    not HAS_TREE_SITTER, reason="needs the ast extra (tree-sitter itself)"
 )
+"""For the handful of tests that need the library rather than one
+grammar — `needs_grammar` covers the rest."""
 
 SAMPLE = '''\
 """Module docstring."""
@@ -368,7 +371,7 @@ class Widget {
 """
 
 
-@pytest.mark.skipif("javascript" not in _installed(), reason="needs the ast extra")
+@needs_grammar("javascript")
 def test_javascript_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(JAVASCRIPT, lang="javascript")]
     assert got == [
@@ -382,14 +385,14 @@ def test_javascript_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("javascript" not in _installed(), reason="needs the ast extra")
+@needs_grammar("javascript")
 def test_jsx_needs_no_second_language() -> None:
     # The JavaScript grammar parses JSX, so `.jsx` is the same language.
     code = "function Button({label}) {\n\treturn <button>{label}</button>;\n}\n"
     assert [c.symbol for c in _chunk(code, lang="javascript")] == ["Button"]
 
 
-@pytest.mark.skipif("tsx" not in _installed(), reason="needs the ast extra")
+@needs_grammar("tsx")
 def test_tsx_gets_typescript_policy_with_jsx_syntax() -> None:
     code = (
         "interface Props { label: string }\n\n"
@@ -425,7 +428,7 @@ func (s Server) String() string {
 """
 
 
-@pytest.mark.skipif("go" not in _installed(), reason="needs the ast extra")
+@needs_grammar("go")
 def test_go_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(GO, lang="go")]
     assert got == [
@@ -437,7 +440,7 @@ def test_go_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("go" not in _installed(), reason="needs the ast extra")
+@needs_grammar("go")
 def test_go_doc_comment_joins_its_declaration() -> None:
     # Arrived with the extractor from the example plugin; pointer and
     # value receivers qualify identically.
@@ -465,7 +468,7 @@ int *make(void) {
 """
 
 
-@pytest.mark.skipif("c" not in _installed(), reason="needs the ast extra")
+@needs_grammar("c")
 def test_c_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(C, lang="c")]
     assert got == [
@@ -477,7 +480,7 @@ def test_c_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("c" not in _installed(), reason="needs the ast extra")
+@needs_grammar("c")
 def test_c_pointer_return_still_yields_the_name() -> None:
     # `int *make(void)` nests the function_declarator inside a
     # pointer_declarator; a one-level lookup would miss the name.
@@ -510,7 +513,7 @@ T identity(T v) {
 """
 
 
-@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("cpp")
 def test_cpp_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(CPP, lang="cpp")]
     assert got == [
@@ -524,33 +527,33 @@ def test_cpp_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("cpp")
 def test_cpp_finds_definitions_inside_namespaces() -> None:
     # The whole point of the recursion: a file wrapped in a namespace has
     # one top-level node, so a flat walk would find nothing at all.
     assert any(c.symbol == "identity" for c in _chunk(CPP, lang="cpp"))
 
 
-@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("cpp")
 def test_cpp_qualifies_methods_with_the_native_separator() -> None:
     # `Server::serve`, not `Server.serve` — the same choice Rust makes.
     symbols = {c.symbol for c in _chunk(CPP, lang="cpp")}
     assert {"Server::serve", "Server::stop"} <= symbols
 
 
-@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("cpp")
 def test_cpp_template_keeps_its_parameter_list() -> None:
     by_symbol = {c.symbol: c for c in _chunk(CPP, lang="cpp")}
     assert by_symbol["identity"].text.startswith("template <typename T>")
 
 
-@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("cpp")
 def test_cpp_nested_namespaces_are_reached() -> None:
     code = "namespace a {\nnamespace b {\nint f() { return 1; }\n}\n}\n"
     assert any(c.symbol == "f" for c in _chunk(code, lang="cpp"))
 
 
-@pytest.mark.skipif("cpp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("cpp")
 def test_extern_c_block_is_descended_into() -> None:
     # `extern "C" {}` nests exactly like a namespace does.
     code = 'extern "C" {\nint legacy(void) { return 1; }\n}\n'
@@ -594,7 +597,7 @@ namespace App {
 """
 
 
-@pytest.mark.skipif("csharp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("csharp")
 def test_csharp_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(CSHARP, lang="csharp")]
     assert got == [
@@ -608,14 +611,14 @@ def test_csharp_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("csharp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("csharp")
 def test_csharp_finds_declarations_inside_a_namespace() -> None:
     # Everything in C# nests under a namespace, so without the recursion
     # a whole file would yield exactly one chunk.
     assert any(c.symbol == "Server.Serve" for c in _chunk(CSHARP, lang="csharp"))
 
 
-@pytest.mark.skipif("csharp" not in _installed(), reason="needs the ast extra")
+@needs_grammar("csharp")
 def test_csharp_file_scoped_namespace_is_a_container_too() -> None:
     code = "namespace App;\n\nclass S {\n\tvoid M() { }\n}\n"
     assert any(c.symbol == "S.M" for c in _chunk(code, lang="csharp"))
@@ -638,7 +641,7 @@ fun topLevel(a: Int) = a
 """
 
 
-@pytest.mark.skipif("kotlin" not in _installed(), reason="needs the ast extra")
+@needs_grammar("kotlin")
 def test_kotlin_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(KOTLIN, lang="kotlin")]
     assert got == [
@@ -653,7 +656,7 @@ def test_kotlin_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("kotlin" not in _installed(), reason="needs the ast extra")
+@needs_grammar("kotlin")
 def test_kotlin_members_live_in_a_child_not_a_field() -> None:
     # Kotlin keeps members in a `class_body` child rather than a `body`
     # field — the case `NestedPolicy.body_types` exists for. If the
@@ -675,7 +678,7 @@ function helper(int $a): int { return $a; }
 """
 
 
-@pytest.mark.skipif("php" not in _installed(), reason="needs the ast extra")
+@needs_grammar("php")
 def test_php_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(PHP, lang="php")]
     assert got == [
@@ -687,7 +690,7 @@ def test_php_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("php" not in _installed(), reason="needs the ast extra")
+@needs_grammar("php")
 def test_php_braced_namespace_is_descended_into() -> None:
     code = "<?php\nnamespace App {\nfunction f(): int { return 1; }\n}\n"
     assert any(c.symbol == "f" for c in _chunk(code, lang="php"))
@@ -714,7 +717,7 @@ end
 """
 
 
-@pytest.mark.skipif("ruby" not in _installed(), reason="needs the ast extra")
+@needs_grammar("ruby")
 def test_ruby_sample_spans_symbols_and_node_types() -> None:
     got = [(c.symbol, c.node_type) for c in _chunk(RUBY, lang="ruby")]
     assert got == [
@@ -728,7 +731,7 @@ def test_ruby_sample_spans_symbols_and_node_types() -> None:
     ]
 
 
-@pytest.mark.skipif("ruby" not in _installed(), reason="needs the ast extra")
+@needs_grammar("ruby")
 def test_ruby_def_is_a_method_inside_a_class_and_a_function_outside() -> None:
     # The case that makes the standalone/member split earn its keep: one
     # node type, two meanings, decided by where it sits.
@@ -737,7 +740,7 @@ def test_ruby_def_is_a_method_inside_a_class_and_a_function_outside() -> None:
     assert "top_level" in by_symbol  # bare at the top level
 
 
-@pytest.mark.skipif("ruby" not in _installed(), reason="needs the ast extra")
+@needs_grammar("ruby")
 def test_ruby_class_level_methods_answer_the_same_symbol_query() -> None:
     # `def self.build` is Ruby's class method; qualifying it the same way
     # is what makes `--symbol Server` return a type's whole surface.

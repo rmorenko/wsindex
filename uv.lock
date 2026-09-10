@@ -2967,6 +2967,18 @@ wheels = [
 ]
 
 [[package]]
+name = "types-jsonschema"
+version = "4.26.0.20260518"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dd/46/73b6a5d61a61015c4248030a8cb07e5bdddb4041430fae9e585a68692578/types_jsonschema-4.26.0.20260518.tar.gz", hash = "sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6", size = 16638, upload-time = "2026-05-18T06:06:44.106Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/d5/134f8a147dcecda10db7f60cfc6af0578a25a5c53c87b3907a64385e0184/types_jsonschema-4.26.0.20260518-py3-none-any.whl", hash = "sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307", size = 16072, upload-time = "2026-05-18T06:06:43.264Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3096,6 +3108,7 @@ shell = [
 [package.dev-dependencies]
 dev = [
     { name = "codespell" },
+    { name = "jsonschema" },
     { name = "mdformat" },
     { name = "mdformat-gfm" },
     { name = "mypy" },
@@ -3106,6 +3119,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "taplo" },
+    { name = "types-jsonschema" },
     { name = "yamlfix" },
 ]
 
@@ -3149,6 +3163,7 @@ provides-extras = ["ast", "mcp", "ml", "server", "shell"]
 [package.metadata.requires-dev]
 dev = [
     { name = "codespell", specifier = ">=2.4,<3" },
+    { name = "jsonschema", specifier = ">=4.25,<5" },
     { name = "mdformat", specifier = ">=1.0,<2" },
     { name = "mdformat-gfm", specifier = ">=1.0,<2" },
     { name = "mypy", specifier = ">=2.3,<3" },
@@ -3159,6 +3174,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1,<8" },
     { name = "ruff", specifier = ">=0.16,<1" },
     { name = "taplo", specifier = ">=0.9,<1" },
+    { name = "types-jsonschema", specifier = ">=4.25" },
     { name = "yamlfix", specifier = ">=1.19,<2" },
 ]
 

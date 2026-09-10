@@ -83,6 +83,12 @@ dev = [
   "yamlfix>=1.19,<2",
   "poethepoet>=0.38,<1",
   "pyarrow-stubs>=20.0.0.20260819",
+  # Dev only, and only to check one thing: that the generated
+  # `wsindex.schema.json` is a valid schema and accepts what the config
+  # validator accepts. A schema that lies is worse than none — it would
+  # underline a working config in somebody's editor.
+  "jsonschema>=4.25,<5",
+  "types-jsonschema>=4.25",
 ]
 
 [tool.uv]
@@ -152,6 +158,10 @@ show_missing = true
 [tool.poe.tasks.install]
 help = "Install dependencies (uv sync)"
 cmd = "uv sync"
+
+[tool.poe.tasks.schema]
+help = "Regenerate wsindex.schema.json from the config validator"
+cmd = "python -c \"import json;from pathlib import Path;from wsindex.config.jsonschema import build,SCHEMA_FILE;Path(SCHEMA_FILE).write_text(json.dumps(build(),indent=2)+chr(10))\""
 
 [tool.poe.tasks.lint]
 help = "Run linter (ruff check)"

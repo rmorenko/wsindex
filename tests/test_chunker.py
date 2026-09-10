@@ -9,13 +9,10 @@ from textwrap import dedent
 
 import pytest
 
+from conftest import needs_grammar
 from wsindex.ingest import chunk_file
 from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Kind, SourceFile
-
-
-def has_grammar(lang: str) -> bool:
-    return REGISTRY.parser(lang) is not None
 
 
 def drop_grammar(monkeypatch: pytest.MonkeyPatch, lang: str) -> None:
@@ -61,7 +58,7 @@ def test_code_falls_back_to_plain_windows() -> None:
     assert chunks[0].symbol is None
 
 
-@pytest.mark.skipif(not has_grammar("python"), reason="needs the ast extra")
+@needs_grammar("python")
 def test_python_code_gets_ast_chunks() -> None:
     code = "def f():\n    return 1\n"
     chunks = chunk_file(code, SourceFile(repo=REPO, path="src/m.py", lang="python", kind=Kind.CODE))
@@ -71,7 +68,7 @@ def test_python_code_gets_ast_chunks() -> None:
     assert chunks[0].text == "def f():\n    return 1"
 
 
-@pytest.mark.skipif(not has_grammar("rust"), reason="needs the ast extra")
+@needs_grammar("rust")
 def test_rust_code_gets_ast_chunks() -> None:
     code = "impl S {\n    fn m(&self) -> u8 {\n        1\n    }\n}\n"
     chunks = chunk_file(code, SourceFile(repo=REPO, path="src/s.rs", lang="rust", kind=Kind.CODE))
@@ -79,7 +76,7 @@ def test_rust_code_gets_ast_chunks() -> None:
     assert by_symbol["S::m"].node_type == "function_item"
 
 
-@pytest.mark.skipif(not has_grammar("java"), reason="needs the ast extra")
+@needs_grammar("java")
 def test_java_code_gets_ast_chunks() -> None:
     code = "class App {\n    void run() {\n    }\n}\n"
     chunks = chunk_file(
@@ -89,7 +86,7 @@ def test_java_code_gets_ast_chunks() -> None:
     assert by_symbol["App.run"].node_type == "method_declaration"
 
 
-@pytest.mark.skipif(not has_grammar("typescript"), reason="needs the ast extra")
+@needs_grammar("typescript")
 def test_typescript_code_gets_ast_chunks() -> None:
     code = "export function f(): number {\n  return 1;\n}\n"
     chunks = chunk_file(
@@ -101,7 +98,7 @@ def test_typescript_code_gets_ast_chunks() -> None:
     assert chunks[0].text.startswith("export function f")
 
 
-@pytest.mark.skipif(not has_grammar("python"), reason="needs the ast extra")
+@needs_grammar("python")
 def test_python_without_tree_sitter_falls_back_to_plain_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -113,7 +110,7 @@ def test_python_without_tree_sitter_falls_back_to_plain_windows(
     assert chunks[0].symbol is None
 
 
-@pytest.mark.skipif(not has_grammar("toml"), reason="needs the ast extra")
+@needs_grammar("toml")
 def test_toml_config_gets_table_chunks() -> None:
     cfg = "[table]\nkey = 1\n"
     chunks = chunk_file(
@@ -135,7 +132,7 @@ def test_config_without_grammar_falls_back_to_plain_windows() -> None:
     assert chunks[0].symbol is None
 
 
-@pytest.mark.skipif(not has_grammar("toml"), reason="needs the ast extra")
+@needs_grammar("toml")
 def test_removed_grammar_falls_back_to_plain_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     drop_grammar(monkeypatch, "toml")
     cfg = "[table]\nkey = 1\n"

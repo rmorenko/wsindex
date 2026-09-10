@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from conftest import needs_grammar
 from wsindex.ingest import REGISTRY, chunk_file
 from wsindex.model import Chunk, Kind, SourceFile
 
@@ -82,7 +83,7 @@ def chunks(text: str, *, lang: str, path: str) -> list[Chunk]:
 # --- HTML, which is also what Angular templates are ----------------------
 
 
-@pytest.mark.skipif(not has("html"), reason="needs the ast extra")
+@needs_grammar("html")
 def test_top_level_elements_are_named_by_their_tag() -> None:
     got = [(c.symbol, c.node_type) for c in chunks(ANGULAR, lang="html", path="a.component.html")]
     assert got == [
@@ -91,7 +92,7 @@ def test_top_level_elements_are_named_by_their_tag() -> None:
     ]
 
 
-@pytest.mark.skipif(not has("html"), reason="needs the ast extra")
+@needs_grammar("html")
 def test_nested_elements_stay_inside_their_parent() -> None:
     # Descending would put every `<div>` in a chunk of its own and bury
     # the markup that means something under the markup that does not.
@@ -99,7 +100,7 @@ def test_nested_elements_stay_inside_their_parent() -> None:
     assert "app-child" in wrapper.text
 
 
-@pytest.mark.skipif(not has("html"), reason="needs the ast extra")
+@needs_grammar("html")
 def test_angular_component_templates_need_no_dialect() -> None:
     # `foo.component.html` is a plain HTML file; the walker matches it on
     # `.html` and nothing else is required.
@@ -113,7 +114,7 @@ def test_angular_component_templates_need_no_dialect() -> None:
 # --- the container mechanism ---------------------------------------------
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_a_vue_script_block_is_chunked_as_typescript() -> None:
     # The whole point: the section is handed to the real TypeScript
     # extractor, so a function inside a `.vue` file is found the same way
@@ -123,7 +124,7 @@ def test_a_vue_script_block_is_chunked_as_typescript() -> None:
     assert by_symbol["useTitle"].node_type == "function_declaration"
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_section_chunks_carry_container_line_numbers() -> None:
     # A section is chunked as if it were a file, so its chunks start at
     # line 1. Without adding the offset back, every hit in a component
@@ -134,7 +135,7 @@ def test_section_chunks_carry_container_line_numbers() -> None:
     assert VUE.splitlines()[found.start_line - 1].startswith("export function useTitle")
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_chunks_keep_the_containers_language() -> None:
     # `lang` answers "what kind of file is this" everywhere else in the
     # index, so a `.vue` file whose chunks claimed to be TypeScript would
@@ -142,13 +143,13 @@ def test_chunks_keep_the_containers_language() -> None:
     assert {c.lang for c in chunks(VUE, lang="vue", path="Card.vue")} == {"vue"}
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_the_template_is_its_own_chunk() -> None:
     by_symbol = {c.symbol: c for c in chunks(VUE, lang="vue", path="Card.vue")}
     assert by_symbol["template"].text.startswith("<template>")
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_tag_lines_between_sections_are_still_indexed() -> None:
     # Regression: sections cover what is *between* the tags, so
     # `<script setup lang="ts">` and `</script>` belong to no section at
@@ -158,7 +159,7 @@ def test_tag_lines_between_sections_are_still_indexed() -> None:
     assert any("</style>" in c.text for c in produced)
 
 
-@pytest.mark.skipif(not has("svelte"), reason="needs the ast extra")
+@needs_grammar("svelte")
 def test_svelte_bare_markup_is_chunked_too() -> None:
     # Svelte leaves its markup at the top level instead of wrapping it in
     # a `<template>`; the same splitter handles both.
@@ -167,7 +168,7 @@ def test_svelte_bare_markup_is_chunked_too() -> None:
     assert "h1" in by_symbol  # the bare markup, chunked as HTML
 
 
-@pytest.mark.skipif(not has("svelte"), reason="needs the ast extra")
+@needs_grammar("svelte")
 def test_a_script_without_a_lang_attribute_is_javascript() -> None:
     by_symbol = {c.symbol: c for c in chunks(SVELTE, lang="svelte", path="App.svelte")}
     assert by_symbol["greet"].node_type == "function_declaration"
@@ -202,19 +203,19 @@ def test_container_chunk_text_is_a_verbatim_slice(lang: str, source: str, path: 
         assert chunk.text == "\n".join(lines[chunk.start_line - 1 : chunk.end_line])
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_an_empty_component_yields_nothing() -> None:
     assert chunks("", lang="vue", path="Empty.vue") == []
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_a_component_with_only_a_template_still_indexes() -> None:
     produced = chunks("<template>\n  <div/>\n</template>\n", lang="vue", path="T.vue")
     assert produced
     assert produced[0].symbol == "template"
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_a_broken_component_does_not_crash() -> None:
     assert isinstance(chunks("<script>\nfunction (\n", lang="vue", path="B.vue"), list)
 
@@ -270,7 +271,7 @@ def test_a_container_spec_needs_a_grammar() -> None:
         )
 
 
-@pytest.mark.skipif(not has("vue"), reason="needs the ast extra")
+@needs_grammar("vue")
 def test_container_specs_report_themselves_as_containers() -> None:
     from wsindex.ingest.languages import REGISTRY as R
 

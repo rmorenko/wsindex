@@ -117,6 +117,21 @@ Anything wsindex does not recognize in a repo entry is an error rather
 than a shrug: a misspelled `ignores` that silently indexed everything it
 was meant to exclude is the mistake this format invites most.
 
+That check runs when a command runs. To get it while you are still
+typing, point your editor at `wsindex.schema.json` — one line at the top
+of the file, understood by taplo, VS Code's Even Better TOML and the
+JetBrains TOML plugin:
+
+```toml
+#:schema https://raw.githubusercontent.com/rmorenko/wsindex/main/wsindex.schema.json
+```
+
+The schema is *generated* from the same constants the validator uses
+(`poe schema`), not written a second time — a hand-kept copy would drift,
+and a schema that lies is worse than none, because it underlines a config
+that works. A test asserts the checked-in file is what the generator
+produces.
+
 Changing the markup re-reads the repository on the next `index`, even
 though git reports the tree as unchanged — the index remembers which
 markup produced it, because a commit alone does not say which files were

@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rmorenko/wsindex/main/wsindex.schema.json",
+  "title": "wsindex workspace configuration",
+  "type": "object",
+  "required": [
+    "workspace",
+    "embeddings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "workspace": {
+      "type": "object",
+      "required": [
+        "name",
+        "backend"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Workspace name."
+        },
+        "backend": {
+          "type": "string",
+          "enum": [
+            "local"
+          ]
+        }
+      }
+    },
+    "embeddings": {
+      "type": "object",
+      "required": [
+        "model",
+        "dim",
+        "provider"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Model id, e.g. a hub name."
+        },
+        "dim": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Vector width; must match what the model produces."
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "fake",
+            "sentence-transformers"
+          ]
+        }
+      }
+    },
+    "store": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "Where the index lives; a path, or s3://bucket/prefix. Defaults to `.wsindex/` beside this file."
+        },
+        "metric": {
+          "type": "string",
+          "enum": [
+            "cosine"
+          ],
+          "default": "cosine"
+        }
+      }
+    },
+    "rank": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Re-rank with a cross-encoder; loads a second model."
+        },
+        "model": {
+          "type": "string",
+          "default": "cross-encoder/ms-marco-MiniLM-L6-v2"
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "token_env": {
+          "type": "string",
+          "description": "Name of the variable holding the bearer token \u2014 the name, never the token."
+        },
+        "interval": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Seconds between automatic syncs; 0 turns them off."
+        }
+      }
+    },
+    "references": {
+      "type": "object",
+      "description": "Prefix -> url template, e.g. PROJ = \"https://tracker/browse/{id}\".",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Dataset name; unique within the workspace."
+          },
+          "path": {
+            "type": "string",
+            "description": "Working copy on this machine."
+          },
+          "remote": {
+            "type": "string",
+            "description": "Clone url; `wsindex sync` keeps `path` current from it."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "connector"
+            ],
+            "description": "`connector` makes this a snapshot repo built from `urls`."
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Documents to materialize; needs `source = \"connector\"`."
+          },
+          "ignore": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Path globs this repo excludes; `*` crosses directories."
+          },
+          "formats": {
+            "type": "object",
+            "description": "Suffix (with the dot) -> language and kind, for this repo only.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "lang": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "code",
+                    "config",
+                    "doc",
+                    "commit"
+                  ]
+                }
+              },
+              "required": [
+                "lang",
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "connectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "url_pattern"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Connector name, e.g. `github`."
+          },
+          "url_pattern": {
+            "type": "string",
+            "description": "Glob the url must match; `*` and `?` as in a shell."
+          },
+          "token_env": {
+            "type": "string",
+            "description": "Name of the variable holding this source's token."
+          }
+        }
+      }
+    }
+  }
+}

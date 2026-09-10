@@ -7,15 +7,18 @@ test chdirs into its own tmp_path and drives the full loop through files.
 and treats anything else as a config error.
 """
 
+import re
 import stat
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
 import pytest
+import typer.main
 from typer.testing import CliRunner
 
-from wsindex.cli import app
+from wsindex.cli import app, run
 from wsindex.cli.interfaces import is_loopback
 from wsindex.config import Config, Provider
 from wsindex.connectors import BUILTIN, Connector, Document, DocumentNotFound
@@ -519,7 +522,36 @@ def test_fetch_says_when_nothing_claims_the_url(workspace: Path) -> None:
     assert "no connector claims" in result.output
 
 
-def test_fetch_reports_a_connector_error(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def console_script(
+    argv: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> tuple[int, str]:
+    """Run a command the way the installed `wsindex` script does.
+
+    `CliRunner` invokes the typer app; the console script invokes
+    `wsindex.cli.run`, which wraps it and turns a library RuntimeError
+    into one line. Commands that rely on that wrapper — rather than
+    catching for themselves — are only really tested from here.
+
+    Returns:
+        The exit code and everything written to stdout and stderr.
+    """
+    monkeypatch.setattr(sys, "argv", ["wsindex", *argv])
+    code = 0
+    try:
+        run()
+    except SystemExit as stop:
+        code = int(stop.code or 0)
+    captured = capsys.readouterr()
+    return code, captured.out + captured.err
+
+
+def test_fetch_reports_a_connector_error(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Through `run`, not the app: `fetch` catches nothing of its own —
+    # ConnectorError is a RuntimeError and the entry point already turns
+    # those into a message. Testing it through CliRunner would prove the
+    # handler that is no longer there.
     from wsindex.connectors import DocumentNotFound
 
     runner.invoke(app, ["init", "ws", "--provider", "fake"])
@@ -532,10 +564,11 @@ def test_fetch_reports_a_connector_error(workspace: Path, monkeypatch: pytest.Mo
         raise DocumentNotFound(f"{url} is not there, or not visible")
 
     monkeypatch.setattr("wsindex.connectors.http.GenericHttpConnector.fetch", missing)
-    result = runner.invoke(app, ["fetch", "https://example.invalid/gone"])
-    assert result.exit_code == 1
-    assert "not there, or not visible" in result.output
-    assert "Traceback" not in result.output
+    code, output = console_script(["fetch", "https://example.invalid/gone"], monkeypatch, capsys)
+
+    assert code == 1
+    assert "not there, or not visible" in output
+    assert "Traceback" not in output
 
 
 def test_fetch_needs_a_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -874,3 +907,21 @@ def test_explain_answers_the_question_this_tool_gets_asked_most(workspace: Path)
     assert "no language claims this suffix" in skipped.output
     assert outside.exit_code == 1
     assert "not inside any configured repo" in outside.output
+
+
+def test_every_command_is_documented() -> None:
+    """The README names each command; nothing regenerates it.
+
+    A generated list was considered and rejected — the README is written
+    by a person for a person, and a table dropped into it would read
+    like one. What it needs is not generation but a guard: `explain` was
+    added in one review and documented by hand in the same breath, which
+    is exactly the moment the two can part company.
+    """
+    documented = set(re.findall(r"wsindex ([a-z][a-z-]+)", Path("README.md").read_text()))
+    # Through click rather than `app.registered_commands`: this is the
+    # mapping the CLI actually dispatches on, already keyed by the name a
+    # reader types (`add-repo`, not `add_repo`).
+    shipped = set(typer.main.get_command(app).commands)  # type: ignore[attr-defined]
+
+    assert shipped <= documented, f"undocumented: {sorted(shipped - documented)}"

@@ -3,7 +3,7 @@
 import typer
 
 from wsindex.cli.composition import config_or_default, require_config_file
-from wsindex.connectors import ConnectorError, route
+from wsindex.connectors import route
 
 
 def fetch(url: str) -> None:
@@ -22,11 +22,11 @@ def fetch(url: str) -> None:
             err=True,
         )
         raise typer.Exit(code=1)
-    try:
-        document = connector.fetch(url)
-    except ConnectorError as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+    # No `except ConnectorError` here: it is a RuntimeError, and
+    # `wsindex.cli.run` turns those into the same message and the same
+    # exit code for every command. A second handler saying the same thing
+    # is one more place for the two to disagree.
+    document = connector.fetch(url)
     typer.echo(f"{document.url}")
     if document.title:
         typer.echo(f"title: {document.title}")
