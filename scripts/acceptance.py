@@ -41,6 +41,22 @@ REPO_URL = os.environ.get("WSINDEX_E2E_REPO", "https://github.com/tensorus/tenso
 K = 5
 
 # Fixed acceptance criteria: (query, acceptable path fragments in top-K).
+#
+# Fixed before any run, and *kept* when a run fails them — which is the
+# whole point and was tested on 2026-09-10. Giving the corpus its history
+# (commits are indexed by default, so the shallow clone graded a product
+# with a feature switched off) took this from 10/10 to 9/10. The failing
+# criterion was not loosened to get the ten back.
+#
+# What that miss is, measured rather than guessed: `expose dataset
+# operations over http` finds `tensorus/api.py` at rank 8 — inside the
+# 20 candidates re-rank sees, so not a recall failure by the threshold
+# the README sets. The cross-encoder scores every candidate for this
+# query at 0.44 against 0.95+ for the other nine: it is saying the
+# corpus has no good answer. And the chunk that *would* match is a bare
+# comment header, `# --- Dataset Management Endpoints ---`, orphaned
+# from the endpoints it labels. That is a chunking observation, kept
+# here as one rather than acted on.
 CRITERIA: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("where are tensors stored on disk", ("storage",)),
     ("how is the api key validated", ("auth", "security")),
@@ -96,6 +112,17 @@ class BackendRun:
 
 
 def ensure_corpus() -> Path:
+    """The graded corpus, with its history.
+
+    With, not `--depth 1`, and the change was earned. Indexing commit
+    messages is the default (step 27), so a corpus holding one commit
+    graded a configuration nobody runs: it was worth 10/10 while the
+    realistic one is worth 9. The shallow clone was not measuring the
+    product, it was measuring a product with the history switched off.
+
+    An existing shallow clone is deepened in place rather than re-cloned:
+    somebody's cache should not have to be deleted for this to take.
+    """
     override = os.environ.get("WSINDEX_E2E_DIR")
     if override:
         corpus = Path(override).expanduser()
@@ -103,11 +130,16 @@ def ensure_corpus() -> Path:
         name = REPO_URL.rstrip("/").rsplit("/", 1)[-1]
         corpus = Path.home() / ".cache" / "wsindex-e2e" / name
     if not corpus.exists():
-        subprocess.run(
-            ["git", "clone", "--depth", "1", REPO_URL, str(corpus)],
-            check=True,
-            capture_output=True,
-        )
+        subprocess.run(["git", "clone", "-q", REPO_URL, str(corpus)], check=True)
+        return corpus
+    shallow = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=corpus,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if shallow == "true":
+        subprocess.run(["git", "fetch", "--unshallow", "-q"], cwd=corpus, check=True)
     return corpus
 
 
@@ -173,7 +205,7 @@ def measure_incremental(
     commit that only this script knows about.
 
     Args:
-        corpus: The cloned corpus (a git repo, `--depth 1`).
+        corpus: The cloned corpus (a git repo, full history).
         store: The already-populated store to re-index into.
         state_dir: Where the incremental state was recorded.
         cold: Seconds the initial full index took, for the report.

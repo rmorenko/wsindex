@@ -461,19 +461,14 @@ def main() -> int:
 def bench_corpus() -> Path:
     """A clone of the acceptance corpus, with its history, of our own.
 
-    Of our own, and that is the whole point. This benchmark needs the
-    commits — blame was 91% of an indexing run before review 4 put it in
-    a pool, and a shallow clone measures none of it. `acceptance.py`
-    needs the opposite: it grades search quality against fixed criteria
-    fixed before any run, and 713 commit messages entering the corpus
-    change what the top five hold.
-
-    That is not a guess. Unshallowing the *shared* cache took acceptance
-    from 10/10 to 9/10 — `expose dataset operations over http` fell out
-    of the top five, and a commit message outranked the code it
-    describes on `list_to_tensor`. A benchmark that changes another
-    harness's verdict is a benchmark with a bug, so the two keep
-    separate clones.
+    Of our own, and the reason is independence rather than shape. Both
+    harnesses now want the same thing — a corpus with history, since
+    indexing commits is what the product does by default — so they could
+    share one. They do not, because they did once: this file unshallowed
+    the shared cache and acceptance silently went from 10/10 to 9/10.
+    Nothing about that was visible from here. A harness that can change
+    another harness's verdict is a harness with a bug, and the cure that
+    outlives the specific mistake is a clone each.
     """
     home = Path(os.environ.get("WSINDEX_BENCH_DIR", Path.home() / ".cache" / "wsindex-bench"))
     corpus = home / REPO_URL.rstrip("/").rsplit("/", 1)[-1]
