@@ -20,13 +20,15 @@ left its old chunks in the index forever.
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 
 from wsindex.config import Config, Repository
 from wsindex.ingest import (
+    PARSE_ERROR,
     IndexState,
     RepoDiff,
     Skip,
@@ -71,6 +73,7 @@ class _Totals:
     deleted: int
     commits: int
     unreadable: tuple[str, ...] = ()
+    unparsed: tuple[str, ...] = ()
 
 
 class FullPass(StrEnum):
@@ -114,10 +117,22 @@ class _Written:
     chunks: int = 0
     written: int = 0
     ids: frozenset[str] = frozenset()
+    unparsed: tuple[str, ...] = ()
 
-    def read(self, *, chunks: int, ids: set[str]) -> "_Written":
-        """This plus one more file, read and chunked but not yet written."""
-        return replace(self, files=self.files + 1, chunks=self.chunks + chunks, ids=self.ids | ids)
+    def read(self, *, chunks: int, ids: set[str], path: str | None = None) -> "_Written":
+        """This plus one more file, read and chunked but not yet written.
+
+        `path` is given only when that file's grammar reported errors, so
+        the count of them costs one boolean per file rather than a second
+        parse.
+        """
+        return replace(
+            self,
+            files=self.files + 1,
+            chunks=self.chunks + chunks,
+            ids=self.ids | ids,
+            unparsed=(*self.unparsed, path) if path is not None else self.unparsed,
+        )
 
     def wrote(self, written: int) -> "_Written":
         """This plus one batch that reached the store."""
@@ -206,6 +221,10 @@ class IndexReport:
             `repo/path`. Not a policy skip: these were meant to be
             indexed and are not, and a run that only printed `files: 1`
             when there were two said something untrue.
+        unparsed: Paths whose grammar reported errors, as `repo/path`.
+            They are in the index, as text windows rather than
+            definitions — worse to search and, until now, impossible to
+            notice.
         seconds: How long the run took. The server already recorded this
             per run; a person at a terminal deserves the same, and it is
             the only number that makes two runs comparable.
@@ -219,7 +238,43 @@ class IndexReport:
     missing_repos: tuple[str, ...]
     full_repos: tuple[tuple[str, FullPass], ...]
     unreadable: tuple[str, ...] = ()
+    unparsed: tuple[str, ...] = ()
     seconds: float = 0.0
+
+
+def _unparsed(chunks: list[Chunk]) -> bool:
+    """True when the grammar could not read the file these came from."""
+    return any(chunk.node_type == PARSE_ERROR for chunk in chunks)
+
+
+@contextmanager
+def _blaming(repo_id: str, rel_path: str) -> Iterator[None]:
+    """Make sure a failure in here says which file it was reading.
+
+    An index run touches a hundred-odd files, and a bug in chunking one
+    of them used to surface as `error: the chunker fell over` — measured,
+    with no way to tell which of five files in a toy repo, let alone
+    which of 122. The loop knows the path at exactly that moment and was
+    dropping it.
+
+    Always a RuntimeError, never `type(exc)(...)`: not every exception
+    can be rebuilt from one string — `UnicodeDecodeError` takes five
+    arguments — and a TypeError raised from inside an `except` would bury
+    the failure it was meant to describe. The original type is named in
+    the message and chained underneath, so nothing is lost and
+    `WSINDEX_DEBUG` still shows every frame.
+
+    Args:
+        repo_id: The repo being indexed.
+        rel_path: The file being read, repo-relative.
+
+    Yields:
+        Nothing; this is here for the `except`.
+    """
+    try:
+        yield
+    except Exception as exc:
+        raise RuntimeError(f"{repo_id}/{rel_path}: {type(exc).__name__}: {exc}") from exc
 
 
 def _why_full(repo: Repository, *, state: IndexState, dirty: bool) -> FullPass:
@@ -340,6 +395,7 @@ class Pipeline:
         missing_repos: list[str] = []
         full_repos: list[tuple[str, FullPass]] = []
         unreadable: list[str] = []
+        unparsed: list[str] = []
         for repo in config.repos:
             # The engine says *who* is being read; what to draw with that
             # is the caller's business (see `wsindex.ui`). A plain
@@ -365,6 +421,7 @@ class Pipeline:
                 deleted += totals.deleted
                 commits += totals.commits
                 unreadable.extend(f"{repo.id}/{path}" for path in totals.unreadable)
+                unparsed.extend(f"{repo.id}/{path}" for path in totals.unparsed)
                 log.info(
                     "indexed %s: %d files, %d chunks, %d written, %d deleted",
                     repo.id,
@@ -401,6 +458,7 @@ class Pipeline:
             missing_repos=tuple(missing_repos),
             full_repos=tuple(full_repos),
             unreadable=tuple(unreadable),
+            unparsed=tuple(unparsed),
             seconds=round(time.monotonic() - started, 2),
         )
 
@@ -477,6 +535,7 @@ class Pipeline:
             deleted=deleted,
             commits=history.written,
             unreadable=tuple(picked.unreadable),
+            unparsed=files.unparsed,
         )
 
     def _index_commits(
@@ -545,19 +604,24 @@ class Pipeline:
         )
         for entry in walked:
             source = SourceFile(repo=repo.id, path=entry.rel_path, lang=entry.lang, kind=entry.kind)
-            text = (root / entry.rel_path).read_text(encoding="utf-8", errors="replace")
-            chunks: list[Chunk] = chunk_file(text, source)
-            totals = totals.read(chunks=len(chunks), ids={chunk.id for chunk in chunks})
-            # Links are per file by nature — they name the file they were
-            # found in — so they are recorded as the file is read, not
-            # when its chunks happen to reach the store.
-            self._link(
-                chunks,
-                source=source,
-                history=history,
-                references=config.references,
-                by_line=blames.get(entry.rel_path, {}),
-            )
+            with _blaming(repo.id, entry.rel_path):
+                text = (root / entry.rel_path).read_text(encoding="utf-8", errors="replace")
+                chunks: list[Chunk] = chunk_file(text, source)
+                totals = totals.read(
+                    chunks=len(chunks),
+                    ids={chunk.id for chunk in chunks},
+                    path=entry.rel_path if _unparsed(chunks) else None,
+                )
+                # Links are per file by nature — they name the file they
+                # were found in — so they are recorded as the file is
+                # read, not when its chunks happen to reach the store.
+                self._link(
+                    chunks,
+                    source=source,
+                    history=history,
+                    references=config.references,
+                    by_line=blames.get(entry.rel_path, {}),
+                )
             batch += chunks
             if len(batch) >= _WRITE_BATCH:
                 totals = totals.wrote(self.store.add_chunks(dataset_name=repo.id, chunks=batch))

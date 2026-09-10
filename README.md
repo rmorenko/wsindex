@@ -167,6 +167,11 @@ r/src/schema.tf: not indexed — no language claims this suffix; add a `formats`
 
 $ wsindex explain src/main.py
 r/src/main.py: indexed as python (code)
+  7 chunk(s), 6 with a symbol
+
+$ wsindex explain src/half-written.py
+r/src/half-written.py: indexed as python (code)
+  2 chunk(s), but the python grammar reported errors — the parts it could not read are indexed as text, not definitions
 ```
 
 `wsindex status` answers the other half — whether the index has run at
@@ -224,7 +229,31 @@ warning: could not read 1 tracked file(s) — self/src/locked.py
 
 That last line is not a policy skip. A file git tracks and the
 filesystem refuses to open was *meant* to be indexed; saying `files: 121` and nothing else would have left you to discover it by noticing a
-search that finds nothing.
+search that finds nothing. A file the grammar cannot read gets its own
+warning for the same reason: it *is* indexed, as text windows rather than
+definitions, which is worse to search and — until it says so —
+impossible to notice. Syntax newer than the installed grammar, and a
+`formats` entry aimed at the wrong language, both land here.
+
+**When the message is not enough, `WSINDEX_DEBUG=1` opens the door.**
+The traceback comes through instead of one tidy line, the library's own
+log records reach stderr, and blame runs in a single thread so a
+breakpoint lands where you put it. A variable rather than a flag, because
+by the time you want it the command has already failed — set it and
+repeat the same line.
+
+```console
+$ wsindex index
+error: self/src/wsindex/pipeline.py: RuntimeError: the chunker fell over
+
+$ WSINDEX_DEBUG=1 wsindex index
+...the whole traceback, with source context
+```
+
+Note the file in that message. An index run touches a hundred-odd files,
+and a failure in one of them used to arrive as `error: the chunker fell over` with no way to tell which. The default is otherwise unchanged, and
+so is the rule behind it: a traceback in ordinary output is a bug. This
+is a door, not a reversal.
 
 The last indexed commit per repo lives in `state.json` inside the index
 directory. It is a cache, so a corrupt or outdated one costs a full

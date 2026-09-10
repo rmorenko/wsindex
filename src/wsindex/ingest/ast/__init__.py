@@ -21,6 +21,7 @@ export statement.
 
 from wsindex.ingest.ast.core import (
     HAS_TREE_SITTER,
+    PARSE_ERROR,
     Span,
     ast_chunks,
     def_span,
@@ -33,6 +34,7 @@ from wsindex.ingest.ast.core import (
 
 __all__ = [
     "HAS_TREE_SITTER",
+    "PARSE_ERROR",
     "Span",
     "ast_chunks",
     "def_span",

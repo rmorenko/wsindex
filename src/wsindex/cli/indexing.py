@@ -48,6 +48,18 @@ def index() -> None:
         typer.echo(f"note: full pass for {repo_id} — {reason}", err=True)
     if report.missing_repos:
         typer.echo("warning: missing repos: " + ", ".join(report.missing_repos), err=True)
+    if report.unparsed:
+        # In the index, but as text windows rather than definitions:
+        # searchable and worse. The usual causes are syntax newer than
+        # the installed grammar and a `formats` entry aimed at the wrong
+        # language, and both are fixable once seen.
+        typer.echo(
+            f"warning: the grammar could not fully read {len(report.unparsed)} file(s) — "
+            + ", ".join(report.unparsed[:3])
+            + (" ..." if len(report.unparsed) > 3 else "")
+            + " (indexed as text; `wsindex explain <path>` for one of them)",
+            err=True,
+        )
     if report.unreadable:
         # Not a policy skip. These were meant to be indexed, are not, and
         # the run that printed only `files: N` left the reader to

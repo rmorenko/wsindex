@@ -22,10 +22,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import wsindex.pipeline
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
-from wsindex.ingest import IndexState, NotAGitRepositoryError
-from wsindex.model import Chunk, Kind, SearchFilter
+from wsindex.ingest import IndexState, NotAGitRepositoryError, chunk_file
+from wsindex.model import Chunk, Kind, SearchFilter, SourceFile
 from wsindex.pipeline import _CANDIDATE_MULTIPLIER, FullPass, Pipeline
 from wsindex.rank.reranker import FakeReranker
 from wsindex.store import LanceDBStore
@@ -663,3 +664,62 @@ def test_a_dirty_tree_outranks_never_having_been_indexed(
     (tmp_path / "repo1" / "scratch.py").write_text("print('uncommitted')\n")
 
     assert pipeline.index().full_repos == (("repo1", FullPass.DIRTY_TREE),)
+
+
+# --- finding out what went wrong -----------------------------------------
+
+
+def test_a_failure_while_chunking_says_which_file(
+    tmp_path: Path, pipeline: Pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # It used to be `error: the chunker fell over` for a workspace of 122
+    # files. The loop knows the path at exactly that moment.
+    (tmp_path / "repo1" / "src" / "later.py").write_text("def g():\n    return 2\n")
+    real = chunk_file  # the pipeline's own reference, before it is swapped
+
+    def flaky(text: str, source: SourceFile) -> list[Chunk]:
+        if source.path.endswith("later.py"):
+            raise RuntimeError("the chunker fell over")
+        return real(text, source)
+
+    monkeypatch.setattr(wsindex.pipeline, "chunk_file", flaky)
+
+    with pytest.raises(RuntimeError, match=r"repo1/src/later\.py.*the chunker fell over"):
+        pipeline.index()
+
+
+def test_the_original_failure_is_still_underneath(
+    tmp_path: Path, pipeline: Pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Chained, not replaced: `WSINDEX_DEBUG` shows every frame, and a
+    # caller can still see what really happened.
+    def flaky(text: str, source: SourceFile) -> list[Chunk]:
+        raise ZeroDivisionError("the real cause")
+
+    monkeypatch.setattr(wsindex.pipeline, "chunk_file", flaky)
+
+    with pytest.raises(RuntimeError) as caught:
+        pipeline.index()
+
+    assert isinstance(caught.value.__cause__, ZeroDivisionError)
+    # The type is named in the message, since RuntimeError replaced it:
+    # not every exception can be rebuilt from one string.
+    assert "ZeroDivisionError" in str(caught.value)
+
+
+def test_a_file_the_grammar_could_not_read_is_reported(
+    tmp_path: Path, pipeline: Pipeline, commit: Committer
+) -> None:
+    # It is still indexed — as text windows rather than definitions,
+    # which is worse to search and used to be impossible to notice.
+    broken = tmp_path / "repo1" / "src" / "broken.py"
+    broken.write_text("def alpha(:\n    return 1\n\n\ndef beta(\n    return 2\n")
+    commit(tmp_path / "repo1")
+
+    report = pipeline.index()
+
+    assert report.unparsed == ("repo1/src/broken.py",)
+
+
+def test_a_file_the_grammar_reads_is_not_reported(pipeline: Pipeline) -> None:
+    assert pipeline.index().unparsed == ()

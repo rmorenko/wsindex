@@ -19,6 +19,7 @@ import pytest
 
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
+from wsindex.ingest import commits as commits_module
 from wsindex.ingest.commits import (
     COMMIT_LANG,
     blame_links,
@@ -313,3 +314,20 @@ def test_commit_chunks_survive_a_full_pass(
     pipeline.index()
     kept = pipeline.search("caller", k=10, filters=SearchFilter(kind=(Kind.COMMIT,)))
     assert kept
+
+
+def test_a_blame_failure_names_the_file(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # It does reach the caller — `map` re-raises when the results are
+    # walked — but it used to arrive through `concurrent.futures` with no
+    # idea which of a hundred files caused it.
+    real = commits_module._blame
+
+    def flaky(root: Path, rel_path: str) -> dict[int, str]:
+        if rel_path == "b.py":
+            raise RuntimeError("blame blew up")
+        return real(root, rel_path)
+
+    monkeypatch.setattr(commits_module, "_blame", flaky)
+
+    with pytest.raises(RuntimeError, match=r"blaming b\.py.*blame blew up"):
+        blame_map(repo, ["a.py", "b.py"])

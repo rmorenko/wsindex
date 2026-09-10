@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from wsindex.model import Chunk, Kind
+from wsindex.model import Chunk, Hit, Kind, SourceFile
 
 
 def make_chunk(**overrides: Any) -> Chunk:
@@ -81,3 +81,15 @@ def test_to_metadata_contains_all_fields() -> None:
         "end_line": 2,
         "text": "def f(): pass",
     }
+
+
+def test_a_hit_carries_the_only_name_a_chunk_has() -> None:
+    # `repo/path:lines` locates a chunk for a person; one file yields
+    # many, and re-indexing moves the boundaries. The id is what dedup
+    # and every link are keyed on, and it was the one thing an outside
+    # caller could not say back.
+    src = SourceFile(repo="r", path="a.py", lang="python", kind=Kind.CODE)
+    chunk = src.chunk(text="def f(): pass", start_line=1, end_line=1)
+    hit = Hit(score=0.5, metadata=chunk.to_metadata(), native_id=chunk.id)
+
+    assert hit.to_json()["id"] == chunk.id

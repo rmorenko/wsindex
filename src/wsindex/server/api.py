@@ -395,6 +395,7 @@ def run_detail(report: IndexReport, *, seconds: float) -> dict[str, Any]:
         "full_repos": {repo_id: str(reason) for repo_id, reason in report.full_repos},
         "missing_repos": list(report.missing_repos),
         "unreadable": list(report.unreadable),
+        "unparsed": list(report.unparsed),
         "seconds": seconds,
     }
 

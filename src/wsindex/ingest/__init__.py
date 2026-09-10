@@ -19,6 +19,7 @@ necessary is unavoidable: a plugin must import wsindex to build what it
 registers, so wsindex must not import plugins on its way up.
 """
 
+from wsindex.ingest.ast import PARSE_ERROR
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.git_state import (
     GitCommandError,
@@ -43,6 +44,7 @@ from wsindex.ingest.walker import SKIP_REASONS, Skip, WalkedFile, examine, inspe
 
 __all__ = [
     "ENTRY_POINT_GROUP",
+    "PARSE_ERROR",
     "REGISTRY",
     "SKIP_REASONS",
     "GitCommandError",

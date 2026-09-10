@@ -274,8 +274,16 @@ class Hit:
         HTTP API and the MCP tools both return this, so a caller that has
         seen one recognizes the other. `metadata` holds whatever the
         store kept; this is the part that is promised.
+
+        `id` leads, because it is the only field that *names* the chunk.
+        `repo/path:lines` locates it for a person, but one file yields
+        many chunks and re-indexing moves the boundaries; the id is
+        deterministic, is what dedup and every link are keyed on, and was
+        the one thing an outside caller could not say back. A surprising
+        hit was impossible to report precisely without it.
         """
         return {
+            "id": self.native_id,
             "repo": self.repo,
             "path": self.path,
             "start_line": self.start_line,

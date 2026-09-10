@@ -18,7 +18,8 @@ import pytest
 import typer.main
 from typer.testing import CliRunner
 
-from wsindex.cli import app, run
+import wsindex.pipeline
+from wsindex.cli import DEBUG_ENV, app, run
 from wsindex.cli.interfaces import is_loopback
 from wsindex.config import Config, Provider
 from wsindex.connectors import BUILTIN, Connector, Document, DocumentNotFound
@@ -925,3 +926,71 @@ def test_every_command_is_documented() -> None:
     shipped = set(typer.main.get_command(app).commands)  # type: ignore[attr-defined]
 
     assert shipped <= documented, f"undocumented: {sorted(shipped - documented)}"
+
+
+# --- the door for whoever is fixing it ------------------------------------
+
+
+def test_debug_lets_the_traceback_through(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A RuntimeError may be a bug rather than a user's mistake, and one
+    # line is then exactly the wrong amount of information. Everything
+    # LanceDB, torch and git raise is a RuntimeError, so this used to be
+    # every last frame anyone had.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    monkeypatch.setattr(
+        wsindex.pipeline.Pipeline,
+        "index",
+        lambda self, progress=None: (_ for _ in ()).throw(RuntimeError("deep failure")),
+    )
+    monkeypatch.setenv(DEBUG_ENV, "1")
+
+    with pytest.raises(RuntimeError, match="deep failure"):
+        console_script(["index"], monkeypatch, capsys)
+
+
+def test_without_debug_it_is_one_line(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    monkeypatch.setattr(
+        wsindex.pipeline.Pipeline,
+        "index",
+        lambda self, progress=None: (_ for _ in ()).throw(RuntimeError("deep failure")),
+    )
+    monkeypatch.delenv(DEBUG_ENV, raising=False)
+
+    code, output = console_script(["index"], monkeypatch, capsys)
+
+    assert code == 1
+    assert "error: deep failure" in output
+    assert "Traceback" not in output
+
+
+def test_debug_puts_blame_back_in_one_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A breakpoint in a worker thread is a breakpoint in the wrong place.
+    from wsindex.cli import _open_the_door
+    from wsindex.ingest import commits
+
+    monkeypatch.setattr(commits, "BLAME_WORKERS", 8)
+
+    _open_the_door()
+
+    assert commits.BLAME_WORKERS == 1
+
+
+def test_explain_says_when_the_grammar_gave_up(workspace: Path) -> None:
+    # "indexed as python" was true and misleading.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    broken = workspace / "repo1" / "src" / "broken.py"
+    broken.write_text("def alpha(:\n    return 1\n\n\ndef beta(\n    return 2\n")
+
+    whole = runner.invoke(app, ["explain", str(workspace / "repo1" / "src" / "main.py")])
+    torn = runner.invoke(app, ["explain", str(broken)])
+
+    assert "with a symbol" in whole.output
+    assert "grammar reported errors" in torn.output

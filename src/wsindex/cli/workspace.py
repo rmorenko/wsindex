@@ -8,8 +8,9 @@ import typer
 
 from wsindex.cli.composition import config_or_default, require_config_file
 from wsindex.config import Backend, Config, Provider, Repository, RepoSource
-from wsindex.ingest import SKIP_REASONS, WalkedFile, examine
+from wsindex.ingest import PARSE_ERROR, SKIP_REASONS, WalkedFile, chunk_file, examine
 from wsindex.ingest.git_state import STATE_FILE, IndexState
+from wsindex.model import SourceFile
 from wsindex.paths import user_config_file, workspace_config_path
 
 
@@ -191,6 +192,7 @@ def explain(
         found = examine(root, rel, ignore=repo.ignore, formats=repo.formats)
         if isinstance(found, WalkedFile):
             typer.echo(f"{repo.id}/{rel}: indexed as {found.lang} ({found.kind.value})")
+            typer.echo(f"  {_how_it_chunks(target, found)}")
             return
         typer.echo(f"{repo.id}/{rel}: not indexed — {SKIP_REASONS[found]}")
         return
@@ -199,3 +201,31 @@ def explain(
         err=True,
     )
     raise typer.Exit(code=1)
+
+
+def _how_it_chunks(target: Path, found: WalkedFile) -> str:
+    """Whether the grammar actually read the file, or gave up on it.
+
+    "Indexed as python" was true and misleading: a file the grammar
+    cannot parse is still indexed, as text windows rather than
+    definitions — worse to search, and there was no way to find out. The
+    usual causes are syntax newer than the installed grammar and a
+    `formats` entry aimed at the wrong language.
+
+    Args:
+        target: The file, absolute.
+        found: What the walker decided about it.
+
+    Returns:
+        One line about how the file was cut up.
+    """
+    text = target.read_text(encoding="utf-8", errors="replace")
+    source = SourceFile(repo="", path=found.rel_path, lang=found.lang, kind=found.kind)
+    chunks = chunk_file(text, source)
+    if any(chunk.node_type == PARSE_ERROR for chunk in chunks):
+        return (
+            f"{len(chunks)} chunk(s), but the {found.lang} grammar reported errors — "
+            "the parts it could not read are indexed as text, not definitions"
+        )
+    named = sum(1 for chunk in chunks if chunk.symbol)
+    return f"{len(chunks)} chunk(s), {named} with a symbol"

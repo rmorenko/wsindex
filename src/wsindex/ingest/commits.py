@@ -17,7 +17,7 @@ with an error, and that is a normal answer here rather than a failure.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -188,12 +188,31 @@ def blame_map(root: Path, rel_paths: Sequence[str]) -> dict[str, dict[int, str]]
     Returns:
         One entry per path; a file git cannot blame — an untracked one —
         maps to an empty dict, which is a normal answer.
+
+    Raises:
+        RuntimeError: One file could not be blamed, named. A failure in a
+            worker thread does reach the caller — `map` re-raises when
+            the results are walked — but it arrives with a traceback
+            through `concurrent.futures` and no idea which of a hundred
+            files caused it. The name is added here, where it is known.
     """
     if not rel_paths:
         return {}
     with ThreadPoolExecutor(max_workers=BLAME_WORKERS) as pool:
-        blamed = pool.map(lambda rel_path: _blame(root, rel_path), rel_paths)
+        blamed = pool.map(_named(root), rel_paths)
         return dict(zip(rel_paths, blamed, strict=True))
+
+
+def _named(root: Path) -> Callable[[str], dict[int, str]]:
+    """`_blame` for one root, with the path attached to any failure."""
+
+    def blame(rel_path: str) -> dict[int, str]:
+        try:
+            return _blame(root, rel_path)
+        except Exception as exc:
+            raise RuntimeError(f"blaming {rel_path}: {type(exc).__name__}: {exc}") from exc
+
+    return blame
 
 
 def blame_links(

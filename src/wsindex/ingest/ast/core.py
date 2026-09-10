@@ -168,6 +168,14 @@ def def_span(outer: Node, *, covered: list[bool], symbol: str, node_type: str) -
     return Span(start_line=start, end_line=end, symbol=symbol, node_type=node_type)
 
 
+PARSE_ERROR = "parse-error"
+"""`node_type` on the chunks left over when the grammar reported errors.
+
+A value rather than a flag on the side: it reaches search output, the
+index report and `wsindex explain` through the field every chunk already
+has."""
+
+
 def ast_chunks(
     text: str,
     source: SourceFile,
@@ -190,10 +198,29 @@ def ast_chunks(
 
     Returns:
         Chunks in file order, covering every non-blank line exactly once.
+        When the grammar could not read the file, the leftover chunks
+        carry `PARSE_ERROR` as their node type — see below.
     """
     lines = text.splitlines()
     covered = [False] * (len(lines) + 1)
-    root = parser.parse(text.encode()).root_node
+    tree = parser.parse(text.encode())
+    root = tree.root_node
     spans = extractor(root, lines, covered)
-    spans += gap_spans(lines, covered=covered, start=1, end=len(lines), symbol=None, node_type=None)
+    # `has_error` was available all along and asked by nobody, so a file
+    # the grammar could not read degraded quietly into text windows —
+    # search kept working, worse, and there was no way to find out.
+    # It happens for real reasons: syntax newer than the installed
+    # grammar, or a `formats` entry pointing a suffix at the wrong
+    # language.
+    #
+    # Marked on the gap chunks rather than reported out of band, because
+    # `node_type` is already carried everywhere a chunk goes and is not
+    # part of the chunk id — so this costs no second parse and moves no
+    # id. Its limit is worth naming: an error confined inside a
+    # definition still leaves that definition's own span intact, so this
+    # catches the common case (a broken top level) and not every case.
+    leftover = PARSE_ERROR if root.has_error else None
+    spans += gap_spans(
+        lines, covered=covered, start=1, end=len(lines), symbol=None, node_type=leftover
+    )
     return _assemble(spans, lines=lines, source=source)
