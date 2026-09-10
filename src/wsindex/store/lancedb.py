@@ -149,6 +149,10 @@ class LanceDBStore(VectorStore):
                 self._known_datasets[d["repo"]] = d
         return self._known_datasets
 
+    def datasets(self) -> set[str]:
+        """Every dataset in the registry table; see the base contract."""
+        return set(self._get_datasets())
+
     def create_dataset(self, dataset_name: str, *, metric: str) -> None:
         """Register the dataset in the registry table; a no-op if known.
 

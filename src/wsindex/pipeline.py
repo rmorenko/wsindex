@@ -18,19 +18,23 @@ the store used to only ever add, so a file that shrank or vanished
 left its old chunks in the index forever.
 """
 
+import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from pathlib import Path
 
 from wsindex.config import Config, Repository
 from wsindex.ingest import (
     IndexState,
     RepoDiff,
+    Skip,
     WalkedFile,
     chunk_file,
     diff_since,
+    examine,
     has_uncommitted_changes,
-    inspect_file,
 )
 from wsindex.ingest.commits import blame_links, blame_map, commit_chunks, read_commits
 from wsindex.ingest.link_extract import links_for
@@ -49,6 +53,13 @@ into two writes instead of 149."""
 
 _CANDIDATE_MULTIPLIER = 4
 
+log = logging.getLogger(__name__)
+"""Silent unless somebody attaches a handler; `wsindex serve` does.
+What is logged here is what an operator asks about afterwards — which
+repo was read, how much of it, how long, and what could not be read at
+all. The CLI says the same things in its own words to a person who is
+watching; a log is for the reader who was not."""
+
 
 @dataclass(frozen=True, kw_only=True)
 class _Totals:
@@ -59,6 +70,24 @@ class _Totals:
     written: int
     deleted: int
     commits: int
+    unreadable: tuple[str, ...] = ()
+
+
+class FullPass(StrEnum):
+    """Why a repo was read whole instead of by delta.
+
+    The note this feeds used to list three possible causes and let the
+    reader guess, which is fine until the real cause is a fourth one —
+    a state file that could not be read named none of them. Each member
+    is the sentence itself: there is no second place where these are
+    turned into words, so they cannot drift out of step.
+    """
+
+    NEVER_INDEXED = "a first index"
+    STATE_LOST = "the index state file could not be read, so the last run is unknown"
+    MARKUP_CHANGED = "its ignore/formats markup changed"
+    DIRTY_TREE = "uncommitted work, which a commit-to-commit diff cannot see; commit or stash it"
+    HISTORY_MOVED = "the commit it was last indexed at is gone (a rebase, a gc, a re-clone)"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -95,10 +124,29 @@ class _Written:
         return replace(self, written=self.written + written)
 
 
+@dataclass(frozen=True, kw_only=True)
+class _Selection:
+    """What one repo's changed paths turned into.
+
+    Attributes:
+        indexable: The files worth reading.
+        forget: Paths whose stored chunks must go — deleted ones, plus
+            paths that changed into something unindexable.
+        unreadable: Paths git tracks that could not be opened. Neither
+            indexable nor forgettable: they are a problem to report, not
+            a decision to act on, and folding them into either list is
+            how they went unmentioned for as long as they did.
+    """
+
+    indexable: list[WalkedFile]
+    forget: list[str]
+    unreadable: list[str]
+
+
 def _selection(
     repo: Repository, *, root: Path, changed: tuple[str, ...], deleted: tuple[str, ...]
-) -> tuple[list[WalkedFile], list[str]]:
-    """Split the changed paths into what to read and what to forget.
+) -> _Selection:
+    """Split the changed paths into what to read, what to forget, what broke.
 
     A path that changed into something unindexable — renamed to a `.png`,
     grown past the size limit, turned binary — is a deletion as far as the
@@ -112,17 +160,22 @@ def _selection(
         deleted: Paths git reports as gone.
 
     Returns:
-        The files worth reading, and the paths whose chunks must go.
+        The three lists; see `_Selection`.
     """
     indexable: list[WalkedFile] = []
     forget: list[str] = list(deleted)
+    unreadable: list[str] = []
     for rel_path in changed:
-        walked = inspect_file(root, rel_path, ignore=repo.ignore, formats=repo.formats)
-        if walked is None:
-            forget.append(rel_path)
+        walked = examine(root, rel_path, ignore=repo.ignore, formats=repo.formats)
+        if isinstance(walked, WalkedFile):
+            indexable.append(walked)
             continue
-        indexable.append(walked)
-    return indexable, forget
+        if walked is Skip.UNREADABLE:
+            unreadable.append(rel_path)
+        # Unreadable paths are forgotten too: whatever the store still
+        # holds for one is from a version nobody can confirm any more.
+        forget.append(rel_path)
+    return _Selection(indexable=indexable, forget=forget, unreadable=unreadable)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -145,9 +198,17 @@ class IndexReport:
             two of those chunks came from no file at all.
         missing_repos: Ids of configured repos whose directory does not
             exist; they were skipped, not failed on.
-        full_repos: Ids of repos that could not go incremental this run
-            and were fully re-read. Either they had never been indexed,
-            or their working tree is dirty (see `Pipeline.index`).
+        full_repos: Repos that could not go incremental this run, each
+            with the reason it could not. A pair rather than a bare id
+            because "why did this take nine seconds" is the question the
+            field exists to answer.
+        unreadable: Paths git tracks that could not be opened, as
+            `repo/path`. Not a policy skip: these were meant to be
+            indexed and are not, and a run that only printed `files: 1`
+            when there were two said something untrue.
+        seconds: How long the run took. The server already recorded this
+            per run; a person at a terminal deserves the same, and it is
+            the only number that makes two runs comparable.
     """
 
     files: int
@@ -156,7 +217,43 @@ class IndexReport:
     deleted: int
     commits: int
     missing_repos: tuple[str, ...]
-    full_repos: tuple[str, ...]
+    full_repos: tuple[tuple[str, FullPass], ...]
+    unreadable: tuple[str, ...] = ()
+    seconds: float = 0.0
+
+
+def _why_full(repo: Repository, *, state: IndexState, dirty: bool) -> FullPass:
+    """Which of the five reasons made this repo a full pass.
+
+    Ordered by which one the reader can still do something about, which
+    is not the same as which came first. A dirty tree wins even when the
+    repo has also never been indexed: a dirty tree *is* why nothing was
+    recorded, and it will cost a full pass on every run until somebody
+    commits, while "a first index" is true once and then never again.
+    Found by watching a live server call a workspace it had indexed all
+    week "a first index" — correct, and useless.
+
+    Then the lost state file, because it looks exactly like a first index
+    and is not; then the markup, which the user changed on purpose; and
+    last the one nobody chose.
+
+    Args:
+        repo: The repo just planned.
+        state: The state as it was loaded, before this run wrote to it.
+        dirty: Whether its working tree has uncommitted work.
+
+    Returns:
+        The reason, as the sentence the note will print.
+    """
+    if dirty:
+        return FullPass.DIRTY_TREE
+    if state.commits.get(repo.id) is None:
+        return FullPass.STATE_LOST if state.lost else FullPass.NEVER_INDEXED
+    if state.markup.get(repo.id) != repo.markup_key:
+        return FullPass.MARKUP_CHANGED
+    # A `since` was known, the tree is clean, the markup is the same, and
+    # the diff still came back full: git no longer resolves that commit.
+    return FullPass.HISTORY_MOVED
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -236,11 +333,13 @@ class Pipeline:
                 fallback to plain walking would mean two models of
                 state, so this is a config error with a message.
         """
+        started = time.monotonic()
         config = self.config
         state = IndexState.load(self.state_dir)
         files = chunks_count = written = deleted = commits = 0
         missing_repos: list[str] = []
-        full_repos: list[str] = []
+        full_repos: list[tuple[str, FullPass]] = []
+        unreadable: list[str] = []
         for repo in config.repos:
             # The engine says *who* is being read; what to draw with that
             # is the caller's business (see `wsindex.ui`). A plain
@@ -249,12 +348,15 @@ class Pipeline:
                 progress(repo.id)
             root = Path(repo.path)
             if not root.is_dir():
+                log.warning("skipping %s: %s does not exist", repo.id, root)
                 missing_repos.append(repo.id)
                 continue
             self.store.create_dataset(dataset_name=repo.id, metric=config.metric)
             diff, dirty = self._plan(repo, root=root, state=state)
             if diff.full:
-                full_repos.append(repo.id)
+                reason = _why_full(repo, state=state, dirty=dirty)
+                log.info("full pass for %s: %s", repo.id, reason)
+                full_repos.append((repo.id, reason))
             if diff.full or diff.changed or diff.deleted:
                 totals = self._index_repo(repo, root=root, diff=diff, config=config)
                 files += totals.files
@@ -262,6 +364,17 @@ class Pipeline:
                 written += totals.written
                 deleted += totals.deleted
                 commits += totals.commits
+                unreadable.extend(f"{repo.id}/{path}" for path in totals.unreadable)
+                log.info(
+                    "indexed %s: %d files, %d chunks, %d written, %d deleted",
+                    repo.id,
+                    totals.files,
+                    totals.chunks,
+                    totals.written,
+                    totals.deleted,
+                )
+                for path in totals.unreadable:
+                    log.warning("could not read %s/%s", repo.id, path)
             # Nothing moved and nothing to reconcile: no read, no chunking,
             # no store round trip. That is the whole point of the step.
             if not dirty:
@@ -273,6 +386,12 @@ class Pipeline:
                 # run skip those same changes forever.
                 state = state.with_commit(repo.id, diff.head, markup=repo.markup_key)
                 state.save(self.state_dir)
+        log.info(
+            "index finished in %.2fs: %d files, %d chunks",
+            time.monotonic() - started,
+            files,
+            chunks_count,
+        )
         return IndexReport(
             files=files,
             chunks=chunks_count,
@@ -281,6 +400,8 @@ class Pipeline:
             commits=commits,
             missing_repos=tuple(missing_repos),
             full_repos=tuple(full_repos),
+            unreadable=tuple(unreadable),
+            seconds=round(time.monotonic() - started, 2),
         )
 
     def _plan(self, repo: Repository, *, root: Path, state: IndexState) -> tuple[RepoDiff, bool]:
@@ -336,12 +457,18 @@ class Pipeline:
         Returns:
             Totals for this repo.
         """
-        indexable, forget = _selection(repo, root=root, changed=diff.changed, deleted=diff.deleted)
-        scope = None if diff.full else [*(walked.rel_path for walked in indexable), *forget]
+        picked = _selection(repo, root=root, changed=diff.changed, deleted=diff.deleted)
+        scope = (
+            None
+            if diff.full
+            else [*(walked.rel_path for walked in picked.indexable), *picked.forget]
+        )
         stored = self.store.chunk_ids(dataset_name=repo.id, paths=scope)
 
         history = self._index_commits(repo, root=root, since=diff.since, config=config)
-        files = self._index_files(repo, root=root, walked=indexable, history=history, config=config)
+        files = self._index_files(
+            repo, root=root, walked=picked.indexable, history=history, config=config
+        )
         deleted = self._forget(repo, stale=sorted(stored - files.ids - history.ids))
         return _Totals(
             files=files.files,
@@ -349,6 +476,7 @@ class Pipeline:
             written=files.written,
             deleted=deleted,
             commits=history.written,
+            unreadable=tuple(picked.unreadable),
         )
 
     def _index_commits(
@@ -513,8 +641,10 @@ class Pipeline:
         less is wrong), then one stable sort merges and cuts to k — on
         equal scores the given repo order wins, which keeps results
         deterministic. A repo that was never indexed (store raises
-        ValueError) silently contributes zero hits: not yet indexed is a
-        normal state, not an error.
+        ValueError) contributes zero hits here: not yet indexed is a
+        normal state, not an error. It is not a *silent* state, though —
+        ask `unsearched()` and tell the reader, because an answer that
+        skipped half the workspace must not look like one that did not.
 
         Repo scope is applied here (dataset list), structural filters go
         down to the store as a prefilter — reranker sees only the
@@ -533,11 +663,7 @@ class Pipeline:
         Raises:
             ValueError: `repo` is set but not present in the config.
         """
-        repos = self.config.repos
-        if repo is not None:
-            repos = [r for r in repos if r.id == repo]
-            if not repos:
-                raise ValueError(f"unknown repo id: {repo!r}")
+        repos = self._scope(repo)
         # Before reading, not after: a store holds the version it opened
         # at, so a long-lived process would answer from the corpus as it
         # was when it started and never fail doing it (ADR-10). Costs
@@ -555,3 +681,40 @@ class Pipeline:
             scores = self.reranker.rank(query, [hit.text for hit in all_hits])
             all_hits = [replace(h, score=s) for h, s in zip(all_hits, scores, strict=True)]
         return sorted(all_hits, key=lambda h: h.score, reverse=True)[:k]
+
+    def _scope(self, repo: str | None) -> list[Repository]:
+        """The repos a query covers, or a named error for an unknown id."""
+        if repo is None:
+            return list(self.config.repos)
+        scoped = [r for r in self.config.repos if r.id == repo]
+        if not scoped:
+            raise ValueError(f"unknown repo id: {repo!r}")
+        return scoped
+
+    def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
+        """Configured repos the store has never heard of, in config order.
+
+        The other half of `search`. A repo that was added to the config
+        and never indexed — or whose indexing failed a month ago — takes
+        no part in any search and says nothing about it, so every answer
+        since has been quietly partial. This is what lets the caller put
+        that in words.
+
+        Asked separately rather than returned from `search` because a
+        Pipeline is frozen and a search returns hits; the store call
+        behind this reads one small registry table.
+
+        Args:
+            repo: Restrict to one repo id, matching the search it
+                accompanies. An unknown id raises, exactly as it does
+                there.
+
+        Returns:
+            The ids, in the order the config lists them; empty when the
+            whole workspace is searchable.
+
+        Raises:
+            ValueError: `repo` is set but not present in the config.
+        """
+        known = self.store.datasets()
+        return tuple(r.id for r in self._scope(repo) if r.id not in known)

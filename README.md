@@ -21,13 +21,15 @@ uv run wsindex index             # first run downloads the embedding model (~90 
 uv run wsindex search "how are markdown files split into chunks"
 uv run wsindex why chunk_markdown        # the commits that wrote it, and why
 uv run wsindex refs 8080                 # everything that names this port
+uv run wsindex status                    # what is configured, and what the index holds
+uv run wsindex explain src/thing.tf      # why a file is (or is not) searchable
 ```
 
 Real output on this very repository:
 
 ```
 $ uv run wsindex index
-files: 87  chunks: 1228  written: 1227  deleted: 0  commits: 95
+files: 87  chunks: 1228  written: 1227  deleted: 0  commits: 95  in 6.42s
 
 $ uv run wsindex search "how are markdown files split into chunks" -k 3
 wsindex/README.md:14-38  0.707  ## Quickstart
@@ -140,6 +142,37 @@ What the suffix table does not save you from is a `secrets.yaml` or a
 indexed like any other. Untracked files count too, as long as
 `.gitignore` does not exclude them.
 
+Six rules can leave a file out, and from outside they all used to look
+the same: the file was simply absent. `wsindex explain` names the one
+that caught yours, because each points at a different fix.
+
+```console
+$ wsindex explain src/schema.tf
+r/src/schema.tf: not indexed — no language claims this suffix; add a `formats` entry for it
+
+$ wsindex explain src/main.py
+r/src/main.py: indexed as python (code)
+```
+
+`wsindex status` answers the other half — whether the index has run at
+all, and at which commit:
+
+```console
+$ wsindex status
+repos:
+  self -> /Users/me/wsindex  (indexed 2026-09-10 08:47 at e15022e)
+  new  -> /Users/me/other    (not indexed)
+```
+
+A repo that has never been indexed takes no part in any search, so
+`search` says so before showing results rather than letting a partial
+answer look like a whole one:
+
+```console
+$ wsindex search "how are chunks deduplicated"
+warning: not searched (never indexed): new — run `wsindex index`
+```
+
 ## Incremental indexing
 
 `index` asks git what changed since the commit it last indexed, so a
@@ -158,10 +191,25 @@ Measured on the acceptance corpus (149 files, 3458 chunks, real model):
 Two conditions put a repo on that fast path: it must be a git repository
 (a plain directory is a configuration error, not a silent fallback), and
 its working tree must be clean. A dirty tree costs a full pass, because a
-commit-to-commit diff cannot see uncommitted edits or untracked files —
-`index` says so on stderr rather than being quietly slow. The full pass
-is a reconcile, not just an append: chunks the current tree no longer
-produces are removed either way.
+commit-to-commit diff cannot see uncommitted edits or untracked files.
+The full pass is a reconcile, not just an append: chunks the current tree
+no longer produces are removed either way.
+
+When a repo does go the long way, `index` says which one and why —
+naming the reason rather than listing the possibilities, because a note
+that offers three causes names none of them when the real one is a
+fourth:
+
+```console
+$ wsindex index
+files: 122  chunks: 1795  written: 1795  deleted: 0  commits: 115  in 8.71s
+note: full pass for self — uncommitted work, which a commit-to-commit diff cannot see; commit or stash it
+warning: could not read 1 tracked file(s) — self/src/locked.py
+```
+
+That last line is not a policy skip. A file git tracks and the
+filesystem refuses to open was *meant* to be indexed; saying `files: 121` and nothing else would have left you to discover it by noticing a
+search that finds nothing.
 
 The last indexed commit per repo lives in `state.json` inside the index
 directory. It is a cache, so a corrupt or outdated one costs a full
@@ -501,6 +549,26 @@ at it; the body is ignored, since "something changed" is all an
 incremental run needs to hear. OpenAPI comes free at `/openapi.json`.
 
 `/admin` is a page with the repo list, a sync button and the recent runs.
+
+**It writes down what it did.** `serve` turns on uvicorn's access log
+and the library's own records; every CLI command stays silent, because a
+log line is not an interface for somebody watching a terminal. The
+library follows the rule libraries are supposed to follow — modules log,
+the package handles nothing, whoever embeds it decides where that goes:
+
+```
+INFO:     127.0.0.1:53298 - "GET /search?q=chunks HTTP/1.1" 200 OK
+INFO     full pass for self: uncommitted work, which a commit-to-commit diff cannot see; commit or stash it
+INFO     indexed self: 122 files, 1827 chunks, 75 written, 43 deleted
+INFO     index finished in 1.27s: 122 files, 1827 chunks
+```
+
+Before this, a successful request left no trace at all and a failed one
+left ~69 lines of traceback that named neither the time nor the query.
+The scheduler's failures are logged with their traceback as well as
+recorded: the run log holds twenty entries in memory and loses them on
+restart, which is the wrong place for the one failure nobody watched
+happen.
 
 **Nothing server-shaped leaks into the engine.** Every endpoint is a call
 into the same library the CLI uses — an endpoint that could not be

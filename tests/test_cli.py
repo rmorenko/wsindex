@@ -802,3 +802,75 @@ def test_indexing_leaves_a_private_index_directory(workspace: Path) -> None:
     runner.invoke(app, ["index"])
 
     assert stat.S_IMODE((workspace / ".wsindex").stat().st_mode) == 0o700
+
+
+# --- saying what happened -------------------------------------------------
+
+
+def test_index_says_how_long_and_why_it_was_full(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+
+    result = runner.invoke(app, ["index"])
+
+    assert "in 0." in result.output or "in 1." in result.output
+    assert "full pass for r — a first index" in result.output
+
+
+def test_search_says_which_repos_it_did_not_look_in(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    runner.invoke(app, ["add-repo", "later", str(workspace / "repo1")])
+
+    result = runner.invoke(app, ["search", "f"])
+
+    assert "not searched (never indexed): later" in result.output
+
+
+def test_add_repo_warns_about_a_path_that_is_not_there(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+
+    result = runner.invoke(app, ["add-repo", "typo", str(workspace / "repoo")])
+
+    assert result.exit_code == 0
+    assert "does not exist" in result.output
+
+
+def test_add_repo_stays_quiet_when_sync_will_create_the_path(workspace: Path) -> None:
+    # With a remote the path is *supposed* not to exist yet.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+
+    result = runner.invoke(
+        app, ["add-repo", "fresh", str(workspace / "new"), "--remote", "https://example.invalid/x"]
+    )
+
+    assert "does not exist" not in result.output
+
+
+def test_status_says_whether_the_index_has_run(workspace: Path) -> None:
+    # It used to recite the config back, every line of it already visible
+    # in wsindex.toml, and say nothing about the index itself.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+
+    assert "(not indexed)" in runner.invoke(app, ["status"]).output
+
+    runner.invoke(app, ["index"])
+
+    assert "(indexed " in runner.invoke(app, ["status"]).output
+
+
+def test_explain_answers_the_question_this_tool_gets_asked_most(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    (workspace / "repo1" / "notes.unknownsuffix").write_text("hello\n")
+
+    indexed = runner.invoke(app, ["explain", str(workspace / "repo1" / "src" / "main.py")])
+    skipped = runner.invoke(app, ["explain", str(workspace / "repo1" / "notes.unknownsuffix")])
+    outside = runner.invoke(app, ["explain", str(workspace / "elsewhere.py")])
+
+    assert "indexed as python (code)" in indexed.output
+    assert "no language claims this suffix" in skipped.output
+    assert outside.exit_code == 1
+    assert "not inside any configured repo" in outside.output

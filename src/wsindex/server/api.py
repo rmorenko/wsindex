@@ -40,7 +40,7 @@ from wsindex.server.admin import mount_admin
 from wsindex.server.scheduler import mount_scheduler
 
 if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
-    from wsindex.pipeline import Pipeline
+    from wsindex.pipeline import IndexReport, Pipeline
 
 # FastAPI at module scope, not inside the factory. It has to be: with
 # postponed annotations a route's `request: Request` is resolved against
@@ -253,12 +253,21 @@ def create_app(
             hits = app.state.pipeline.search(
                 q, k=k, repo=repo, filters=None if candidate.is_empty else candidate
             )
+            # Part of the answer, not a footnote: a caller that cannot
+            # see which repos were left out has no way to know its result
+            # is partial, and an agent will report it as complete.
+            skipped = app.state.pipeline.unsearched(repo)
         except ValueError as exc:
             # An unknown repo id is the caller's mistake, not the
             # server's — the CLI exits 1 on it, and 400 is the same
             # sentence in HTTP.
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"query": q, "count": len(hits), "hits": [hit.to_json() for hit in hits]}
+        return {
+            "query": q,
+            "count": len(hits),
+            "hits": [hit.to_json() for hit in hits],
+            "unsearched": list(skipped),
+        }
 
     @app.post("/index", dependencies=guarded)
     def index() -> dict[str, Any]:
@@ -278,16 +287,7 @@ def create_app(
             # server broke, when the answer is in the config file.
             app.state.runs.record("index", started, {"error": str(exc)})
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        detail = {
-            "files": report.files,
-            "chunks": report.chunks,
-            "written": report.written,
-            "deleted": report.deleted,
-            "commits": report.commits,
-            "full_repos": list(report.full_repos),
-            "missing_repos": list(report.missing_repos),
-            "seconds": round(time.monotonic() - clock, 2),
-        }
+        detail = run_detail(report, seconds=round(time.monotonic() - clock, 2))
         app.state.runs.record("index", started, detail)
         return detail
 
@@ -371,6 +371,34 @@ class Guard:
         return None
 
 
+def run_detail(report: IndexReport, *, seconds: float) -> dict[str, Any]:
+    """One index run as JSON, for `/index`, the hook and the run log.
+
+    One function because the three used to build the same dict in two
+    places, and the day `full_repos` grew a reason only one of them would
+    have learned it.
+
+    Args:
+        report: The `IndexReport` to render.
+        seconds: Wall clock for the whole call, which is longer than the
+            report's own figure when a sync ran first.
+
+    Returns:
+        The plain-data shape every caller returns.
+    """
+    return {
+        "files": report.files,
+        "chunks": report.chunks,
+        "written": report.written,
+        "deleted": report.deleted,
+        "commits": report.commits,
+        "full_repos": {repo_id: str(reason) for repo_id, reason in report.full_repos},
+        "missing_repos": list(report.missing_repos),
+        "unreadable": list(report.unreadable),
+        "seconds": seconds,
+    }
+
+
 def _mount_mcp(app: FastAPI) -> None:
     """Offer the same tools over streamable HTTP, when the extra is here.
 
@@ -428,4 +456,5 @@ __all__ = [
     "bearer_ok",
     "create_app",
     "cross_origin",
+    "run_detail",
 ]

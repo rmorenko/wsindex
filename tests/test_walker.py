@@ -13,8 +13,11 @@ import pytest
 from wsindex.ingest.walker import (
     IGNORED_DIRS,
     MAX_FILE_SIZE,
+    SKIP_REASONS,
+    Skip,
     WalkedFile,
     _skip_dir,
+    examine,
     inspect_file,
 )
 from wsindex.model import Kind
@@ -332,3 +335,48 @@ def test_a_symlink_inside_the_repo_is_skipped_too(tmp_path: Path) -> None:
     (repo / "alias.md").symlink_to(repo / "real.md")
 
     assert inspect_file(repo, "alias.md") is None
+
+
+def test_examine_names_the_rule_that_excluded_a_file(tmp_path: Path) -> None:
+    # Six rules, one answer each. Until this existed every one of them
+    # looked identical from outside — the file was simply absent — and
+    # each points at a different fix.
+    repo = tmp_path / "repo"
+    (repo / "node_modules").mkdir(parents=True)
+    (repo / "node_modules" / "dep.py").write_text("x = 1\n")
+    (repo / "vendor").mkdir()
+    (repo / "vendor" / "lib.py").write_text("x = 1\n")
+    (repo / "notes.unknownsuffix").write_text("hello\n")
+    (repo / "big.py").write_text("x = 1\n" * (MAX_FILE_SIZE // 5))
+    (repo / "blob.py").write_bytes(b"def f():\x00\n")
+    (repo / "real.py").write_text("def f():\n    return 1\n")
+    (repo / "alias.py").symlink_to(repo / "real.py")
+
+    assert examine(repo, "node_modules/dep.py") is Skip.HIDDEN_DIR
+    assert examine(repo, "vendor/lib.py", ignore=["vendor/*"]) is Skip.IGNORED
+    assert examine(repo, "notes.unknownsuffix") is Skip.UNKNOWN_SUFFIX
+    assert examine(repo, "alias.py") is Skip.SYMLINK
+    assert examine(repo, "gone.py") is Skip.NOT_A_FILE
+    assert examine(repo, "big.py") is Skip.TOO_LARGE
+    assert examine(repo, "blob.py") is Skip.BINARY
+    assert isinstance(examine(repo, "real.py"), WalkedFile)
+
+
+def test_a_file_that_cannot_be_opened_is_its_own_answer(tmp_path: Path) -> None:
+    # Not NOT_A_FILE, which is what it used to be: a broken symlink is
+    # nothing, a file the filesystem refuses to open is a problem.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    locked = repo / "locked.py"
+    locked.write_text("def f():\n    return 1\n")
+    locked.chmod(0o000)
+    try:
+        assert examine(repo, "locked.py") is Skip.UNREADABLE
+    finally:
+        locked.chmod(0o644)
+
+
+def test_every_reason_can_be_said_out_loud() -> None:
+    # `explain` looks each one up; a member with no sentence would be a
+    # KeyError in front of the user.
+    assert set(SKIP_REASONS) == set(Skip)

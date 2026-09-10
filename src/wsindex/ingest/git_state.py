@@ -136,10 +136,17 @@ class IndexState:
             Without this, editing the markup and re-indexing did exactly
             nothing — measured, not imagined. A repo absent here is one
             whose markup is unknown, which costs one full pass.
+        lost: A state file was there and could not be used. Empty
+            `commits` alone cannot say that: a first index and a
+            corrupted cache produce the same mapping and cost the same
+            full pass, but only one of them is worth telling somebody
+            about, and the note used to name three causes that were all
+            wrong in that case.
     """
 
     commits: dict[str, str]
     markup: dict[str, str] = field(default_factory=dict)
+    lost: bool = False
 
     @classmethod
     def load(cls, index_dir: Path) -> IndexState:
@@ -159,17 +166,19 @@ class IndexState:
             The stored state, or an empty one.
         """
         path = index_dir / STATE_FILE
+        present = path.exists()
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             # OSError: absent, unreadable, a directory. ValueError:
             # JSONDecodeError (a subclass) — truncated by a crash mid-write.
-            return cls(commits={})
+            # `present` is what tells the first of those from the rest.
+            return cls(commits={}, lost=present)
         if not isinstance(raw, dict) or raw.get("version") != STATE_VERSION:
-            return cls(commits={})
+            return cls(commits={}, lost=True)
         commits = raw.get("commits")
         if not isinstance(commits, dict):
-            return cls(commits={})
+            return cls(commits={}, lost=True)
         markup = raw.get("markup")
         # Values are re-typed rather than trusted: a hand-edited file
         # could hold a number where a sha belongs. Shas are also checked

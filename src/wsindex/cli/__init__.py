@@ -20,7 +20,7 @@ from wsindex.cli.external import fetch
 from wsindex.cli.indexing import compact, index, sync
 from wsindex.cli.interfaces import mcp, serve, shell
 from wsindex.cli.searching import refs, search, why
-from wsindex.cli.workspace import add_repo, init, status
+from wsindex.cli.workspace import add_repo, explain, init, status
 from wsindex.config import Config
 
 app = typer.Typer(no_args_is_help=True)
@@ -41,6 +41,7 @@ for command in (
     init,
     add_repo,
     status,
+    explain,
     index,
     search,
     sync,
@@ -71,8 +72,28 @@ def run() -> None:
     try:
         app()
     except RuntimeError as exc:
-        typer.echo(f"error: {exc}", err=True)
+        typer.echo(f"error: {exc}{_advice(exc)}", err=True)
         raise SystemExit(1) from exc
+
+
+def _advice(exc: RuntimeError) -> str:
+    """One more sentence, when the error alone leaves nowhere to go.
+
+    A damaged store answers in its backend's own words — `lance error:
+    LanceError(IO): Generic memory error: Invalid range 0..642` — which
+    says what broke inside and nothing about what to do. There *is*
+    something to do, and it is cheap: an index is derived data, so
+    throwing it away costs one re-index. Same sentence the pre-ADR-7
+    config check uses, for the same reason.
+    """
+    if "lance error" not in str(exc).lower():
+        return ""
+    from wsindex.config import Config
+
+    return (
+        f"\nhint: the index looks damaged — remove {Config().index_dir} and run "
+        "`wsindex index` (ids are deterministic, re-indexing is cheap)"
+    )
 
 
 __all__ = ["app", "build_pipeline", "build_store", "run"]

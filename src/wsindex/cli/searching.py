@@ -48,9 +48,21 @@ def search(
     filters: SearchFilter | None = None if candidate.is_empty else candidate
     try:
         hits = pipeline.search(query, k=top, repo=repo, filters=filters)
+        skipped = pipeline.unsearched(repo)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+    if skipped:
+        # Before the results, not after: this changes how they should be
+        # read. A repo that was never indexed takes no part in any
+        # search, so "nothing found there" was never something this
+        # answer had the standing to say.
+        typer.echo(
+            "warning: not searched (never indexed): "
+            + ", ".join(skipped)
+            + " — run `wsindex index`",
+            err=True,
+        )
     if not hits:
         typer.echo("no results")
         return
@@ -121,8 +133,13 @@ def why(symbol: str) -> None:
     pipeline = build_pipeline()
     found = _definitions(pipeline, symbol)
     if not found:
+        # Exit 0, like `refs`. Looking and not finding is an answer, and
+        # the two commands used to disagree about that — `why` exited 1
+        # where `refs` exited 0 for the same situation, which is the kind
+        # of difference a script discovers the hard way. Code 1 is kept
+        # for "could not look".
         typer.echo(f"no definition found for {symbol!r}")
-        raise typer.Exit(code=1)
+        return
     with LinkStore(config.index_dir) as links:
         for hit in found[:3]:
             typer.echo(f"{hit.symbol}  {hit.location}")

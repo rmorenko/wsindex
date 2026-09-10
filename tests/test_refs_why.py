@@ -161,10 +161,14 @@ def test_why_shows_what_the_commit_pointed_at(workspace: Path) -> None:
     assert "https://jira.invalid/browse/PROJ-412" in result.output
 
 
-def test_why_on_an_unknown_symbol_exits_nonzero(workspace: Path) -> None:
-    result = runner.invoke(app, ["why", "no_such_symbol_anywhere"])
-    assert result.exit_code == 1
-    assert "no definition found" in result.output
+def test_why_and_refs_agree_that_not_found_is_an_answer(workspace: Path) -> None:
+    # They used to disagree: `why` exited 1 and `refs` exited 0 for the
+    # same situation, which a script finds out the hard way. Looking and
+    # not finding is an answer; code 1 is for not being able to look.
+    why_result = runner.invoke(app, ["why", "no_such_symbol_anywhere"])
+    refs_result = runner.invoke(app, ["refs", "no_such_name_anywhere"])
+    assert why_result.exit_code == refs_result.exit_code == 0
+    assert "no definition found" in why_result.output
 
 
 def test_why_needs_a_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

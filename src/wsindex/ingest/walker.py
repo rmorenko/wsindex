@@ -16,6 +16,7 @@ noise, and no global table is right for both.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
@@ -45,6 +46,44 @@ IGNORED_DIRS: frozenset[str] = frozenset(
     ]
 )
 MAX_FILE_SIZE = 1024 * 1024
+
+
+class Skip(StrEnum):
+    """Why a file is not in the index.
+
+    Seven ways to be left out, and until this existed a reader could tell
+    them apart only by guessing. "Why is my `.tf` file not searchable" is
+    the likeliest question this tool gets asked, and the answer decides
+    what to do next — add a `formats` entry, move the file, or look at
+    permissions. `wsindex explain` turns these into that answer.
+
+    One of them is not policy at all: `UNREADABLE` means a file git
+    considers part of the project could not be opened. That is worth
+    reporting from an ordinary index run, which the other six are not.
+    """
+
+    HIDDEN_DIR = "hidden-dir"
+    IGNORED = "ignored"
+    UNKNOWN_SUFFIX = "unknown-suffix"
+    SYMLINK = "symlink"
+    NOT_A_FILE = "not-a-file"
+    TOO_LARGE = "too-large"
+    BINARY = "binary"
+    UNREADABLE = "unreadable"
+
+
+SKIP_REASONS: dict[Skip, str] = {
+    Skip.HIDDEN_DIR: "inside a directory the walker never descends into",
+    Skip.IGNORED: "excluded by this repo's `ignore`",
+    Skip.UNKNOWN_SUFFIX: "no language claims this suffix; add a `formats` entry for it",
+    Skip.SYMLINK: "a symlink; whatever it points at is indexed on its own, if it belongs",
+    Skip.NOT_A_FILE: "not a regular file",
+    Skip.TOO_LARGE: f"larger than {MAX_FILE_SIZE // 1024 // 1024} MB",
+    Skip.BINARY: "binary; a NUL byte in the first 8 KiB, which is git's own test",
+    Skip.UNREADABLE: "could not be read; check the permissions",
+}
+"""One sentence per reason, said to a person. Apart from the enum so the
+size comes from `MAX_FILE_SIZE` rather than from a number typed twice."""
 
 
 def _skip_dir(name: str) -> bool:
@@ -163,16 +202,45 @@ def inspect_file(
     # Directory pruning, which walk_repo does by not descending, has to be
     # re-checked here: git happily reports a tracked file under
     # `node_modules/`, and the two callers must select the same set.
+    found = examine(root, rel_path, ignore=ignore, formats=formats)
+    return found if isinstance(found, WalkedFile) else None
+
+
+def examine(
+    root: Path,
+    rel_path: str,
+    *,
+    ignore: Sequence[str] = (),
+    formats: Mapping[str, tuple[str, Kind]] | None = None,
+) -> WalkedFile | Skip:
+    """The same decision as `inspect_file`, with the reason kept.
+
+    Split out because "no" is not one answer: an index run wants to
+    report a file it could not *read*, and `wsindex explain` wants to
+    tell a person which of the seven rules caught theirs. Both used to be
+    impossible, since every rule returned the same None.
+
+    Args:
+        root: Repository root.
+        rel_path: POSIX path relative to `root`.
+        ignore: Globs from this repo's config; see `inspect_file`.
+        formats: This repo's suffix overrides; see `detect_lang_kind`.
+
+    Returns:
+        The WalkedFile, or the `Skip` that excluded it.
+    """
+    # Directory pruning has to be re-checked here: git happily reports a
+    # tracked file under `node_modules/`.
     parts = PurePosixPath(rel_path).parts
     if any(_skip_dir(part) for part in parts[:-1]):
-        return None
+        return Skip.HIDDEN_DIR
     if any(fnmatchcase(rel_path, pattern) for pattern in ignore):
-        return None
+        return Skip.IGNORED
     abs_path = root / rel_path
     # Cheapest check first (name only), then stat, then open+read.
     found = detect_lang_kind(abs_path, formats)
     if found is None:
-        return None
+        return Skip.UNKNOWN_SUFFIX
     try:
         if abs_path.is_symlink():
             # A symlink is a name, not a file. `is_file()` follows it, so
@@ -183,16 +251,22 @@ def inspect_file(
             # target is inside the repo is no better: the target is
             # walked on its own, and indexing it twice would put one text
             # at two paths.
-            return None
+            return Skip.SYMLINK
         if not abs_path.is_file():
-            return None
+            # A broken symlink lands here too, and so does a file deleted
+            # between git listing it and this call. Neither is anybody's
+            # problem: there is nothing there to index.
+            return Skip.NOT_A_FILE
         if abs_path.stat().st_size > MAX_FILE_SIZE:
-            return None
+            return Skip.TOO_LARGE
         if is_binary(abs_path):
-            return None
+            return Skip.BINARY
     except OSError:
-        # Unreadable, a broken symlink, a race with a concurrent delete:
-        # all of them mean the same thing to an indexer.
-        return None
+        # Not folded into NOT_A_FILE, which is what this used to be. A
+        # file git tracks and the filesystem refuses to open *should*
+        # have been indexed and was not, and an index run that says
+        # `files: 1` when there were two has told the reader something
+        # untrue.
+        return Skip.UNREADABLE
     lang, kind = found
     return WalkedFile(rel_path=PurePosixPath(rel_path).as_posix(), lang=lang, kind=kind)

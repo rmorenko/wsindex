@@ -37,20 +37,27 @@ def index() -> None:
     typer.echo(
         f"files: {report.files}  chunks: {report.chunks}  "
         f"written: {report.written}  deleted: {report.deleted}  "
-        f"commits: {report.commits}"
+        f"commits: {report.commits}  in {report.seconds:.2f}s"
     )
-    if report.full_repos:
+    for repo_id, reason in report.full_repos:
         # Told, not hidden: this is why the run took seconds instead of
-        # milliseconds, and the user is the only one who can fix it.
-        typer.echo(
-            "note: full pass for "
-            + ", ".join(report.full_repos)
-            + " — a first index, edited per-repo markup, or uncommitted work "
-            "(a commit-to-commit diff cannot see the last one; commit or stash it)",
-            err=True,
-        )
+        # milliseconds, and the user is the only one who can fix it. One
+        # line per repo with its own reason — the single note that listed
+        # three possible causes named none of them when the real one was
+        # a fourth.
+        typer.echo(f"note: full pass for {repo_id} — {reason}", err=True)
     if report.missing_repos:
         typer.echo("warning: missing repos: " + ", ".join(report.missing_repos), err=True)
+    if report.unreadable:
+        # Not a policy skip. These were meant to be indexed, are not, and
+        # the run that printed only `files: N` left the reader to
+        # discover it by noticing a search that finds nothing.
+        typer.echo(
+            f"warning: could not read {len(report.unreadable)} tracked file(s) — "
+            + ", ".join(report.unreadable[:3])
+            + (" ..." if len(report.unreadable) > 3 else ""),
+            err=True,
+        )
     if pipeline.links is not None:
         drift = pipeline.links.dangling()
         if drift:

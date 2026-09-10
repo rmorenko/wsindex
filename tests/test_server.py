@@ -656,3 +656,26 @@ def test_a_cross_origin_call_to_the_mcp_mount_is_refused(client: TestClient) -> 
         },
     )
     assert answer.status_code == 403
+
+
+def test_search_names_the_repos_it_could_not_look_in(client: TestClient, workspace: Path) -> None:
+    # An HTTP caller cannot see stderr, so a partial answer has to say so
+    # inside the answer. An agent reporting "no such code" about a
+    # workspace half of which was never indexed is worse than one that
+    # says it does not know.
+    client.post("/index")
+    Config().add_repo(Repository(id="later", path=str(workspace / "repo1")))
+
+    body = client.get("/search?q=greet").json()
+
+    assert body["unsearched"] == ["later"]
+    assert client.post("/index").status_code == 200
+    assert client.get("/search?q=greet").json()["unsearched"] == []
+
+
+def test_an_index_run_reports_why_it_was_full(client: TestClient) -> None:
+    detail = client.post("/index").json()
+
+    assert detail["full_repos"] == {"repo1": "a first index"}
+    assert detail["unreadable"] == []
+    assert detail["seconds"] >= 0

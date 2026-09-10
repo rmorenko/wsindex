@@ -118,6 +118,21 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
+    def datasets(self) -> set[str]:
+        """Names of the datasets this store holds.
+
+        Lets a caller tell "indexed and empty" from "never indexed" without
+        provoking the ValueError that every other method answers with. The
+        difference is not academic: a repo in the config that is absent
+        here contributes nothing to every search, silently and forever,
+        and somebody has to be able to say so.
+
+        Returns:
+            The dataset names; empty for a store nothing has been written
+            to yet.
+        """
+
+    @abstractmethod
     def chunk_ids(self, dataset_name: str, *, paths: Sequence[str] | None = None) -> set[str]:
         """Ids of the chunks currently stored for the given source paths.
 

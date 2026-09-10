@@ -26,7 +26,7 @@ from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest import IndexState, NotAGitRepositoryError
 from wsindex.model import Chunk, Kind, SearchFilter
-from wsindex.pipeline import _CANDIDATE_MULTIPLIER, Pipeline
+from wsindex.pipeline import _CANDIDATE_MULTIPLIER, FullPass, Pipeline
 from wsindex.rank.reranker import FakeReranker
 from wsindex.store import LanceDBStore
 
@@ -346,7 +346,9 @@ def edit(root: Path, rel: str, text: str, commit: Committer) -> None:
 
 def test_first_run_is_a_full_pass_and_arms_the_next(pipeline: Pipeline, state_dir: Path) -> None:
     report = pipeline.index()
-    assert report.full_repos == ("repo1",)
+    # The reason travels with the id: "why did this take nine seconds" is
+    # the question the field exists to answer.
+    assert report.full_repos == (("repo1", FullPass.NEVER_INDEXED),)
     # A clean tree IS exactly HEAD, so a full pass records it — that is
     # what switches the repo onto the fast path for the next run.
     assert "repo1" in IndexState.load(state_dir).commits
@@ -435,7 +437,7 @@ def test_dirty_tree_forces_a_full_pass_and_records_nothing(
     (tmp_path / "repo1" / "scratch.py").write_text("print('uncommitted')\n")
 
     report = pipeline.index()
-    assert report.full_repos == ("repo1",)
+    assert report.full_repos == (("repo1", FullPass.DIRTY_TREE),)
     # Recording HEAD here would make the next run diff from it and skip
     # the uncommitted work forever.
     assert IndexState.load(state_dir).commits["repo1"] == armed
@@ -473,9 +475,24 @@ def test_full_pass_reconciles_chunks_it_can_no_longer_produce(
     commit(tmp_path / "repo1")
 
     report = pipeline.index()
-    assert report.full_repos == ("repo1",)
+    # A *deleted* state file is honestly indistinguishable from never
+    # having indexed — there is nothing left to say otherwise. A file
+    # that is there and unusable is a different story; see below.
+    assert report.full_repos == (("repo1", FullPass.NEVER_INDEXED),)
     assert report.deleted == 1
     assert store.chunk_ids(dataset_name="repo1", paths=["src/main.py"]) == set()
+
+
+def test_an_unusable_state_file_says_so_instead_of_guessing(
+    pipeline: Pipeline, state_dir: Path
+) -> None:
+    # The note used to name three causes — a first index, edited markup,
+    # uncommitted work — and a corrupt state file is none of them, so it
+    # sent the reader looking for uncommitted work that was not there.
+    pipeline.index()
+    (state_dir / "state.json").write_text("not json at all")
+
+    assert pipeline.index().full_repos == (("repo1", FullPass.STATE_LOST),)
 
 
 def test_state_is_per_repo(
@@ -497,7 +514,7 @@ def test_one_dirty_repo_does_not_hold_back_a_clean_one(
     (tmp_path / "repo1" / "scratch.py").write_text("print('dirty')\n")
 
     report = pipeline.index()
-    assert report.full_repos == ("repo1",)  # repo2 stayed incremental
+    assert report.full_repos == (("repo1", FullPass.DIRTY_TREE),)  # repo2 stayed incremental
 
 
 def test_non_git_repo_is_a_config_error(tmp_path: Path, config: Config, pipeline: Pipeline) -> None:
@@ -529,7 +546,7 @@ def test_changed_markup_re_reads_a_tree_git_calls_unchanged(
     config._data["repos"][0]["formats"] = {".sql": {"lang": "sql", "kind": "code"}}
     report = pipeline.index()
 
-    assert report.full_repos == ("repo1",)
+    assert report.full_repos == (("repo1", FullPass.MARKUP_CHANGED),)
     assert report.written == 1
     # And the run after that is back on the fast path.
     assert pipeline.index().files == 0
@@ -574,3 +591,75 @@ def test_chunks_reach_the_store_in_batches(
     assert report.files == 14
     assert len(writes) == 2
     assert sum(writes) >= report.chunks
+
+
+def test_a_repo_that_was_never_indexed_is_named_not_hidden(
+    tmp_path: Path, config: Config, pipeline: Pipeline, commit: Committer
+) -> None:
+    # The worst failure the tool had: an answer that is not wrong but
+    # *partial*, and looks exactly like a whole one. A repo added to the
+    # config and never indexed took no part in any search and said
+    # nothing, so "not found there" was a conclusion nobody was entitled
+    # to draw.
+    second = tmp_path / "repo2"
+    (second / "src").mkdir(parents=True)
+    (second / "src" / "other.py").write_text("def helper():\n    return 2\n")
+    commit(second)
+    pipeline.index()
+    config.add_repo(Repository(id="repo2", path=str(second)))
+
+    assert pipeline.unsearched() == ("repo2",)
+    assert {hit.repo for hit in pipeline.search("helper", k=10)} == {"repo1"}
+
+    pipeline.index()
+    assert pipeline.unsearched() == ()
+
+
+def test_unsearched_narrows_with_the_search_it_accompanies(
+    tmp_path: Path, config: Config, pipeline: Pipeline
+) -> None:
+    config.add_repo(Repository(id="repo2", path=str(tmp_path / "repo2")))
+    pipeline.index()
+
+    assert pipeline.unsearched("repo1") == ()
+    assert pipeline.unsearched("repo2") == ("repo2",)
+    with pytest.raises(ValueError, match="unknown repo id"):
+        pipeline.unsearched("nope")
+
+
+def test_a_file_that_cannot_be_read_is_reported_not_dropped(
+    tmp_path: Path, pipeline: Pipeline, commit: Committer
+) -> None:
+    # It used to be folded in with a broken symlink and a concurrent
+    # delete, which really are nothing. This one is not: git tracks the
+    # file, it was meant to be indexed, and `files: 1` where there were
+    # two told the reader something untrue.
+    locked = tmp_path / "repo1" / "src" / "locked.py"
+    locked.write_text("def hidden():\n    return 2\n")
+    commit(tmp_path / "repo1")
+    locked.chmod(0o000)
+    try:
+        report = pipeline.index()
+    finally:
+        locked.chmod(0o644)
+
+    assert report.unreadable == ("repo1/src/locked.py",)
+
+
+def test_a_run_reports_how_long_it_took(pipeline: Pipeline) -> None:
+    # The server recorded this per run and a person at a terminal did
+    # not, so "did that get slower" had nothing to compare against.
+    assert pipeline.index().seconds >= 0.0
+
+
+def test_a_dirty_tree_outranks_never_having_been_indexed(
+    tmp_path: Path, pipeline: Pipeline
+) -> None:
+    # Both are true on a first run over a dirty tree, and only one of
+    # them is worth saying: the dirty tree is *why* nothing was recorded
+    # and will cost a full pass on every run until somebody commits.
+    # Caught on a live server, which called a workspace it had indexed
+    # all week "a first index".
+    (tmp_path / "repo1" / "scratch.py").write_text("print('uncommitted')\n")
+
+    assert pipeline.index().full_repos == (("repo1", FullPass.DIRTY_TREE),)

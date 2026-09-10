@@ -19,6 +19,7 @@ a coroutine would stop the server answering searches.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from pathlib import Path
@@ -28,6 +29,8 @@ from fastapi import FastAPI, HTTPException
 
 from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
 from wsindex.snapshot import materialize
+
+log = logging.getLogger(__name__)
 
 
 def sync_and_index(app: FastAPI) -> dict[str, Any]:
@@ -67,28 +70,22 @@ def sync_and_index(app: FastAPI) -> dict[str, Any]:
                     )
                     synced[repo.id] = report.summary()
                 except (ValueError, GitCommandError) as exc:
+                    log.warning("snapshot %s failed: %s", repo.id, exc)
                     synced[repo.id] = f"failed — {exc}"
             elif repo.remote is not None:
                 try:
                     synced[repo.id] = sync_repo(Path(repo.path), remote=repo.remote).value
                 except (NotAGitRepositoryError, GitCommandError) as exc:
+                    log.warning("sync %s failed: %s", repo.id, exc)
                     synced[repo.id] = f"failed — {exc}"
         try:
             report = app.state.pipeline.index()
         except NotAGitRepositoryError as exc:
             app.state.runs.record("sync", started, {"synced": synced, "error": str(exc)})
             raise
-    detail = {
-        "files": report.files,
-        "chunks": report.chunks,
-        "written": report.written,
-        "deleted": report.deleted,
-        "commits": report.commits,
-        "full_repos": list(report.full_repos),
-        "missing_repos": list(report.missing_repos),
-        "synced": synced,
-        "seconds": round(time.monotonic() - clock, 2),
-    }
+    from wsindex.server.api import run_detail
+
+    detail = {**run_detail(report, seconds=round(time.monotonic() - clock, 2)), "synced": synced}
     app.state.runs.record("sync", started, detail)
     return detail
 
@@ -136,6 +133,12 @@ class Ticker:
                 # thread is the only thing keeping the index current; if
                 # it dies on one bad tick, the server keeps answering
                 # from a corpus that quietly stops advancing.
+                #
+                # Logged as well as recorded, and with the traceback: the
+                # run log holds twenty entries in memory and loses them
+                # all on restart, which is the wrong place for the one
+                # failure nobody was watching happen.
+                log.exception("scheduled sync failed")
                 self.app.state.runs.record(
                     "sync", time.time(), {"error": f"{type(exc).__name__}: {exc}"}
                 )

@@ -82,7 +82,15 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
         hits = engine.search(
             query, k=k, repo=repo, filters=None if candidate.is_empty else candidate
         )
-        return {"count": len(hits), "hits": [hit.to_json() for hit in hits]}
+        # Named, because an agent reporting "there is no such code" on a
+        # workspace half of which was never indexed is worse than an
+        # agent that says it does not know.
+        skipped = engine.unsearched(repo)
+        return {
+            "count": len(hits),
+            "hits": [hit.to_json() for hit in hits],
+            "unsearched": list(skipped),
+        }
 
     @server.tool()
     def refs(

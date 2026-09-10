@@ -5,6 +5,7 @@ pipeline to something that speaks a different language.
 """
 
 import ipaddress
+import logging
 import os
 from typing import Annotated
 
@@ -137,4 +138,10 @@ def serve(
         )
 
     typer.echo(f"wsindex '{config.name}' on http://{host}:{port}  (admin at /admin)")
-    uvicorn.run(create_app(token=token), host=host, port=port, log_level="warning")
+    # `info`, not `warning`: this turns on uvicorn's access log and lets
+    # the library's own records through. A server that ran for a week and
+    # kept nothing could not answer "was it broken last night" — the only
+    # question anybody asks it afterwards. The CLI commands stay silent,
+    # which is why this is set here and not in the library.
+    logging.getLogger("wsindex").setLevel(logging.INFO)
+    uvicorn.run(create_app(token=token), host=host, port=port, log_level="info")

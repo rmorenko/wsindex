@@ -39,11 +39,12 @@ from wsindex.ingest.languages import (
     SpanExtractor,
 )
 from wsindex.ingest.plugins import ENTRY_POINT_GROUP, PluginLoadWarning, load_plugins
-from wsindex.ingest.walker import WalkedFile, inspect_file
+from wsindex.ingest.walker import SKIP_REASONS, Skip, WalkedFile, examine, inspect_file
 
 __all__ = [
     "ENTRY_POINT_GROUP",
     "REGISTRY",
+    "SKIP_REASONS",
     "GitCommandError",
     "GitUnavailableError",
     "GrammarSpec",
@@ -53,11 +54,13 @@ __all__ = [
     "NotAGitRepositoryError",
     "PluginLoadWarning",
     "RepoDiff",
+    "Skip",
     "SpanExtractor",
     "SyncOutcome",
     "WalkedFile",
     "chunk_file",
     "diff_since",
+    "examine",
     "has_uncommitted_changes",
     "head_commit",
     "inspect_file",
