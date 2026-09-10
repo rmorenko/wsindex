@@ -26,6 +26,7 @@
 | What are `refs` and `why` built on?           | `docs/adr/adr-009-links-as-entities.md`             |
 | Why are links not in the vector store?        | `docs/adr/adr-011-links-backend.md`                 |
 | Where is the line between library and server? | `docs/adr/adr-010-library-server-boundary.md`       |
+| Why does indexing start a child process?      | `docs/adr/adr-012-spawning-processes.md`            |
 | What can `wsindex.toml` say?                  | `wsindex.schema.json` (generated) and the README    |
 | Why is this line of code like that?           | the docstring above it — 45% of `src/` is reasoning |
 

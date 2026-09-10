@@ -38,6 +38,10 @@ one platform, kept unconditional anyway — on Linux it is one process
 start (21 ms) per batch of four files or more, which is not worth a
 platform branch and a second path that only half the machines test.
 
+The decision and everything measured for it is ADR-12
+(`docs/adr/adr-012-spawning-processes.md`), including the cures that were
+rejected and what it would take to revisit this.
+
 One implementation, two callers, which is why `blame` arrives as an
 argument: the parent hands in `run_git` and keeps every guarantee that
 function makes about invoking git, while the child hands in the plain one

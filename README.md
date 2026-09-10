@@ -653,6 +653,10 @@ process start per batch, 21 ms against a pass that takes seconds, which
 is cheaper than a platform branch and a second path that only half the
 machines would test.
 
+The rule this leaves behind — a program run per file belongs in a child,
+not in the engine — is [ADR-12](docs/adr/adr-012-spawning-processes.md),
+with a test that fails if a future ingest step forgets it.
+
 The cure itself:
 [`wsindex.ingest.blame`](src/wsindex/ingest/blame.py) hands the batch to a
 small child that imports nothing from this package, and the child does
