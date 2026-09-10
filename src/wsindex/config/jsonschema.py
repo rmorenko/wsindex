@@ -178,6 +178,21 @@ def _links() -> dict[str, Any]:
     )
 
 
+def _index() -> dict[str, Any]:
+    """`[index]`: how much of a repository a full pass takes in."""
+    return _section(
+        {
+            "max_commits": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 10000,
+                "description": "How far back a full pass indexes history, in commits. "
+                "Costs about 1.4 s and 2.5 MB per thousand.",
+            }
+        }
+    )
+
+
 def _stats() -> dict[str, Any]:
     """`[stats]`: whether searches are written to the local log."""
     return _section(
@@ -260,6 +275,7 @@ def build() -> dict[str, Any]:
             "embeddings": _embeddings(),
             "store": _store(),
             "links": _links(),
+            "index": _index(),
             "stats": _stats(),
             "rank": _rank(),
             "server": _server(),

@@ -92,6 +92,18 @@
         }
       }
     },
+    "index": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_commits": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10000,
+          "description": "How far back a full pass indexes history, in commits. Costs about 1.4 s and 2.5 MB per thousand."
+        }
+      }
+    },
     "stats": {
       "type": "object",
       "additionalProperties": false,

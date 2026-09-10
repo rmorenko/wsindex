@@ -294,7 +294,7 @@ class Pipeline:
         Before the files, because blame edges point at these chunk ids
         and `git log` over a whole history costs milliseconds.
         """
-        commits = read_commits(root, since=since)
+        commits = read_commits(root, since=since, limit=config.max_commits)
         messages = commit_chunks(commits, repo=repo.id)
         # Keyed off the chunk's symbol rather than zipping: `commit_chunks`
         # drops commits with an empty message, so the two lists are not

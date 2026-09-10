@@ -35,10 +35,35 @@ from wsindex.model import Chunk, Kind
 
 log = logging.getLogger(__name__)
 
-MAX_COMMITS = 1000
-"""How far back a full pass reaches. History is unbounded; the questions
-people ask of it are not. Incremental runs are bounded by the diff
-instead and never hit this."""
+MAX_COMMITS = 10_000
+"""How far back a full pass reaches, unless `[index] max_commits` says
+otherwise. Incremental runs are bounded by the diff and never hit this.
+
+History is unbounded and the questions people ask of it are not, so a cap
+has to exist — a repository the size of the Linux kernel would otherwise
+add over a million chunks. But **a thousand was measured and found to be
+an order of magnitude too tight.**
+
+The measurement, across six real repositories: on five of them the cap
+never fires, because they have fewer than a thousand commits. On the
+sixth, openemr, it cut 10 351 commits down to the newest 1 000 — leaving
+history visible back to 2022 out of a project that starts in 2005.
+**Seventeen and a half years and 90% of the commits, invisible**, for a
+saving of 23 MB and 15 seconds on an index that already takes 130
+seconds and 181 MB.
+
+That trade is the wrong way round for a feature whose whole premise is
+that a repository's reasoning lives in its commit messages. The price of
+history is small and linear — about 1.4 s and 2.5 MB per thousand
+commits — so ten thousand bounds the worst case at roughly 14 s and
+23 MB, which is what openemr's *entire* history costs.
+
+How much of the index this governs varies more than any other constant
+here, which is why it is the one that became configurable. Measured share
+of chunks that are commit messages: 0% for a repository with no history,
+1.5% for openemr, 6.1% for this project, 20.6% for the acceptance corpus,
+31.3% for another. For that last one the cap decides a third of
+everything searchable."""
 
 COMMIT_LANG = "git-commit"
 """`lang` recorded on a commit chunk, so `--lang git-commit` narrows to
@@ -83,14 +108,20 @@ class Commit:
         return f"commits/{self.date[:10]}-{self.short}"
 
 
-def read_commits(root: Path, *, since: str | None, limit: int = MAX_COMMITS) -> list[Commit]:
+def read_commits(root: Path, *, since: str | None, limit: int | None = None) -> list[Commit]:
     """The commits worth indexing this run, newest first.
 
     Args:
         root: Repository root.
         since: Last indexed commit, or None for a full pass. Given one,
             only what the repo gained after it is read.
-        limit: Cap for a full pass.
+        limit: Cap for a full pass; None means `MAX_COMMITS`.
+
+            **Not `limit: int = MAX_COMMITS`.** Python binds a keyword
+            default when the function is defined, so the module attribute
+            would be read exactly once ever and `[index] max_commits`
+            could never reach it. Found by a probe that set the constant,
+            re-indexed three times and got three identical answers.
 
     Returns:
         The commits, newest first. Empty when nothing is new.
@@ -103,7 +134,7 @@ def read_commits(root: Path, *, since: str | None, limit: int = MAX_COMMITS) -> 
     # any line-oriented split would tear bodies apart.
     args = ["log", f"--format={_LOG_FORMAT}"]
     if since is None:
-        args.append(f"--max-count={limit}")
+        args.append(f"--max-count={MAX_COMMITS if limit is None else limit}")
     else:
         args.append(f"{since}..HEAD")
     raw = decode_path(run_git(root, *args))

@@ -331,3 +331,48 @@ def test_a_blame_failure_names_the_file(repo: Path, monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(RuntimeError, match=r"blaming b\.py.*blame blew up"):
         blame_map(repo, ["a.py", "b.py"])
+
+
+# --- how far back a full pass reaches -------------------------------------
+
+
+def test_the_cap_is_read_when_the_log_is_read_not_when_the_module_loads(
+    repo: Path, commit: Committer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`limit` must not be a keyword default, and this is why.
+
+    Python binds a keyword default once, when the function is defined, so
+    `limit: int = MAX_COMMITS` would read the module attribute exactly
+    once ever — and `[index] max_commits` could never reach it. A probe
+    set the constant, re-indexed three times and got three identical
+    answers before this was noticed.
+    """
+    for n in range(4):
+        (repo / "a.py").write_text(f"x = {n}\n")
+        commit(repo, f"change {n}")
+    monkeypatch.setattr(commits_module, "MAX_COMMITS", 2)
+
+    assert len(read_commits(repo, since=None)) == 2
+
+
+def test_an_explicit_limit_wins_over_the_default(repo: Path, commit: Committer) -> None:
+    for n in range(4):
+        (repo / "a.py").write_text(f"x = {n}\n")
+        commit(repo, f"change {n}")
+
+    assert len(read_commits(repo, since=None, limit=3)) == 3
+
+
+def test_an_incremental_run_is_bounded_by_the_diff_not_the_cap(
+    repo: Path, commit: Committer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The cap exists to stop a first pass reading a decade of history. A
+    # run that knows where it left off reads what arrived since, and a
+    # cap that also applied there would silently skip commits.
+    first = read_commits(repo, since=None)[0].sha
+    for n in range(5):
+        (repo / "a.py").write_text(f"x = {n}\n")
+        commit(repo, f"later {n}")
+    monkeypatch.setattr(commits_module, "MAX_COMMITS", 1)
+
+    assert len(read_commits(repo, since=first)) == 5

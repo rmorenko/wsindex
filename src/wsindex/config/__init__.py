@@ -337,6 +337,28 @@ class Config:
         return bool(self._setting("stats", "enabled", True))
 
     @property
+    def max_commits(self) -> int | None:
+        """How far back a full pass indexes history, or None for the default.
+
+        The one constant in the ingest path whose right value is a
+        property of the repository rather than of the machine, which is
+        why it is the one that became configurable: "how much history
+        should be searchable here" is a question somebody can answer
+        about their own project, unlike "how many blame processes to
+        run". Measured cost, so it can be chosen rather than guessed:
+        about 1.4 s and 2.5 MB per thousand commits.
+
+        None rather than `MAX_COMMITS`, so that this module does not
+        import `wsindex.ingest` to learn a number. Config sits under
+        everything and is imported by every command; reaching up into the
+        ingest layer for a default would put 30 ms of tree-sitter and
+        model imports behind `wsindex --help`. The default stays where it
+        is documented, and `read_commits` applies it.
+        """
+        setting = self._setting("index", "max_commits")
+        return int(setting) if setting is not None else None
+
+    @property
     def links_backend(self) -> LinksBackend:
         """Where the link store lives: `sqlite` (default) or `postgres`.
 

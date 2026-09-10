@@ -506,3 +506,40 @@ def test_a_config_with_no_repos_leaves_room_for_one(tmp_path: Path) -> None:
     )
     Config.reset()
     assert [r.id for r in Config(path).repos] == ["a"]
+
+
+def test_max_commits_defaults_to_absent_rather_than_to_a_number(tmp_path: Path) -> None:
+    """None, not `MAX_COMMITS`, and the reason is layering.
+
+    Config sits under everything and is imported by every command.
+    Reaching up into `wsindex.ingest` for a default would put 30 ms of
+    tree-sitter and model imports behind `wsindex --help`; `read_commits`
+    applies the default instead, where it is documented.
+    """
+    Config.reset()
+    config = Config.default("w")
+
+    assert config.max_commits is None
+
+
+def test_max_commits_is_read_from_the_index_section(tmp_path: Path) -> None:
+    Config.reset()
+    config = Config.default("w")
+    config._data["index"] = {"max_commits": 250}
+
+    assert config.max_commits == 250
+
+
+def test_the_index_section_is_accepted_by_the_validator(tmp_path: Path) -> None:
+    # The schema is generated from the same constants the validator uses,
+    # so a section the generator does not know is a section that makes a
+    # valid config unloadable.
+    path = tmp_path / "wsindex.toml"
+    path.write_text(
+        '[workspace]\nname = "w"\nbackend = "local"\n\n'
+        '[embeddings]\nmodel = "m"\ndim = 8\nprovider = "fake"\n\n'
+        "[index]\nmax_commits = 250\n"
+    )
+    Config.reset()
+
+    assert Config(path).max_commits == 250

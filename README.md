@@ -358,11 +358,39 @@ would make that filter mean two things and leave no way to search the
 code without the history.
 
 Cheap, and proportional to the work. Reading a whole history takes
-milliseconds. Blame is per file, so it forks once per *indexed* file —
-which the incremental pass already keeps down to what changed — and those
-forks run eight at a time, since each one waits on a process rather than
-on Python: 122 files cost 1.9 s one after another and 0.7 s in the pool.
-Untracked files have no history and simply get no edges.
+milliseconds. Blame is per file, so it runs `git blame` once per
+*indexed* file — which the incremental pass already keeps down to what
+changed — in a pool, and in a child process (see
+[ADR-12](docs/adr/adr-012-spawning-processes.md)). Untracked files have
+no history and simply get no edges.
+
+**How far back it reaches is the one setting that depends on the
+repository rather than the machine**, so it is the one that is
+configurable:
+
+```toml
+[index]
+max_commits = 10000   # a full pass; incremental runs read the diff instead
+```
+
+The default used to be a thousand, and measuring six real repositories
+showed that to be an order of magnitude too tight. On five of them the
+cap never fires at all — they have fewer than a thousand commits. On the
+sixth it cut 10 351 commits to the newest 1 000, leaving history visible
+back to 2022 in a project that starts in 2005: **17.7 years and 90% of
+the commits, invisible**, to save 23 MB and 15 seconds on an index that
+already took 130 seconds and 181 MB. For a feature whose premise is that
+the reasoning lives in the messages, that is the trade the wrong way
+round.
+
+A cap still has to exist — a repository the size of the Linux kernel
+would add over a million chunks — and history costs about 1.4 s and
+2.5 MB per thousand commits, so ten thousand bounds the worst case at
+roughly what openemr's *entire* history costs. How much this governs
+varies more than any other constant here: measured, the share of an index
+that is commit messages runs from 0% (a repository with no history)
+through 6.1% (this project) to 31.3%, where the cap decides a third of
+everything searchable.
 
 ## References out of the repository
 
