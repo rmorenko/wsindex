@@ -19,12 +19,16 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from wsindex.ingest import blame as blaming
 from wsindex.ingest import commits as commits_module
 from wsindex.ingest.commits import BLAME_WORKERS, HELPER_FROM, _blame, blame_map
+
+REAL_RUN = subprocess.run
+"""`subprocess.run` as it was before any test replaced it."""
 
 
 @pytest.fixture
@@ -296,3 +300,100 @@ def test_the_helpers_own_git_returns_porcelain_for_a_tracked_file(repo: Path) ->
 
     assert raw is not None
     assert blaming.parse(raw) != {}
+
+
+# --- the rule the child exists to keep ------------------------------------
+
+
+def spawns_during_index(root: Path, home: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    """How many processes an index run starts *from this process*."""
+    from wsindex.config import Config, Repository
+    from wsindex.embed import FakeEmbedder
+    from wsindex.links import LinkStore
+    from wsindex.pipeline import Pipeline
+    from wsindex.store import LanceDBStore
+
+    started = 0
+
+    def counted(args: Any, **kw: Any) -> Any:
+        nonlocal started
+        if isinstance(args, list) and args and args[0] == "git":
+            started += 1
+        return REAL_RUN(args, **kw)
+
+    # `REAL_RUN` from import time, not from here: this runs twice in one
+    # test, and reading `subprocess.run` now would capture the previous
+    # wrapper and count through a chain of them.
+    monkeypatch.setattr(subprocess, "run", counted)
+    Config.reset()
+    config = Config.default("spawns")
+    config.add_repo(Repository(id="r", path=str(root)))
+    # `links` is not optional here: with no link store the pipeline skips
+    # the blame pass altogether, and the first version of this measured a
+    # run that never blamed anything. The falsification test below is what
+    # caught it.
+    with LinkStore(home / "idx") as links:
+        Pipeline(
+            store=LanceDBStore(uri=str(home / "db"), embedder=FakeEmbedder()),
+            state_dir=home / "state",
+            links=links,
+        ).index()
+    return started
+
+
+def test_indexing_starts_a_fixed_number_of_processes_whatever_the_repo_size(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The property the child exists to preserve, as a test rather than a memory.
+
+    Not a count anybody has to keep up to date — a *shape*. Blame used to
+    start one process per indexed file from the process holding the
+    embedding model, and on macOS every one of those costs 2.43 ms of
+    address-space teardown that no amount of threading parallelises. The
+    cure moved them into a child; what must stay true is that the engine
+    process starts a number of processes that does not grow with the
+    repository.
+
+    A linter, a `ripgrep`, a second git pass added to the ingest path
+    would reintroduce the problem silently and pass every other test in
+    this suite. This one fails.
+    """
+    small = spawns_during_index(repo, tmp_path / "small", monkeypatch)
+
+    for n in range(20):
+        (repo / f"extra{n}.py").write_text(f"def extra{n}():\n    return {n}\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "more"], cwd=repo, check=True, capture_output=True)
+
+    large = spawns_during_index(repo, tmp_path / "large", monkeypatch)
+
+    assert large == small, (
+        f"indexing {20} more files started {large - small} more processes from the "
+        "engine process; they belong in the blame helper's child"
+    )
+
+
+def test_without_the_child_that_number_grows_with_the_repository(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same measurement with the child switched off, so the guard above
+    is known not to be vacuous.
+
+    A test that cannot fail proves nothing, and this one names what the
+    child actually buys: with it disabled, twenty more files mean twenty
+    more processes started from the process holding the model.
+    """
+    monkeypatch.setattr(commits_module, "HELPER_FROM", 10**6)
+
+    small = spawns_during_index(repo, tmp_path / "small", monkeypatch)
+    for n in range(20):
+        (repo / f"extra{n}.py").write_text(f"def extra{n}():\n    return {n}\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "more"], cwd=repo, check=True, capture_output=True)
+
+    large = spawns_during_index(repo, tmp_path / "large", monkeypatch)
+
+    # At least one more process per added file. Not exactly twenty: the
+    # second run also reads a diff the first one had no commit for, and
+    # what this has to establish is the *growth*, not a census.
+    assert large - small >= 20
