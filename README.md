@@ -641,15 +641,21 @@ wsindex_last_index_success_timestamp_seconds 1.7889e+09
 **How much load it takes.** `poe load` starts a real server on a real
 corpus and judges it against an SLO fixed *before* the first run — p95
 under 500 ms, p99 under 1 s, no failed requests — the same discipline the
-acceptance criteria use, and for the same reason. Measured on an M-series
-laptop with eight concurrent clients:
+acceptance criteria use, and for the same reason.
 
-| Scenario                          |    p50 |    p95 | verdict                |
-| --------------------------------- | -----: | -----: | ---------------------- |
-| search, idle server               |  55 ms |  69 ms | PASS                   |
-| search during an ordinary sync    | 116 ms | 168 ms | PASS                   |
-| search during a **full** re-index |  90 ms | 123 ms | PASS                   |
-| 8 simultaneous `POST /index`      |      — |      — | PASS: 1 run, 7 refused |
+Both harnesses record the machine's load and refuse to judge on a busy
+one, which is not caution but experience: a run here reported a 30%
+regression that was another program using ten of fourteen cores.
+Repeating a measurement cannot fix that — every repeat meets the same
+disturbance, and the minimum of three spoiled runs is a spoiled run.
+Measured on an idle M-series laptop with eight concurrent clients:
+
+| Scenario                          |   p50 |    p95 | verdict                |
+| --------------------------------- | ----: | -----: | ---------------------- |
+| search, idle server               | 56 ms |  76 ms | PASS                   |
+| search during an ordinary sync    | 79 ms | 129 ms | PASS                   |
+| search during a **full** re-index | 91 ms | 133 ms | PASS                   |
+| 8 simultaneous `POST /index`      |     — |      — | PASS: 1 run, 7 refused |
 
 Eleven rules of eleven — but only after the third row failed at
 **1459 ms** and was chased down rather than negotiated. What caused it:
@@ -697,7 +703,7 @@ re-ranking is off by default.
 The cure itself:
 [`wsindex.ingest.blame`](src/wsindex/ingest/blame.py) hands the batch to a
 small child that imports nothing from this package, and the child does
-the spawning. Search during a full re-index went **1459 ms → 123 ms** p95,
+the spawning. Search during a full re-index went **1459 ms → 133 ms** p95,
 and a cold index got **11% faster** (8.18 s → 7.29 s) — those forks were
 never necessary work. Under four files the batch still runs in-process,
 where a child would cost more than the forks it saves; that threshold is

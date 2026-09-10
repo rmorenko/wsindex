@@ -87,7 +87,7 @@ FLOOR = 0.10
 """Seconds below which a change is not worth reporting whatever its
 percentage. Without it the fastest scenarios cry loudest."""
 
-BUSY = 0.2
+BUSY = 0.4
 """Share of the machine's cores already busy above which a measurement is
 not worth taking.
 
@@ -97,9 +97,19 @@ another program using ten of fourteen cores — load average 7.93, which is
 repeat is disturbed by the same thing, and the minimum of three spoiled
 runs is a spoiled run.
 
-Crude on purpose. The job is to catch half the machine being gone, not to
-model contention: an idle laptop sits near 0.05 and the run above sat at
-0.57, so anything in between is a fine place to draw the line."""
+**Calibrated rather than chosen, and the first attempt at it was wrong.**
+0.2 looked sensible and sat *below this laptop's own floor*: sampled over
+ninety idle seconds with a browser and an IDE open, the load average
+reads 2.18-3.10 on fourteen cores, which is 16% to 22%. The guard would
+have refused every run on a perfectly ordinary machine, and a guard that
+always fires is one everybody passes `--anyway` to — which is no guard.
+The contaminated run sat at 0.57-0.72, so 0.4 clears the floor with
+margin and stays well under the case this exists for.
+
+What it cannot do is worth knowing. macOS counts more than running
+threads in a load average, which is why an idle machine reads 0.22 here
+rather than near zero, and a single-threaded hog will barely move it.
+This catches half the machine being gone; it does not certify quiet."""
 
 
 @dataclass

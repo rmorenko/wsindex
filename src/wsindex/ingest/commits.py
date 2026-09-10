@@ -183,8 +183,8 @@ useful half of the answer.** That sweep was a full re-index: the store
 already held the chunks, so nothing was embedded and the parent sat idle
 while blame ran. A *cold* index — the number anyone actually waits
 through — has the parent embedding thousands of chunks, and there eight,
-sixteen and thirty-two come out identical: 4.80 s, 4.80 s and 4.75 s,
-against 5.06 s at four. So this is not a tuning knob worth anybody's
+sixteen and thirty-two come out identical: 4.62 s, 4.56 s and 4.59 s,
+against 4.76 s at four, which is a spread of 1.3%. So this is not a tuning knob worth anybody's
 attention; it is a constant that had to stop citing a measurement that no
 longer held.
 

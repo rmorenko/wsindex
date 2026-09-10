@@ -116,6 +116,18 @@ def test_a_machine_someone_else_is_using_is_named(monkeypatch: pytest.MonkeyPatc
     assert "7.93" in said and "14 cores" in said and "57%" in said
 
 
+def test_an_ordinary_working_laptop_is_left_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The calibration, as a test, because the first threshold failed it.
+
+    Sampled over ninety idle seconds with a browser and an IDE open, this
+    machine's load average sits at 2.18-3.10 on fourteen cores. A guard
+    that fires there is a guard everybody disables.
+    """
+    for average in (2.18, 3.10):
+        monkeypatch.setattr("bench.load", lambda a=average: (a, 14))
+        assert busy() is None, f"load {average} is this laptop doing nothing"
+
+
 def test_the_threshold_is_a_share_of_the_machine_not_a_number(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
