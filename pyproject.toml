@@ -125,6 +125,10 @@ indent-style = "space"
 python_version = "3.12"
 strict = true
 warn_unused_ignores = true
+# `scripts/` holds the harnesses (acceptance, bench). They are not
+# importable as a package, so the tests that check their judgement add
+# the directory to `sys.path`; mypy needs to be told the same.
+mypy_path = "scripts"
 
 # CI installs without the ml extra (torch is huge); the import is already
 # guarded at runtime, so a missing sentence_transformers is fine to skip.
@@ -204,6 +208,10 @@ set -eu -o pipefail
 uv pip install -q -e examples/wsindex-lang-lua -e examples/wsindex-connector-notion
 pytest examples/wsindex-lang-lua/tests examples/wsindex-connector-notion/tests
 """
+
+[tool.poe.tasks.bench]
+help = "Performance benchmarks on the acceptance corpus (--save/--baseline to compare runs)"
+cmd = "python scripts/bench.py"
 
 [tool.poe.tasks.acceptance]
 help = "Full MVP acceptance on a real corpus, writes acceptance_report.md"

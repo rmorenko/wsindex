@@ -1,0 +1,111 @@
+{
+  "environment": {
+    "date": "2026-09-10 15:12",
+    "commit": "eb4b249-dirty",
+    "python": "3.12.12",
+    "platform": "Darwin arm64",
+    "embedder": "real"
+  },
+  "runs": [
+    {
+      "scenario": "startup",
+      "seconds": 2.2580450829700567,
+      "peak_mb": 586.265625,
+      "detail": {
+        "runs": [
+          2.295,
+          2.258,
+          2.33
+        ]
+      }
+    },
+    {
+      "scenario": "index-cold",
+      "seconds": 8.183360041992273,
+      "peak_mb": 978.453125,
+      "detail": {
+        "files": 149,
+        "chunks": 3458,
+        "commits": 713,
+        "index_mb": 13.42,
+        "runs": [
+          8.206,
+          8.183,
+          8.253
+        ]
+      }
+    },
+    {
+      "scenario": "index-warm",
+      "seconds": 0.14187716704327613,
+      "peak_mb": 983.90625,
+      "detail": {
+        "files": 0,
+        "written": 0,
+        "runs": [
+          0.146,
+          0.142,
+          0.146
+        ]
+      }
+    },
+    {
+      "scenario": "index-one-file",
+      "seconds": 0.3235996249713935,
+      "peak_mb": 978.859375,
+      "detail": {
+        "files": 1,
+        "written": 1,
+        "runs": [
+          0.324,
+          0.344,
+          0.341
+        ]
+      }
+    },
+    {
+      "scenario": "search",
+      "seconds": 1.6470180000178516,
+      "peak_mb": 989.375,
+      "detail": {
+        "samples": 200,
+        "p50_ms": 7.7,
+        "p95_ms": 10.41,
+        "runs": [
+          1.647,
+          1.706,
+          1.724
+        ]
+      }
+    },
+    {
+      "scenario": "search-rerank",
+      "seconds": 12.510306584008504,
+      "peak_mb": 1030.65625,
+      "detail": {
+        "samples": 200,
+        "p50_ms": 72.15,
+        "p95_ms": 79.5,
+        "runs": [
+          12.51,
+          12.513,
+          12.515
+        ]
+      }
+    },
+    {
+      "scenario": "compact",
+      "seconds": 0.018047958030365407,
+      "peak_mb": 1000.53125,
+      "detail": {
+        "versions": "6 -> 2",
+        "mb": "13.42 -> 13.42",
+        "runs": [
+          0.019,
+          0.02,
+          0.018
+        ]
+      }
+    }
+  ]
+}
