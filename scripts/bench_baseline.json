@@ -1,8 +1,8 @@
 {
   "environment": {
-    "date": "2026-09-10 22:23",
-    "commit": "851c89b-dirty",
-    "load": "3.00 on 14 cores",
+    "date": "2026-09-11 00:21",
+    "commit": "eb9df75",
+    "load": "2.82 on 14 cores",
     "python": "3.12.12",
     "platform": "Darwin arm64",
     "embedder": "real"
@@ -10,100 +10,100 @@
   "runs": [
     {
       "scenario": "startup",
-      "seconds": 2.202962249983102,
-      "peak_mb": 584.171875,
+      "seconds": 2.2166365410084836,
+      "peak_mb": 584.25,
       "detail": {
         "runs": [
-          2.23,
-          2.203,
-          2.209
+          2.217,
+          2.223,
+          2.248
         ]
       }
     },
     {
       "scenario": "index-cold",
-      "seconds": 7.256001417001244,
-      "peak_mb": 978.359375,
+      "seconds": 7.49771016597515,
+      "peak_mb": 996.1875,
       "detail": {
         "files": 149,
-        "chunks": 3458,
+        "chunks": 3634,
         "commits": 713,
-        "index_mb": 13.39,
+        "index_mb": 13.91,
         "runs": [
-          7.275,
-          7.376,
-          7.256
+          7.525,
+          7.549,
+          7.498
         ]
       }
     },
     {
       "scenario": "index-warm",
-      "seconds": 0.13542770803906024,
-      "peak_mb": 983.46875,
+      "seconds": 0.14288800000213087,
+      "peak_mb": 997.796875,
       "detail": {
         "files": 0,
         "written": 0,
         "runs": [
-          0.144,
-          0.138,
-          0.135
+          0.148,
+          0.145,
+          0.143
         ]
       }
     },
     {
       "scenario": "index-one-file",
-      "seconds": 0.3212451249710284,
-      "peak_mb": 972.953125,
+      "seconds": 0.3228891250328161,
+      "peak_mb": 995.203125,
       "detail": {
         "files": 1,
         "written": 1,
         "runs": [
-          0.322,
-          0.337,
-          0.321
+          0.325,
+          0.323,
+          0.325
         ]
       }
     },
     {
       "scenario": "search",
-      "seconds": 1.6899726659758016,
-      "peak_mb": 1006.546875,
+      "seconds": 1.647332499967888,
+      "peak_mb": 1015.40625,
       "detail": {
         "samples": 200,
-        "p50_ms": 8.04,
-        "p95_ms": 10.05,
+        "p50_ms": 7.69,
+        "p95_ms": 9.81,
         "runs": [
-          1.69,
-          1.706,
-          1.743
+          1.647,
+          1.711,
+          1.689
         ]
       }
     },
     {
       "scenario": "search-rerank",
-      "seconds": 12.537830750050489,
-      "peak_mb": 1037.390625,
+      "seconds": 12.385072625009343,
+      "peak_mb": 1058.09375,
       "detail": {
         "samples": 200,
-        "p50_ms": 73.77,
-        "p95_ms": 79.4,
+        "p50_ms": 72.16,
+        "p95_ms": 79.36,
         "runs": [
-          12.54,
-          12.538,
-          12.581
+          12.385,
+          12.446,
+          12.406
         ]
       }
     },
     {
       "scenario": "compact",
-      "seconds": 0.019219708046875894,
-      "peak_mb": 1006.765625,
+      "seconds": 0.01837583299493417,
+      "peak_mb": 1018.546875,
       "detail": {
         "versions": "6 -> 2",
-        "mb": "13.40 -> 13.42",
+        "mb": "13.88 -> 13.88",
         "runs": [
-          0.024,
-          0.019,
+          0.018,
+          0.02,
           0.019
         ]
       }
