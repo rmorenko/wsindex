@@ -626,6 +626,42 @@ class Pipeline:
             raise ValueError(f"unknown repo id: {repo!r}")
         return scoped
 
+    def fit(self, hits: list[Hit], *, budget: int) -> tuple[list[Hit], int]:
+        """The longest prefix of `hits` that costs at most `budget` tokens.
+
+        `k` answers "how many results"; an agent needs "how much context",
+        and the two are not the same question. Ten hits are anywhere
+        between two hundred tokens and twelve thousand depending on what
+        they happen to contain, and today the caller finds out only after
+        it has already spent them. Measured on the acceptance criteria,
+        plain search fills a thousand tokens with fifteen chunks and
+        already holds the expected answer for all ten queries — so this
+        is not about finding more, it is about not overrunning.
+
+        A prefix rather than a knapsack: hits arrive best-first, and
+        skipping a large one to fit two small ones would quietly reorder
+        relevance to save bytes. Dropping the tail is a decision the
+        caller can see; re-ranking by size is not.
+
+        Args:
+            hits: What `search` returned, best first.
+            budget: Maximum tokens the texts may cost together.
+
+        Returns:
+            The hits that fit, and what they cost. An empty list when even
+            the first does not fit — the caller asked for less than one
+            result is worth, and saying so beats overrunning silently.
+        """
+        kept: list[Hit] = []
+        spent = 0
+        for hit in hits:
+            cost = self.store.count_tokens(hit.text)
+            if spent + cost > budget:
+                break
+            kept.append(hit)
+            spent += cost
+        return kept, spent
+
     def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
         """Configured repos the store has never heard of, in config order.
 

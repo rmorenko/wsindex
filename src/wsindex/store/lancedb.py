@@ -216,6 +216,10 @@ class LanceDBStore(VectorStore):
         self.tbl.add(rows)
         return len(rows)
 
+    def count_tokens(self, text: str) -> int:
+        """Exactly what this store's model will read, since it has one."""
+        return self.embedder.count_tokens(text)
+
     def search(
         self,
         dataset_name: str,

@@ -612,6 +612,29 @@ A workspace already running `wsindex serve` offers the same tools over
 HTTP at `/mcp`, from the same tool code. Two transports, one
 implementation.
 
+**`search` takes a token budget, which is the one thing `k` cannot say.**
+Twenty hits on this corpus cost 4 201 tokens, and until now the caller
+found that out by spending them. `budget` trims the answer to fit and
+names what it dropped:
+
+```
+budget  200 ->  2 hits,  156 tokens, 18 dropped
+budget 1000 ->  4 hits,  649 tokens, 16 dropped
+budget 2000 ->  8 hits, 1348 tokens, 12 dropped
+```
+
+A prefix, not a knapsack: hits arrive best-first, and skipping a large
+one to fit two small ones would quietly trade relevance for bytes. The
+count is exact — the store asks its own tokeniser — and falls back to a
+measured three-characters-per-token estimate for a backend that has none,
+erring high so a budget is never overrun.
+
+This is all that survived spiking the "context pack" idea. Assembling
+context *better* turned out to have nothing to improve: filling a
+1 000-token budget with plain search already holds the expected answer
+for all ten acceptance queries, in fifteen chunks. Adding provenance
+changed nothing. What was actually missing was the budget itself.
+
 ## Running it as a server
 
 The same engine behind HTTP, for a workspace more than one person

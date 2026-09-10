@@ -150,3 +150,43 @@ async def test_why_on_something_that_is_not_there(server: FastMCP) -> None:
     assert result["definitions"] == [] or all(
         d["symbol"] != "no_such_function_anywhere" for d in result["definitions"]
     )
+
+
+@pytest.mark.anyio
+async def test_a_budget_trims_the_answer_and_says_so(server: FastMCP) -> None:
+    """The one thing `k` cannot say, and the reason this tool has it.
+
+    A person reading hits on a screen scrolls past what they do not want.
+    A model has a context window it cannot exceed, and learns what ten
+    hits cost only after spending it.
+    """
+    full = await call(server, "search", query="greet", k=10)
+    assert full["count"] >= 1
+    biggest = max(len(hit["text"]) for hit in full["hits"]) // 3 + 1
+
+    trimmed = await call(server, "search", query="greet", k=10, budget=biggest)
+
+    assert trimmed["tokens"] <= biggest
+    assert trimmed["count"] <= full["count"]
+    # Named rather than silent: a trimmed answer that does not say it was
+    # trimmed is one an agent reports as complete.
+    assert trimmed["dropped_for_budget"] == full["count"] - trimmed["count"]
+
+
+@pytest.mark.anyio
+async def test_a_tiny_budget_is_never_overrun(server: FastMCP) -> None:
+    # Not "returns nothing": a one-character commit message really does
+    # cost one token and really does fit. What must hold is the promise,
+    # which is that the answer never costs more than was asked for.
+    answer = await call(server, "search", query="greet", k=10, budget=1)
+
+    assert answer["tokens"] <= 1
+    assert answer["dropped_for_budget"] > 0
+
+
+@pytest.mark.anyio
+async def test_without_a_budget_the_answer_says_nothing_about_one(server: FastMCP) -> None:
+    answer = await call(server, "search", query="greet", k=5)
+
+    assert "tokens" not in answer
+    assert "dropped_for_budget" not in answer

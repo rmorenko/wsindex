@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
+from wsindex.embed import estimate_tokens
 from wsindex.model import Chunk, Hit, SearchFilter
 
 
@@ -51,6 +52,19 @@ class VectorStore(ABC):
     The contract is text in, hits out: who and where embeds is an
     implementation detail — LanceDBStore embeds with an injected Embedder.
     """
+
+    def count_tokens(self, text: str) -> int:
+        """What this text costs the model behind this store, in tokens.
+
+        Concrete and estimating by default. "Who and where embeds is an
+        implementation detail" is the contract above, and reaching past
+        it for a tokeniser would break that — but a caller assembling a
+        context to a budget has to know the price of what it is holding,
+        and that price belongs to the store's model rather than to the
+        caller. A store that knows its tokeniser overrides this and
+        answers exactly.
+        """
+        return estimate_tokens(text)
 
     @abstractmethod
     def create_dataset(self, dataset_name: str, *, metric: str) -> None:

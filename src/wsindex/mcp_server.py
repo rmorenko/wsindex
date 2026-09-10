@@ -70,10 +70,22 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
         ] = None,
         path: Annotated[str | None, Field(description="Path glob, e.g. src/*.py")] = None,
         symbol: Annotated[str | None, Field(description="Substring of the symbol name")] = None,
+        budget: Annotated[
+            int | None,
+            Field(description="Cap the returned text at this many tokens", ge=1),
+        ] = None,
     ) -> dict[str, Any]:
         """Search the workspace by meaning; returns chunks with file:line."""
         return _search(
-            engine, query, k=k, repo=repo, lang=lang, kind=kind, path=path, symbol=symbol
+            engine,
+            query,
+            k=k,
+            repo=repo,
+            lang=lang,
+            kind=kind,
+            path=path,
+            symbol=symbol,
+            budget=budget,
         )
 
     @server.tool()
@@ -109,8 +121,18 @@ def _search(
     kind: list[str] | None,
     path: str | None,
     symbol: str | None,
+    budget: int | None = None,
 ) -> dict[str, Any]:
     """`search`, as data.
+
+    `budget` is the one thing `k` cannot say. Ten hits are anywhere
+    between two hundred tokens and twelve thousand depending on what they
+    contain, and the caller finds out only after spending them — which
+    matters here and nowhere else, because this caller is a model with a
+    context window rather than a person with a screen. What was dropped
+    is named in the answer, the way `unsearched` is: a trimmed result
+    that does not say it was trimmed is a result an agent will report as
+    complete.
 
     Raises:
         ValueError: `kind` names something that is not a Kind. Named back
@@ -122,9 +144,16 @@ def _search(
         raise ValueError(f"kind must be one of {', '.join(k.value for k in Kind)}") from exc
     candidate = SearchFilter(lang=tuple(lang or ()), kind=kinds, path=path, symbol=symbol)
     hits = engine.search(query, k=k, repo=repo, filters=None if candidate.is_empty else candidate)
+    spent = None
+    dropped = 0
+    if budget is not None:
+        fitted, spent = engine.fit(hits, budget=budget)
+        dropped = len(hits) - len(fitted)
+        hits = fitted
     return {
         "count": len(hits),
         "hits": [hit.to_json() for hit in hits],
+        **({"tokens": spent, "dropped_for_budget": dropped} if budget is not None else {}),
         # Named, because an agent reporting "there is no such code" about
         # a workspace half of which was never indexed is worse than an
         # agent that says it does not know.

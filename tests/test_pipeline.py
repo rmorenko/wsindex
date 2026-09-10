@@ -26,7 +26,7 @@ import wsindex.pipeline
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest import IndexState, NotAGitRepositoryError, Skip, chunk_file
-from wsindex.model import Chunk, Kind, SearchFilter, SourceFile
+from wsindex.model import Chunk, Hit, Kind, SearchFilter, SourceFile
 from wsindex.pipeline import _CANDIDATE_MULTIPLIER, FullPass, Pipeline
 from wsindex.rank.reranker import FakeReranker
 from wsindex.store import LanceDBStore
@@ -779,3 +779,57 @@ def test_references_without_links_is_empty(config: Config, store: LanceDBStore) 
     bare = Pipeline(store=store, state_dir=Path("/nonexistent"), config=config, links=None)
 
     assert bare.references("8080") == []
+
+
+# --- fitting an answer to a context window --------------------------------
+#
+# `k` says how many results; an agent needs to know how much context, and
+# the two are not the same question. Ten hits are anywhere between two
+# hundred tokens and twelve thousand depending on what they hold.
+
+
+def hit_of(text: str) -> Hit:
+    return Hit(score=1.0, native_id="x", metadata={"text": text, "path": "a.py"})
+
+
+def test_a_budget_keeps_the_best_hits_that_fit(pipeline: Pipeline) -> None:
+    hits = [hit_of("word " * 30), hit_of("word " * 30), hit_of("word " * 30)]
+
+    kept, spent = pipeline.fit(hits, budget=pipeline.store.count_tokens(hits[0].text) * 2)
+
+    assert len(kept) == 2
+    assert spent <= pipeline.store.count_tokens(hits[0].text) * 2
+
+
+def test_a_budget_smaller_than_one_hit_returns_nothing(pipeline: Pipeline) -> None:
+    # Saying "nothing fits" beats overrunning a context window silently,
+    # and beats returning one oversized hit the caller cannot afford.
+    kept, spent = pipeline.fit([hit_of("word " * 200)], budget=5)
+
+    assert (kept, spent) == ([], 0)
+
+
+def test_a_budget_larger_than_everything_keeps_everything(pipeline: Pipeline) -> None:
+    hits = [hit_of("small"), hit_of("also small")]
+
+    kept, _ = pipeline.fit(hits, budget=10_000)
+
+    assert kept == hits
+
+
+def test_fitting_does_not_reorder_by_size(pipeline: Pipeline) -> None:
+    """A prefix, not a knapsack.
+
+    Skipping a large hit to fit two small ones would quietly trade
+    relevance for bytes — and the caller, having asked for the best
+    results, would have no way to see that it got the cheapest instead.
+    """
+    big, small = hit_of("word " * 100), hit_of("tiny")
+
+    kept, _ = pipeline.fit([big, small], budget=pipeline.store.count_tokens("tiny") * 2)
+
+    assert kept == [], "the first hit did not fit, so nothing after it is considered"
+
+
+def test_nothing_to_fit_is_not_an_error(pipeline: Pipeline) -> None:
+    assert pipeline.fit([], budget=100) == ([], 0)
