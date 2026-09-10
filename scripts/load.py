@@ -65,7 +65,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).parent))
 from acceptance import CRITERIA
-from bench import bench_corpus, environment
+from bench import bench_corpus, busy, environment
 
 # --- the SLO, fixed before the first run ----------------------------------
 
@@ -700,7 +700,25 @@ def main() -> int:
     parser.add_argument(
         "--rerank", action="store_true", help="Serve with [rank] enabled (a second model)"
     )
+    parser.add_argument(
+        "--anyway", action="store_true", help="Measure even though the machine is busy"
+    )
     args = parser.parse_args()
+
+    disturbed = busy()
+    if disturbed is not None:
+        print(f"warning: {disturbed}", file=sys.stderr)
+        if not args.anyway:
+            # Stricter than `bench.py`, which lets an exploratory run
+            # through with a warning. This one always produces a verdict
+            # — PASS or FAIL against a budget — and a verdict on a
+            # machine somebody else is using is worse than no verdict:
+            # a FAIL sends someone hunting a regression that is not
+            # there, and a PASS is a promise made on borrowed evidence.
+            print(
+                "refusing to judge an SLO on a busy machine (--anyway overrides)", file=sys.stderr
+            )
+            return 2
 
     corpus = bench_corpus()
     results: list[Result] = []

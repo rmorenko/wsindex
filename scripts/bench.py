@@ -87,6 +87,20 @@ FLOOR = 0.10
 """Seconds below which a change is not worth reporting whatever its
 percentage. Without it the fastest scenarios cry loudest."""
 
+BUSY = 0.2
+"""Share of the machine's cores already busy above which a measurement is
+not worth taking.
+
+Added after a run reported `index-cold` 30% slower and the cause was
+another program using ten of fourteen cores — load average 7.93, which is
+0.57 by this measure. Repeats and minimums cannot help with that: every
+repeat is disturbed by the same thing, and the minimum of three spoiled
+runs is a spoiled run.
+
+Crude on purpose. The job is to catch half the machine being gone, not to
+model contention: an idle laptop sits near 0.05 and the run above sat at
+0.57, so anything in between is a fine place to draw the line."""
+
 
 @dataclass
 class Measurement:
@@ -341,17 +355,50 @@ def _one(name: str, corpus: Path) -> Measurement:
     return Measurement(**json.loads(finished.stdout.strip().splitlines()[-1]))
 
 
+def load() -> tuple[float, int]:
+    """(one-minute load average, cores). `(0.0, 1)` where that is unknowable."""
+    try:
+        return os.getloadavg()[0], os.cpu_count() or 1
+    except (OSError, AttributeError):  # pragma: no cover - not POSIX
+        return 0.0, os.cpu_count() or 1
+
+
+def busy() -> str | None:
+    """A sentence naming what else is using the machine, or None.
+
+    None does not promise a quiet machine — a single-threaded hog barely
+    moves the load average — but it catches the case that actually
+    happened here, which is most of the cores being gone.
+    """
+    average, cores = load()
+    if average <= cores * BUSY:
+        return None
+    return (
+        f"the machine is busy: load average {average:.2f} on {cores} cores "
+        f"({average / cores:.0%} of them). These numbers will be somebody else's work "
+        "as much as this program's."
+    )
+
+
 def environment() -> dict[str, str]:
-    """What the numbers are numbers *of*. A benchmark without this is a rumour."""
+    """What the numbers are numbers *of*. A benchmark without this is a rumour.
+
+    Load included since a run was reported as a 30% regression that was
+    another program taking ten of fourteen cores. Everything else here was
+    already recorded because a number without its machine is a rumour;
+    the machine's *state* turns out to be part of the machine.
+    """
     commit = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
     ).stdout.strip()
     dirty = subprocess.run(
         ["git", "status", "--porcelain"], capture_output=True, text=True
     ).stdout.strip()
+    average, cores = load()
     return {
         "date": time.strftime("%Y-%m-%d %H:%M"),
         "commit": commit + ("-dirty" if dirty else ""),
+        "load": f"{average:.2f} on {cores} cores",
         "python": platform.python_version(),
         "platform": f"{platform.system()} {platform.machine()}",
         "embedder": "fake" if os.environ.get("WSINDEX_BENCH_FAST") == "1" else "real",
@@ -430,6 +477,9 @@ def main() -> int:
     parser.add_argument("--baseline", type=Path, help="Compare against a saved run")
     parser.add_argument("--save", type=Path, help="Write the measurements as JSON")
     parser.add_argument("--only", nargs="*", choices=sorted(SCENARIOS), help="Run a subset")
+    parser.add_argument(
+        "--anyway", action="store_true", help="Measure even though the machine is busy"
+    )
     args = parser.parse_args()
 
     if args.scenario:
@@ -439,6 +489,23 @@ def main() -> int:
             measured = SCENARIOS[args.scenario](Path(args.corpus), Path(index_dir))
         print(json.dumps(asdict(measured)))
         return 0
+
+    disturbed = busy()
+    if disturbed is not None:
+        print(f"warning: {disturbed}", file=sys.stderr)
+        if (args.save or args.baseline) and not args.anyway:
+            # A plain run gets the warning and its numbers; saving a
+            # baseline or judging against one does not, because both
+            # outlive the moment. A baseline recorded under somebody
+            # else's build is a wrong answer every future run compares
+            # itself to, and a regression report from a loaded machine is
+            # how an afternoon gets spent on a change that was innocent.
+            print(
+                "refusing to save or compare against a baseline on a busy machine "
+                "(--anyway overrides)",
+                file=sys.stderr,
+            )
+            return 2
 
     corpus = bench_corpus()
     wanted = args.only or list(SCENARIOS)

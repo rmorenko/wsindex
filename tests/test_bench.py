@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from bench import FLOOR, REGRESSION, Measurement, compare, peak_mb
+from bench import FLOOR, REGRESSION, Measurement, busy, compare, environment, peak_mb
 
 HERE = {"platform": "Darwin arm64", "python": "3.12.12", "embedder": "real"}
 
@@ -93,3 +93,44 @@ def test_peak_memory_is_in_megabytes_on_this_platform() -> None:
     # 400 MB silently becomes 400 GB in a report. A pytest process is
     # somewhere between ten megabytes and a few hundred on either.
     assert 5 < peak_mb() < 5000
+
+
+# --- whether the machine was ours to measure on ---------------------------
+
+
+def test_a_quiet_machine_is_not_complained_about(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("bench.load", lambda: (0.7, 14))
+
+    assert busy() is None
+
+
+def test_a_machine_someone_else_is_using_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The case this exists for, with the numbers it actually had: another
+    # program on ten of fourteen cores, and a benchmark reporting a 30%
+    # regression that was entirely somebody else's build.
+    monkeypatch.setattr("bench.load", lambda: (7.93, 14))
+
+    said = busy()
+
+    assert said is not None
+    assert "7.93" in said and "14 cores" in said and "57%" in said
+
+
+def test_the_threshold_is_a_share_of_the_machine_not_a_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The same load average means different things on a laptop and on a
+    # build server, so the line is drawn per core.
+    monkeypatch.setattr("bench.load", lambda: (4.0, 4))
+    assert busy() is not None
+
+    monkeypatch.setattr("bench.load", lambda: (4.0, 64))
+    assert busy() is None
+
+
+def test_the_environment_block_records_the_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A number without its machine is a rumour, and the machine's state
+    # turns out to be part of the machine.
+    monkeypatch.setattr("bench.load", lambda: (7.93, 14))
+
+    assert environment()["load"] == "7.93 on 14 cores"
