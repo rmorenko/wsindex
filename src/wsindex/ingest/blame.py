@@ -17,11 +17,26 @@ child makes the same storm 27% faster (0.49 s → 0.36 s) *and* leaves the
 searcher at its idle latency (487.8 ms → 8.2 ms p50, 14.2 ms worst); with
 nobody searching it costs nothing (0.35 s against 0.35 s).
 
-What is *not* established is why that process is a bad one to fork from.
-A 1 GB single allocation does not reproduce it and four thousand small
-mappings barely do (0.80 s → 0.89 s), so the tidy explanation — "torch
-has more memory regions" — is a guess and is not relied on here. The
-shape is what was measured, and the shape is enough to act on.
+The mechanism, since it decides whether this is worth keeping. The cost
+is in the **exec**, not the fork: a bare fork storm leaves a working
+thread at 1.1x its idle speed, while fork+exec puts it at 27x, with or
+without pipes. After a fork the child holds a copy-on-write copy of the
+parent's address space, and exec has to tear that down before it can load
+the new binary — so the price is the parent's *map*, not its bytes. One
+gigabyte in a single mapping costs what nothing costs (1.01 ms an exec
+against 0.90); the same gigabyte in sixteen thousand mappings costs
+2.82 ms. The model sits at 2.43 ms with only three thousand regions,
+because its regions are file-backed mappings of large dylibs and each is
+dearer to unmap than an anonymous one. Concurrent execs serialise on that
+teardown, which is the missing parallelism.
+
+**All of which is macOS.** On Linux CPython uses `vfork`, no copy of the
+address space is made, and there is nothing to tear down: sixteen
+thousand mappings cost 0.37 ms an exec against a bare process's 0.49, and
+the working thread stays at 2.6x rather than 34.7x. So this is a cure for
+one platform, kept unconditional anyway — on Linux it is one process
+start (21 ms) per batch of four files or more, which is not worth a
+platform branch and a second path that only half the machines test.
 
 One implementation, two callers, which is why `blame` arrives as an
 argument: the parent hands in `run_git` and keeps every guarantee that

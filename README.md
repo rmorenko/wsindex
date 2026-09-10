@@ -633,10 +633,27 @@ explanations were measured and ruled out first: the embedding batch size
 thread stalls the same 1.8 s) and the GIL (a continuous monitor loses
 53 ms at worst).
 
-*Why* that process is a bad one to fork from is **not** established. A
-1 GB single allocation does not reproduce it and four thousand small
-mappings barely do (0.80 s → 0.89 s), so "it has more memory regions" is
-a guess and nothing here relies on it. The shape was enough to act on:
+The mechanism, chased down afterwards because it decides whether the cure
+generalises. The cost is in the **exec**, not the fork: a bare fork storm
+leaves a working thread at 1.1x its idle speed, fork+exec puts it at 27x,
+and pipes make no difference. After a fork the child holds a
+copy-on-write copy of the parent's address space and exec must tear it
+down first — so the price is the parent's *map*, not its bytes. A
+gigabyte in one mapping costs what nothing costs (1.01 ms an exec against
+0.90); the same gigabyte in sixteen thousand mappings costs 2.82 ms; the
+model costs 2.43 ms with only three thousand regions, because its regions
+are file-backed mappings of large dylibs. Concurrent execs serialise on
+that teardown, which is the missing parallelism.
+
+**This is a macOS problem.** On Linux CPython uses `vfork`, no copy is
+made, nothing is torn down: sixteen thousand mappings cost 0.37 ms an
+exec against a bare process's 0.49, and the worker stays at 2.6x rather
+than 34.7x. The cure is kept unconditional anyway — on Linux it is one
+process start per batch, 21 ms against a pass that takes seconds, which
+is cheaper than a platform branch and a second path that only half the
+machines would test.
+
+The cure itself:
 [`wsindex.ingest.blame`](src/wsindex/ingest/blame.py) hands the batch to a
 small child that imports nothing from this package, and the child does
 the spawning. Search during a full re-index went **1459 ms → 123 ms** p95,
@@ -650,9 +667,6 @@ does nothing (2079 ms → 2143 ms). Fewer blame workers do work (2 workers:
 p95 284 ms) at 48% of indexing throughput. `posix_spawn` is faster again,
 but CPython only takes it with `close_fds=False`, and a probe showed the
 child then inherits seven of this process's descriptors.
-
-All of these numbers are macOS. Linux resolves `fork` differently and is
-not measured here; at worst the cure costs it 21 ms per batch.
 
 **It writes down what it did.** `serve` turns on uvicorn's access log
 and the library's own records; every CLI command stays silent, because a
