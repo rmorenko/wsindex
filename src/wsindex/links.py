@@ -25,6 +25,8 @@ from enum import StrEnum
 from pathlib import Path
 from types import TracebackType
 
+from wsindex.paths import make_index_dir
+
 LINKS_FILE = "links.db"
 """Name of the database inside the index directory."""
 
@@ -158,7 +160,7 @@ class LinkStore:
                 definition, even when the vectors live in S3 — the same
                 reasoning that puts `state.json` there.
         """
-        index_dir.mkdir(parents=True, exist_ok=True)
+        make_index_dir(index_dir)
         self.path = index_dir / LINKS_FILE
         # `check_same_thread=False` because the server runs a sync
         # endpoint in a worker thread while this connection was opened in

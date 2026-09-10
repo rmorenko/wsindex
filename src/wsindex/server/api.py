@@ -12,6 +12,9 @@ only while they say the same things.
 Authentication is a bearer token named by the config as an environment
 variable. With `token_env` set and the variable empty the server refuses
 to start; with no `token_env` it is open, which someone has to write down.
+Two rules, both in `authorize` and both applied again by `Guard` to
+anything mounted: the token must match, and a request that changes
+something must not come from another origin.
 
 One Pipeline, built at startup and shared — safe for reads because
 `Pipeline.search` refreshes the store first. Writes take a lock that
@@ -20,6 +23,7 @@ refuses rather than queues: two indexing runs do the same work twice.
 
 from __future__ import annotations
 
+import secrets
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -28,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from wsindex.ingest import NotAGitRepositoryError
 from wsindex.model import Kind, SearchFilter
@@ -76,6 +81,57 @@ class RunLog:
 
 class Busy(RuntimeError):
     """An indexing run was asked for while one was already going."""
+
+
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+"""Methods that only read. A cross-site request that cannot change
+anything needs no origin check, and `GET /search` is called from
+scripts that have no origin to send."""
+
+
+def bearer_ok(header: str, token: str) -> bool:
+    """True when an `Authorization` header carries the configured token.
+
+    `compare_digest` rather than `==`: the right-hand side is a secret,
+    and `==` on strings returns at the first differing byte, which is a
+    timing signal. Whether that is exploitable across a network is
+    arguable; using the primitive built for it costs one import and ends
+    the argument.
+
+    Bytes, because `compare_digest` refuses non-ASCII strings and a
+    header is whatever the caller sent.
+
+    Args:
+        header: The raw `Authorization` header, possibly empty.
+        token: The token this server was started with.
+
+    Returns:
+        Whether the request may proceed.
+    """
+    offered = header.removeprefix("Bearer ").strip()
+    return secrets.compare_digest(offered.encode("utf-8"), token.encode("utf-8"))
+
+
+def cross_origin(origin: str, host: str) -> bool:
+    """True when `Origin` names somewhere other than this server.
+
+    The whole of the CSRF defence. A browser sends `Origin` on every POST
+    — same-site or not — so a POST that arrives *without* one did not
+    come from a page, which is exactly the client that cannot be tricked
+    into sending it. That is why an absent header passes: refusing it
+    would break `curl`, a webhook and the CLI without stopping any
+    attack.
+
+    Args:
+        origin: The `Origin` header, or empty when there is none.
+        host: The `Host` header — what the caller dialled.
+
+    Returns:
+        Whether the request came from a different origin.
+    """
+    if not origin:
+        return False
+    return origin.split("://")[-1].lower() != host.lower()
 
 
 @dataclass
@@ -153,16 +209,17 @@ def create_app(
     app.state.token = token
 
     def authorize(request: Request) -> None:
-        """Reject a request without the configured bearer token."""
-        if request.app.state.token is None:
-            return
-        header = request.headers.get("Authorization", "")
-        offered = header.removeprefix("Bearer ").strip()
-        if offered != request.app.state.token:
+        """Reject a request with the wrong token or the wrong origin."""
+        token = request.app.state.token
+        if token is not None and not bearer_ok(request.headers.get("Authorization", ""), token):
             # 401 with no hint about which half was wrong: a server that
             # says "unknown token" to one caller and "no token" to
             # another has told both something.
             raise HTTPException(status_code=401, detail="unauthorized")
+        if request.method not in SAFE_METHODS and cross_origin(
+            request.headers.get("Origin", ""), request.headers.get("Host", "")
+        ):
+            raise HTTPException(status_code=403, detail="cross-origin request refused")
 
     guarded = [Depends(authorize)]
 
@@ -263,6 +320,57 @@ def create_app(
     return app
 
 
+class Guard:
+    """`authorize`, one layer out: for what is mounted, not routed.
+
+    `Depends(authorize)` belongs to a route. `app.mount` hands a path to
+    a whole other ASGI application, which brings its own empty stack —
+    so the MCP tools behind `/mcp` answered with no token at all while
+    `/search` answered 401. Found in review, and the shape of the bug is
+    worth keeping in mind: a guard that has to be *listed* per endpoint
+    is one mount away from being wrong.
+
+    The same two rules and the same two functions as the dependency, so
+    there is no second definition of who may call this.
+    """
+
+    def __init__(self, app: Any, parent: FastAPI) -> None:
+        """Wrap `app`, reading the policy from `parent` at request time.
+
+        Args:
+            app: The mounted application to protect.
+            parent: The application holding `state.token`. Read per
+                request rather than captured, so a test that changes the
+                token changes what this enforces.
+        """
+        self._app = app
+        self._parent = parent
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        """Pass an authorized request through; answer the rest ourselves."""
+        if scope.get("type") == "http":
+            refusal = self._refuse(scope)
+            if refusal is not None:
+                await refusal(scope, receive, send)
+                return
+        await self._app(scope, receive, send)
+
+    def _refuse(self, scope: Any) -> JSONResponse | None:
+        """The response to send instead of calling through, or None."""
+        headers = {
+            key.decode("latin-1").lower(): value.decode("latin-1")
+            for key, value in scope.get("headers", ())
+        }
+        token = self._parent.state.token
+        if token is not None and not bearer_ok(headers.get("authorization", ""), token):
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+        if scope.get("method") not in SAFE_METHODS and cross_origin(
+            headers.get("origin", ""), headers.get("host", "")
+        ):
+            return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
+        return None
+
+
 def _mount_mcp(app: FastAPI) -> None:
     """Offer the same tools over streamable HTTP, when the extra is here.
 
@@ -287,7 +395,7 @@ def _mount_mcp(app: FastAPI) -> None:
     # Mounted rather than re-routed: the SDK owns the session handling,
     # the event stream and the protocol version negotiation, and
     # re-implementing any of that here would be a second protocol.
-    app.mount("/mcp", tools.streamable_http_app())
+    app.mount("/mcp", Guard(tools.streamable_http_app(), app))
     app.router.lifespan_context = _with_session_manager(
         app.router.lifespan_context, tools.session_manager.run
     )
@@ -311,4 +419,13 @@ def _with_session_manager(outer: Any, inner: Any) -> Any:
     return lifespan
 
 
-__all__ = ["Busy", "RunLog", "Writer", "create_app"]
+__all__ = [
+    "SAFE_METHODS",
+    "Busy",
+    "Guard",
+    "RunLog",
+    "Writer",
+    "bearer_ok",
+    "create_app",
+    "cross_origin",
+]

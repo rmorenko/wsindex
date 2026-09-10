@@ -19,14 +19,33 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from wsindex.paths import make_index_dir
 
 STATE_FILE = "state.json"
 STATE_VERSION = 1
 """Schema version of `state.json`. A file with an unknown version is
 ignored (see `IndexState.load`), which is safe because state is a cache."""
+
+_SHA = re.compile(r"[0-9a-f]{40}")
+"""What every commit this package records looks like: `git rev-parse
+HEAD` output, full and lowercase. Used to check values read back from
+disk before they are spoken to git as revisions."""
+
+
+def is_sha(value: str) -> bool:
+    """True when `value` is a full commit sha and nothing else.
+
+    Deliberately narrow. Abbreviated shas, `HEAD~2` and branch names are
+    all things git would accept and none of them are things this package
+    writes, so accepting them would only widen what a state file can say.
+    """
+    return _SHA.fullmatch(value) is not None
+
 
 GIT_TIMEOUT = 120.0
 """Seconds any single git command may take before it is killed. A diff
@@ -153,9 +172,15 @@ class IndexState:
             return cls(commits={})
         markup = raw.get("markup")
         # Values are re-typed rather than trusted: a hand-edited file
-        # could hold a number where a sha belongs.
+        # could hold a number where a sha belongs. Shas are also checked
+        # for *shape*, because from here they go into a git command line
+        # as revisions — and `git log --output=…..HEAD` would be read as
+        # an option, not a range. Nothing writes such a value today; the
+        # check is what makes that stay true. A rejected entry looks
+        # exactly like an unknown commit, which this file already
+        # degrades to a full pass for.
         return cls(
-            commits={str(k): str(v) for k, v in commits.items()},
+            commits={str(k): str(v) for k, v in commits.items() if is_sha(str(v))},
             markup=(
                 {str(k): str(v) for k, v in markup.items()} if isinstance(markup, dict) else {}
             ),
@@ -189,7 +214,7 @@ class IndexState:
         Returns:
             The path written.
         """
-        index_dir.mkdir(parents=True, exist_ok=True)
+        make_index_dir(index_dir)
         path = index_dir / STATE_FILE
         payload = {"version": STATE_VERSION, "commits": self.commits, "markup": self.markup}
         tmp = path.with_name(f"{STATE_FILE}.tmp")

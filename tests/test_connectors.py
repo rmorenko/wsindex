@@ -12,6 +12,7 @@ is marked `slow` and deselected by default.
 """
 
 import json
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,7 @@ from wsindex.connectors import (
     DocumentNotFound,
     GenericHttpConnector,
     GitHubConnector,
+    http,
     route,
 )
 from wsindex.connectors.http import html_to_text
@@ -327,7 +329,7 @@ class _FakeResponse:
 
 def serve(monkeypatch: pytest.MonkeyPatch, body: bytes, headers: dict[str, str]) -> None:
     monkeypatch.setattr(
-        "urllib.request.urlopen", lambda request, timeout=None: _FakeResponse(body, headers)
+        http.OPENER, "open", lambda request, timeout=None: _FakeResponse(body, headers)
     )
 
 
@@ -346,7 +348,7 @@ def test_a_404_is_a_missing_document(monkeypatch: pytest.MonkeyPatch) -> None:
     def raise_404(request: object, timeout: float | None = None) -> None:
         raise urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)  # type: ignore[arg-type]
 
-    monkeypatch.setattr("urllib.request.urlopen", raise_404)
+    monkeypatch.setattr(http.OPENER, "open", raise_404)
     with pytest.raises(DocumentNotFound):
         _get("https://example.invalid/gone", {})
 
@@ -359,7 +361,7 @@ def test_another_status_is_a_plain_error(monkeypatch: pytest.MonkeyPatch) -> Non
     def raise_500(request: object, timeout: float | None = None) -> None:
         raise urllib.error.HTTPError("https://x", 500, "Server Error", {}, None)  # type: ignore[arg-type]
 
-    monkeypatch.setattr("urllib.request.urlopen", raise_500)
+    monkeypatch.setattr(http.OPENER, "open", raise_500)
     with pytest.raises(ConnectorError, match="answered 500"):
         _get("https://example.invalid/a", {})
 
@@ -372,7 +374,7 @@ def test_an_unreachable_host_is_a_plain_error(monkeypatch: pytest.MonkeyPatch) -
     def unreachable(request: object, timeout: float | None = None) -> None:
         raise urllib.error.URLError("no route to host")
 
-    monkeypatch.setattr("urllib.request.urlopen", unreachable)
+    monkeypatch.setattr(http.OPENER, "open", unreachable)
     with pytest.raises(ConnectorError, match="could not be reached"):
         _get("https://example.invalid/a", {})
 
@@ -431,3 +433,61 @@ def test_the_generic_connector_sends_its_token_too(monkeypatch: pytest.MonkeyPat
     document = GenericHttpConnector(spec).fetch("https://intranet.invalid/page")
     assert seen["Authorization"] == "Bearer s3cret"
     assert document.text == "# Notes"
+
+
+# --- what a hostile server can do to us -----------------------------------
+
+
+def test_a_redirect_to_another_host_does_not_carry_the_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # urllib copies the original headers onto a redirect, across hosts,
+    # unlike requests and httpx. Measured: a 302 delivered
+    # `Bearer <token>` to the second server.
+    request = urllib.request.Request(
+        "https://trusted.example/doc", headers={"Authorization": "Bearer s3cret"}
+    )
+    handler = http._StripCredentialsOnHop()
+
+    followed = handler.redirect_request(
+        request, None, 302, "Found", {}, "https://elsewhere.example/stolen"
+    )
+
+    assert followed is not None
+    assert "Authorization" not in followed.headers
+    assert "Authorization" not in followed.unredirected_hdrs
+
+
+def test_a_redirect_on_the_same_host_keeps_the_token() -> None:
+    # The header was sent for this server; `/doc` to `/doc/` is it
+    # talking to itself.
+    request = urllib.request.Request(
+        "https://trusted.example/doc", headers={"Authorization": "Bearer s3cret"}
+    )
+    handler = http._StripCredentialsOnHop()
+
+    followed = handler.redirect_request(
+        request, None, 302, "Found", {}, "https://trusted.example/doc/"
+    )
+
+    assert followed is not None
+    assert followed.headers.get("Authorization") == "Bearer s3cret"
+
+
+@pytest.mark.parametrize(
+    ("declared", "expected"),
+    [
+        ("text/plain; charset=latin-1", "latin-1"),
+        ("text/plain; charset=utf-16", "utf-16"),
+        # Not a codec at all, and two that exist but are not textual:
+        # all three raise LookupError out of `decode`, which used to
+        # leave a traceback where a document should have been.
+        ("text/plain; charset=no-such-codec", "utf-8"),
+        ("text/plain; charset=rot_13", "utf-8"),
+        ("text/plain; charset=bz2_codec", "utf-8"),
+        ("text/plain; charset=", "utf-8"),
+        ("text/plain", "utf-8"),
+    ],
+)
+def test_the_server_does_not_get_to_choose_an_unusable_codec(declared: str, expected: str) -> None:
+    assert http._charset(declared) == expected

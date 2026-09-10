@@ -559,3 +559,100 @@ def test_a_workspace_without_the_mcp_extra_still_serves(
     with TestClient(create_app(pipeline_factory=lambda: pipeline)) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
         assert client.post("/mcp", json={}).status_code == 404
+
+
+def test_no_path_answers_without_a_token(secured: TestClient) -> None:
+    # The rule as a question about the application, not a list somebody
+    # has to keep current. The MCP tools were *mounted*, not routed, so
+    # `Depends(authorize)` never saw them: `/search` answered 401 while
+    # `tools/call search` returned the index. Asking the router itself
+    # catches the next mount too.
+    public = {"/healthz", "/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+    for route in secured.app.routes:  # type: ignore[attr-defined]
+        path = getattr(route, "path", None)
+        # The doc endpoints describe the API, which is the same for
+        # everyone; they say nothing about this workspace.
+        if path is None or path in public:
+            continue
+        for method in sorted(getattr(route, "methods", None) or {"GET"}):
+            if method in ("HEAD", "OPTIONS"):
+                continue
+            answer = secured.request(method, path)
+            assert answer.status_code == 401, f"{method} {path} answered {answer.status_code}"
+
+
+def test_the_mcp_mount_is_behind_the_same_token(secured: TestClient) -> None:
+    # The concrete case behind the test above, spelled out: a real MCP
+    # handshake, with no Authorization header at all.
+    answer = secured.post(
+        "/mcp/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {}},
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert answer.status_code == 401
+    assert "mcp-session-id" not in answer.headers
+
+
+# --- cross-origin ---------------------------------------------------------
+
+
+def test_a_form_from_another_site_cannot_add_a_repo(client: TestClient) -> None:
+    # The open server is the default, so this is the shape that matters:
+    # a page on another origin posting the admin form. Measured before
+    # the fix — it rewrote wsindex.toml and returned 303.
+    answer = client.post(
+        "/admin/add-repo",
+        data={"repo_id": "attacker", "path": "/tmp/anywhere", "remote": "https://evil/x.git"},
+        headers={"Origin": "https://evil.example"},
+        follow_redirects=False,
+    )
+    assert answer.status_code == 403
+    assert [repo.id for repo in Config().repos] == ["repo1"]
+
+
+def test_the_page_can_still_post_its_own_forms(client: TestClient) -> None:
+    answer = client.post(
+        "/admin/sync", headers={"Origin": "http://testserver"}, follow_redirects=False
+    )
+    assert answer.status_code == 303
+
+
+def test_a_client_with_no_origin_is_not_a_browser(client: TestClient) -> None:
+    # curl, a webhook and this CLI send no Origin. A browser always sends
+    # one on POST, so absence is the one case CSRF cannot come from —
+    # refusing it would cost the honest callers and stop no attack.
+    assert client.post("/index").status_code == 200
+
+
+def test_reading_across_origins_is_still_allowed(client: TestClient) -> None:
+    # GET changes nothing, and scripts fetch `/search` from wherever they
+    # run. The check is for the methods that write.
+    answer = client.get("/search?q=greet", headers={"Origin": "https://elsewhere.example"})
+    assert answer.status_code == 200
+
+
+def test_a_token_is_compared_whole(secured: TestClient) -> None:
+    # `bearer_ok` uses compare_digest, so a prefix of the real token is
+    # as wrong as anything else.
+    assert secured.get("/status", headers={"Authorization": "Bearer s3cre"}).status_code == 401
+    assert secured.get("/status", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
+def test_a_cross_origin_call_to_the_mcp_mount_is_refused(client: TestClient) -> None:
+    # The mounted app gets both rules, not just the token: an open
+    # server is the default, and the rule that protects `/admin/sync`
+    # there has to reach `/mcp` too.
+    answer = client.post(
+        "/mcp/",
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        headers={
+            "Origin": "https://evil.example",
+            "Accept": "application/json, text/event-stream",
+        },
+    )
+    assert answer.status_code == 403

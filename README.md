@@ -126,6 +126,20 @@ Build output is skipped everywhere, no configuration needed:
 is a real limitation: a repository whose `build/` holds source has no way
 to say so. `ignore` narrows, nothing widens.
 
+**A file is indexed only if a suffix claims it, and only if it really is
+a file in that repository.** Both halves are load-bearing. The suffix
+table is why `.env`, `id_rsa`, `key.pem` and `.netrc` are not indexed —
+treat that as policy, not luck, before adding a suffix. And a symlink is
+skipped rather than followed: `is_file()` follows one, so a repository
+holding `notes.md -> ~/.ssh/id_rsa` had the key's contents indexed, which
+let the author of a cloned repository pick which of *your* files went
+into your index.
+
+What the suffix table does not save you from is a `secrets.yaml` or a
+`credentials.json` sitting in a repo — those are config files and get
+indexed like any other. Untracked files count too, as long as
+`.gitignore` does not exclude them.
+
 ## Incremental indexing
 
 `index` asks git what changed since the commit it last indexed, so a
@@ -305,6 +319,12 @@ configured with a token env var that is not set refuses to run rather
 than falling back to an anonymous request: GitHub answers 404 for a
 private repository, which would otherwise read as "no such issue" and
 send you looking in the wrong place.
+
+The other half of that rule is where the token *goes*. Redirects are
+followed, but not with the token attached: `urllib` copies headers onto
+a redirect across hosts, so one 302 from a source that changed domains
+used to hand `$GITHUB_TOKEN` to whoever answered. Same-host redirects
+keep it, since that is the server it was sent to.
 
 ## Teaching it a new source
 
@@ -497,9 +517,23 @@ Searches refresh first, at about 4 ms against a 111 ms search. Indexing
 runs one at a time and a second caller is told so (409) rather than
 queued: two runs of the same repo do the same work twice.
 
-Binding is `127.0.0.1` unless you say otherwise, and a `token_env`
-naming an unset variable stops the server from starting rather than
-opening the index to whoever can reach the port.
+Binding is `127.0.0.1` unless you say otherwise, and the server refuses
+to start rather than open the index to whoever can reach the port: a
+`token_env` naming an unset variable stops it, and so does a public
+address with no token at all (`--insecure` if you meant it).
+
+Two rules guard every request, and both apply to `/mcp` as well —
+mounting an application, unlike routing one, brings its own empty stack,
+and the tools behind it were once reachable with no token while
+`/search` answered 401. The token must match, compared whole; and a
+request that changes something must not come from another origin. A
+caller with no `Origin` at all — curl, a webhook, this CLI — is let
+through, because a browser always sends one on POST, so its absence is
+the one case CSRF cannot come from.
+
+The index directory is created `0700`. Everything a workspace knows is
+in it, and on a shared machine it used to be readable by every other
+account.
 
 ## Reclaiming space
 

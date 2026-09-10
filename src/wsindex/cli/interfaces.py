@@ -4,6 +4,7 @@ Three adapters over the same library, each a command that hands the
 pipeline to something that speaks a different language.
 """
 
+import ipaddress
 import os
 from typing import Annotated
 
@@ -58,9 +59,29 @@ def mcp() -> None:
     build(build_pipeline()).run(transport="stdio")
 
 
+def is_loopback(host: str) -> bool:
+    """True when only this machine can reach `host`.
+
+    The question `serve` asks before it agrees to run without a token.
+    `localhost` by name as well as by address, because that is what
+    people type; anything it cannot parse — a hostname, `::`, `0.0.0.0` —
+    is not loopback, which is the safe way to be wrong.
+    """
+    if host in ("localhost", ""):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def serve(
     host: Annotated[str, typer.Option("--host", help="Address to bind")] = "127.0.0.1",
     port: Annotated[int, typer.Option("--port", help="Port to bind")] = 8000,
+    insecure: Annotated[
+        bool,
+        typer.Option("--insecure", help="Allow a public address with no token"),
+    ] = False,
 ) -> None:
     """Serve the workspace over HTTP: search, index, and an admin page.
 
@@ -72,7 +93,8 @@ def serve(
 
     Binds to localhost by default. A search index over private
     repositories reaching the network is a decision, not a default —
-    pass `--host 0.0.0.0` to make it, preferably with a token set.
+    pass `--host 0.0.0.0` to make it, and set a token. Without one this
+    refuses to start on a public address; `--insecure` says you meant it.
     """
     config = config_or_default()
     require_config_file(config)
@@ -97,6 +119,18 @@ def serve(
                 err=True,
             )
             raise typer.Exit(code=1)
+    elif not is_loopback(host) and not insecure:
+        # The symmetric half of the refusal above. A token named but
+        # unset stops the server; an address the whole network can reach
+        # with no token at all used to be a line of stderr somebody
+        # scrolls past. Both are the config saying one thing and the
+        # process doing another.
+        typer.echo(
+            f"error: {host} is reachable from the network and no token is set — "
+            "set [server] token_env, bind to 127.0.0.1, or pass --insecure",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     else:
         typer.echo(
             "warning: serving without authentication ([server] token_env is unset)", err=True

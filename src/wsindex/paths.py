@@ -187,3 +187,29 @@ def resolve_cache_dir() -> Path:
     what it needs.
     """
     return user_cache_path(APP_NAME)
+
+
+def make_index_dir(index_dir: Path) -> Path:
+    """Create the index directory, readable by its owner and nobody else.
+
+    Everything a workspace knows lives here: the vectors, the link
+    database, the incremental state. LanceDB already writes its data
+    files 0600, but the directory and `links.db` came out at the process
+    umask — 0755 and 0644 on a default macOS shell — so on a shared
+    machine the map of somebody's workspace was readable by every other
+    account.
+
+    `mode` applies only to directories this call creates; an index
+    directory that already exists keeps the permissions it was made
+    with. Tightening those retroactively is the user's call, not a
+    library's, and silently chmod-ing a directory somebody may have
+    deliberately shared would be worse than the gap.
+
+    Args:
+        index_dir: Where the workspace keeps its index.
+
+    Returns:
+        The same path, now guaranteed to exist.
+    """
+    index_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return index_dir

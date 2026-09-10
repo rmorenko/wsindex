@@ -304,3 +304,31 @@ def test_build_output_directories_are_pruned(tmp_path: Path) -> None:
         (tmp_path / name).mkdir()
         (tmp_path / name / "mod.py").write_text("x = 1")
         assert inspect_file(tmp_path, f"{name}/mod.py") is None, name
+
+
+def test_a_symlink_is_a_name_not_a_file(tmp_path: Path) -> None:
+    # `is_file()` follows the link, so a repository holding
+    # `notes.md -> ~/.ssh/id_rsa` had the key's *contents* indexed —
+    # measured. Git tracks symlinks, so cloning somebody's repository let
+    # them pick which of your files went into your index.
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "id_rsa").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "real.md").write_text("# Ordinary\n")
+    (repo / "notes.md").symlink_to(outside / "id_rsa")
+
+    assert inspect_file(repo, "real.md") is not None
+    assert inspect_file(repo, "notes.md") is None
+
+
+def test_a_symlink_inside_the_repo_is_skipped_too(tmp_path: Path) -> None:
+    # Not a security case, a correctness one: the target is walked on its
+    # own, and indexing it twice would put one text at two paths.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "real.md").write_text("# Ordinary\n")
+    (repo / "alias.md").symlink_to(repo / "real.md")
+
+    assert inspect_file(repo, "alias.md") is None

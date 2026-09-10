@@ -7,6 +7,7 @@ test chdirs into its own tmp_path and drives the full loop through files.
 and treats anything else as a config error.
 """
 
+import stat
 import subprocess
 import tomllib
 from pathlib import Path
@@ -15,6 +16,7 @@ import pytest
 from typer.testing import CliRunner
 
 from wsindex.cli import app
+from wsindex.cli.interfaces import is_loopback
 from wsindex.config import Config, Provider
 from wsindex.connectors import BUILTIN, Connector, Document, DocumentNotFound
 from wsindex.embed import FakeEmbedder
@@ -725,3 +727,78 @@ def test_sync_reports_a_snapshot_it_could_not_write(workspace: Path, stub_connec
     assert result.exit_code == 1
     assert "docs: failed" in result.output
     assert (workspace / "snap" / "notes.txt").exists()
+
+
+# --- serve: binding is a decision -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("host", "loopback"),
+    [
+        ("127.0.0.1", True),
+        ("::1", True),
+        ("localhost", True),
+        ("", True),
+        ("0.0.0.0", False),
+        ("::", False),
+        ("192.168.1.10", False),
+        ("example.invalid", False),
+    ],
+)
+def test_is_loopback_knows_who_can_reach_a_host(host: str, loopback: bool) -> None:
+    assert is_loopback(host) is loopback
+
+
+def test_a_public_address_without_a_token_refuses_to_start(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The symmetric half of the refusal for a named-but-unset token_env.
+    # It used to be a line of stderr above a running server.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    started: list[object] = []
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: started.append(app))
+
+    result = runner.invoke(app, ["serve", "--host", "0.0.0.0"])
+
+    assert result.exit_code == 1
+    assert "no token is set" in result.output
+    assert started == []
+
+
+def test_insecure_says_you_meant_it(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    started: list[object] = []
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: started.append(app))
+
+    result = runner.invoke(app, ["serve", "--host", "0.0.0.0", "--insecure"])
+
+    assert result.exit_code == 0
+    assert len(started) == 1
+
+
+def test_localhost_without_a_token_still_only_warns(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Nobody else can reach it, and needing a token to search your own
+    # laptop would be ceremony.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    started: list[object] = []
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: started.append(app))
+
+    result = runner.invoke(app, ["serve"])
+
+    assert result.exit_code == 0
+    assert "without authentication" in result.output
+    assert len(started) == 1
+
+
+def test_indexing_leaves_a_private_index_directory(workspace: Path) -> None:
+    # The store connects eagerly and creates the directory on the way, so
+    # `LinkStore` arrived second and its `mode=0o700` did nothing. Found
+    # by looking at a real workspace after the fix was supposedly in.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+
+    runner.invoke(app, ["index"])
+
+    assert stat.S_IMODE((workspace / ".wsindex").stat().st_mode) == 0o700

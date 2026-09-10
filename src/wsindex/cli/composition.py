@@ -20,7 +20,7 @@ import typer
 from wsindex.config import Backend, Config, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.links import LinkStore
-from wsindex.paths import ConfigLocation, resolve_cache_dir, searched_paths
+from wsindex.paths import ConfigLocation, make_index_dir, resolve_cache_dir, searched_paths
 from wsindex.pipeline import Pipeline
 from wsindex.rank.reranker import CrossEncoderReranker
 from wsindex.store import LanceDBStore, VectorStore
@@ -86,6 +86,11 @@ def build_pipeline() -> Pipeline:
     """
     config = config_or_default()
     require_config_file(config)
+    # Before the store, not after: `LanceDBStore` connects eagerly, and
+    # connecting creates the directory at the process umask. Whoever
+    # makes it first decides its permissions, and the two callers that
+    # care (`LinkStore`, `IndexState.save`) both arrive second.
+    make_index_dir(config.index_dir)
     store = build_store(config)
     reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
     # index_dir, not store_uri: the incremental state and the link database

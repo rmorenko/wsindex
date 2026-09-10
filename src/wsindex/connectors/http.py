@@ -20,6 +20,8 @@ import re
 import urllib.error
 import urllib.request
 from html.parser import HTMLParser
+from typing import Any
+from urllib.parse import urlsplit
 
 from wsindex.connectors import Connector, ConnectorError, Document, DocumentNotFound
 
@@ -147,18 +149,100 @@ class GenericHttpConnector(Connector):
 
 
 def _charset(content_type: str) -> str:
+    """The codec to decode the body with, and never one that cannot.
+
+    The name comes from the server, so it is external input on its way
+    into `bytes.decode`. An unknown name — or a real codec that is not a
+    text one, like `rot_13` or `bz2_codec` — raises `LookupError`, which
+    no caller expects and which turned a hostile response header into a
+    traceback out of `wsindex sync`. Falling back to utf-8 with
+    `errors="replace"` is what the caller does for a wrong-but-valid
+    charset already; an unusable name deserves no worse.
+    """
     for part in content_type.split(";")[1:]:
         key, _, value = part.partition("=")
-        if key.strip().lower() == "charset":
-            return value.strip().strip('"') or "utf-8"
+        if key.strip().lower() != "charset":
+            continue
+        name = value.strip().strip('"')
+        try:
+            # The check is the operation, on real bytes: `b"".decode(x)`
+            # returns before it ever looks the codec up, so an empty
+            # probe accepts every name. Four bytes because utf-32 reads
+            # in fours.
+            b"    ".decode(name)
+        except LookupError:
+            # Both failures worth catching wear this type: a name no
+            # codec answers to, and a codec that is real but not textual
+            # (`rot_13`, `bz2_codec`).
+            break
+        except UnicodeDecodeError:
+            # A text codec that cannot read four spaces is still a text
+            # codec — let the body decide, with `errors="replace"`.
+            pass
+        return name
     return "utf-8"
+
+
+class _StripCredentialsOnHop(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but do not hand the token to whoever answers.
+
+    `urllib` copies the original request's headers onto a redirect,
+    including `Authorization`, and unlike `requests` and `httpx` it does
+    so across hosts. Measured: a 302 from the configured host to another
+    one delivered `Bearer <token>` to the second. One redirect from a
+    source that changed domains — or was taken over — and a private token
+    is somebody else's.
+
+    Same-origin redirects keep the header, because that is the case it
+    was sent for: `/doc` to `/doc/` on the same host is one server
+    talking to itself.
+    """
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        """Build the follow-up request, minus what the new host may not have."""
+        following = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if following is None:
+            return None
+        if _origin(req.full_url) != _origin(newurl):
+            # `.headers` and `.unredirected_hdrs` both: urllib capitalizes
+            # header names on the way in, and a value left in either dict
+            # is a value that gets sent.
+            for store in (following.headers, following.unredirected_hdrs):
+                store.pop("Authorization", None)
+        return following
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    """Scheme, host and port — what "the same server" means for a token."""
+    parts = urlsplit(url)
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    return parts.scheme.lower(), (parts.hostname or "").lower(), port
+
+
+OPENER = urllib.request.build_opener(_StripCredentialsOnHop)
+"""How this module reaches the network — `urlopen` with our redirect
+rule instead of urllib's. Built once and reused, which is what
+`urlopen` does internally with its own: an opener holds no per-request
+state. Named rather than private because it is the seam a test replaces
+to answer without a network."""
 
 
 def _get(url: str, headers: dict[str, str]) -> tuple[bytes, str]:
     """One GET, with the failures a caller has to tell apart."""
     request = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        with OPENER.open(request, timeout=TIMEOUT) as response:
             declared = response.headers.get("Content-Length")
             if declared is not None and int(declared) > MAX_BYTES:
                 raise ConnectorError(f"{url} is {int(declared):,} bytes, larger than the limit")

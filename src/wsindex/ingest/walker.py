@@ -174,6 +174,16 @@ def inspect_file(
     if found is None:
         return None
     try:
+        if abs_path.is_symlink():
+            # A symlink is a name, not a file. `is_file()` follows it, so
+            # a repository containing `notes.md -> ~/.ssh/id_rsa` had the
+            # key's *contents* indexed — measured, and git tracks
+            # symlinks, so cloning someone's repository let them choose
+            # which of your files went into your index. A link whose
+            # target is inside the repo is no better: the target is
+            # walked on its own, and indexing it twice would put one text
+            # at two paths.
+            return None
         if not abs_path.is_file():
             return None
         if abs_path.stat().st_size > MAX_FILE_SIZE:

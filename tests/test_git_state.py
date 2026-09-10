@@ -325,18 +325,24 @@ def test_staged_file_counts_as_uncommitted(repo: Path, git: GitRunner) -> None:
 
 # --- IndexState: a cache, so nothing about it is fatal -------------------
 
+SHA = "a" * 40
+OTHER_SHA = "b" * 40
+"""Shaped like what `git rev-parse HEAD` returns, because that is what
+`IndexState.load` now insists on: a value read back from disk goes to
+git as a revision, so anything that is not a full sha is dropped."""
+
 
 def test_state_roundtrip(tmp_path: Path) -> None:
-    state = IndexState(commits={}).with_commit("repo1", "abc123")
+    state = IndexState(commits={}).with_commit("repo1", SHA)
     path = state.save(tmp_path)
-    assert IndexState.load(tmp_path).commits == {"repo1": "abc123"}
+    assert IndexState.load(tmp_path).commits == {"repo1": SHA}
     assert path == tmp_path / STATE_FILE
 
 
 def test_save_creates_the_index_dir(tmp_path: Path) -> None:
     target = tmp_path / "deep" / "index"
-    IndexState(commits={"r": "sha"}).save(target)
-    assert IndexState.load(target).commits == {"r": "sha"}
+    IndexState(commits={"r": SHA}).save(target)
+    assert IndexState.load(target).commits == {"r": SHA}
 
 
 def test_with_commit_does_not_mutate_the_original() -> None:
@@ -381,21 +387,37 @@ def test_state_with_a_non_mapping_commits_key_is_an_empty_state(tmp_path: Path) 
     assert IndexState.load(tmp_path).commits == {}
 
 
-def test_state_with_non_string_values_is_coerced(tmp_path: Path) -> None:
-    payload = {"version": STATE_VERSION, "commits": {"repo1": 42}}
+def test_a_value_that_is_not_a_sha_is_dropped(tmp_path: Path) -> None:
+    # Everything this file records is `git rev-parse HEAD` output. A
+    # number, an abbreviation and a branch name are all things git would
+    # happily resolve, and none of them are things we write — and one
+    # shape in particular, a value starting with a dash, would reach a
+    # git command line as an option rather than a revision. Dropping the
+    # entry lands on the path an unknown commit already takes: one full
+    # pass.
+    payload = {
+        "version": STATE_VERSION,
+        "commits": {
+            "num": 42,
+            "short": "abc1234",
+            "branch": "HEAD~2",
+            "dashed": "--output=/tmp/x",
+            "good": SHA,
+        },
+    }
     (tmp_path / STATE_FILE).write_text(json.dumps(payload))
-    assert IndexState.load(tmp_path).commits == {"repo1": "42"}
+    assert IndexState.load(tmp_path).commits == {"good": SHA}
 
 
 def test_save_leaves_no_temporary_behind(tmp_path: Path) -> None:
-    IndexState(commits={"r": "sha"}).save(tmp_path)
+    IndexState(commits={"r": SHA}).save(tmp_path)
     assert [p.name for p in tmp_path.iterdir()] == [STATE_FILE]
 
 
 def test_save_over_an_existing_state_replaces_it(tmp_path: Path) -> None:
-    IndexState(commits={"repo1": "one"}).save(tmp_path)
-    IndexState(commits={"repo2": "two"}).save(tmp_path)
-    assert IndexState.load(tmp_path).commits == {"repo2": "two"}
+    IndexState(commits={"repo1": SHA}).save(tmp_path)
+    IndexState(commits={"repo2": OTHER_SHA}).save(tmp_path)
+    assert IndexState.load(tmp_path).commits == {"repo2": OTHER_SHA}
 
 
 # --- the loop the pipeline runs: index, record, ask again ----------------
@@ -422,7 +444,7 @@ def test_state_drives_the_next_diff(repo: Path, git: GitRunner, tmp_path: Path) 
 
 
 def test_state_remembers_the_markup_a_commit_was_indexed_under(tmp_path: Path) -> None:
-    state = IndexState(commits={}).with_commit("r", "abc123", markup="deadbeef")
+    state = IndexState(commits={}).with_commit("r", SHA, markup="deadbeef")
     state.save(tmp_path)
 
     assert IndexState.load(tmp_path).markup == {"r": "deadbeef"}
@@ -432,10 +454,10 @@ def test_a_state_file_from_before_markup_costs_one_full_pass(tmp_path: Path) -> 
     # Not an error: an unknown markup is exactly "we do not know what was
     # indexed", and the honest answer to that is to read the repo again.
     (tmp_path / STATE_FILE).write_text(
-        json.dumps({"version": STATE_VERSION, "commits": {"r": "abc123"}}), encoding="utf-8"
+        json.dumps({"version": STATE_VERSION, "commits": {"r": SHA}}), encoding="utf-8"
     )
 
     state = IndexState.load(tmp_path)
 
-    assert state.commits == {"r": "abc123"}
+    assert state.commits == {"r": SHA}
     assert state.markup == {}

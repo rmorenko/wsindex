@@ -6,6 +6,7 @@ patched: platformdirs falls back to `$HOME/.config` when `XDG_CONFIG_HOME`
 is unset, and an unpatched HOME would leak the developer's real config.
 """
 
+import stat
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from wsindex.paths import (
     ConfigLocation,
     Mode,
     find_config,
+    make_index_dir,
     resolve_cache_dir,
     resolve_index_dir,
     searched_paths,
@@ -275,3 +277,32 @@ def test_searched_paths_shows_override_value_when_set(
     monkeypatch.setenv("WSINDEX_CONFIG", "/some/explicit/path.toml")
     paths = searched_paths(cwd=tmp_path)
     assert any("/some/explicit/path.toml" in line for line in paths)
+
+
+def test_the_index_directory_is_private(tmp_path: Path) -> None:
+    # Everything a workspace knows lives here. It used to come out at the
+    # process umask — 0755 on a default macOS shell — so every other
+    # account on a shared machine could read the map of somebody's
+    # workspace out of links.db.
+    created = make_index_dir(tmp_path / "deep" / "idx")
+
+    assert created.is_dir()
+    assert stat.S_IMODE(created.stat().st_mode) == 0o700
+    # Only the index directory. `mkdir(parents=True, mode=...)` gives
+    # intermediate directories the default mode, and that is right —
+    # `deep/` is somebody's own directory that happens to be on the way,
+    # not ours to lock down. What matters is that nothing can be read
+    # through the one we did make.
+    assert stat.S_IMODE(created.parent.stat().st_mode) != 0o700
+
+
+def test_an_existing_directory_keeps_its_permissions(tmp_path: Path) -> None:
+    # `mode` applies only to directories the call creates. Chmod-ing one
+    # somebody may have deliberately shared is not a library's decision,
+    # so the gap is named rather than quietly closed.
+    existing = tmp_path / "idx"
+    existing.mkdir(mode=0o755)
+
+    make_index_dir(existing)
+
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o755
