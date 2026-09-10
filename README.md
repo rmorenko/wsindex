@@ -58,6 +58,23 @@ acceptance corpus it moved three of ten queries up and none down —
 embeddings for text" from 4 to 2 — at about 4 ms per pair, so a search
 with `-k 5` pays roughly 80 ms.
 
+**It does not scale, and the number is worth knowing before turning it
+on.** Under load (`poe load --rerank`) the 500 ms budget holds to **six**
+concurrent searches and breaks at eight — p95 438 ms against 607 ms — and
+throughput is flat at 16-17 searches per second however many clients ask.
+Latency simply grows about 73 ms per extra client.
+
+That ceiling is hardware, not software, which is the part that decides
+what to do about it. Both models run on the GPU (`mps` on this machine),
+and one re-ranking of twenty realistic candidates costs 54 ms of it.
+Threads buy nothing (18.3/s at one, 18.4/s at eight) and separate
+processes barely more (18.5/s at one, 28.0/s at four) — they contend for
+the same device. `torch.set_num_threads(1)` changes the figure not at
+all, which is how the CPU was ruled out: it is a CPU knob, and this is
+not CPU work. So a busier server needs another machine, a smaller
+cross-encoder or fewer candidates; running more copies of this one will
+not do it.
+
 Two better-known ideas were measured and **not** built, both on this
 corpus rather than in the abstract:
 
@@ -656,6 +673,13 @@ machines would test.
 The rule this leaves behind — a program run per file belongs in a child,
 not in the engine — is [ADR-12](docs/adr/adr-012-spawning-processes.md),
 with a test that fails if a future ingest step forgets it.
+
+`poe load --rerank` measures the other configuration, the one the SLO was
+deliberately not written for: with a cross-encoder in the funnel every
+search scenario misses 500 ms at eight clients (607, 801 and 928 ms).
+That is a capacity limit rather than a defect — see "Ranking the results"
+for what it is and why more processes are not the answer — and
+re-ranking is off by default.
 
 The cure itself:
 [`wsindex.ingest.blame`](src/wsindex/ingest/blame.py) hands the batch to a

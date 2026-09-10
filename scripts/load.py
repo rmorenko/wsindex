@@ -449,17 +449,23 @@ class Server:
 
 
 @contextmanager
-def serving(corpus: Path, port: int) -> Iterator[Server]:
+def serving(corpus: Path, port: int, *, rerank: bool = False) -> Iterator[Server]:
     """Start a server on a workspace of its own; stop it afterwards.
 
     Its own workspace, in a temporary directory, for the reason
     `bench_corpus` gives about clones: a harness that can disturb
     somebody's real index is a harness with a bug waiting.
+
+    Args:
+        corpus: Repository the server will index.
+        port: Port to bind on loopback.
+        rerank: Turn on `[rank] enabled`. Off by default because that is
+            the product's default and the SLO was written for it.
     """
     token = "load-" + os.urandom(8).hex()
     with tempfile.TemporaryDirectory(prefix="wsindex-load-") as home:
         root = Path(home)
-        config = write_config(root, corpus)
+        config = write_config(root, corpus, rerank=rerank)
         log = root / "server.log"
         environ = {
             **os.environ,
@@ -492,7 +498,7 @@ def serving(corpus: Path, port: int) -> Iterator[Server]:
                     process.kill()
 
 
-def write_config(root: Path, corpus: Path) -> Path:
+def write_config(root: Path, corpus: Path, *, rerank: bool = False) -> Path:
     """A workspace config pointing at the corpus, with a token and no ticker."""
     from wsindex.config import Config, Provider, Repository
 
@@ -500,6 +506,12 @@ def write_config(root: Path, corpus: Path) -> Path:
     fast = os.environ.get("WSINDEX_LOAD_FAST") == "1"
     config = Config.default("load", provider=Provider.FAKE if fast else None)
     config.add_repo(Repository(id="corpus", path=str(corpus)))
+    if rerank:
+        # The second model, as a workspace turns it on. Nothing else
+        # about the run changes: the same scenarios, the same budgets,
+        # because a person waiting on an answer does not know which of
+        # these two configurations they are talking to.
+        config._data["rank"] = {"enabled": True}
     # No `interval`: a ticker would index in the middle of the idle
     # scenario and the "idle" number would be a different measurement
     # every run. Contention is a scenario here, not a background hum.
@@ -685,11 +697,14 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8917, help="Port to serve on")
     parser.add_argument("--json", type=Path, help="Also write the measurements as JSON")
     parser.add_argument("--only", nargs="*", choices=sorted(SCENARIOS), help="Run a subset")
+    parser.add_argument(
+        "--rerank", action="store_true", help="Serve with [rank] enabled (a second model)"
+    )
     args = parser.parse_args()
 
     corpus = bench_corpus()
     results: list[Result] = []
-    with serving(corpus, args.port) as server:
+    with serving(corpus, args.port, rerank=args.rerank) as server:
         print("  first index (cold) ...", file=sys.stderr, flush=True)
         client = server.client()
         try:
@@ -717,6 +732,10 @@ def main() -> int:
         # has its own. Left alone, the report labels a fake-embedder run
         # `real`, which is worse than no label.
         "embedder": "fake" if os.environ.get("WSINDEX_LOAD_FAST") == "1" else "real",
+        # In the header, not a footnote: two runs of this harness measure
+        # different products, and a table that does not say which is a
+        # table somebody will compare against the wrong one.
+        "rank": "on" if args.rerank else "off",
         "workers": str(args.workers),
     }
     verdicts = judge(results)
