@@ -609,7 +609,20 @@ answers without a token because a load balancer is not a reader.
 at it; the body is ignored, since "something changed" is all an
 incremental run needs to hear. OpenAPI comes free at `/openapi.json`.
 
-`/admin` is a page with the repo list, a sync button and the recent runs.
+`/admin` is a page with the repo list, a sync button, the recent runs and
+what gets asked — the same aggregate `wsindex stats` prints: how many
+searches, how long they took, the questions this corpus answered *worst*
+and the ones asked most.
+
+Aggregate, and that is a decision rather than a shortcut. The step this
+came from asked for analytics **per user**; there is no user to split by
+— the token belongs to the server, not to a person, and the search log
+deliberately records no identity — and inventing one would mean per-user
+authentication plus a log of other people's questions attributed to them.
+That is a privacy decision, not a feature of a page. So the page shows
+everyone's questions together, says so in those words, and names the two
+switches: `[stats] enabled = false` to stop recording,
+`wsindex stats --forget` to empty it.
 
 `GET /metrics` is Prometheus exposition — request counts and durations by
 route, indexing runs by outcome, chunks written, when the last run

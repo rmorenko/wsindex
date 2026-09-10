@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import contextlib
 import html
+from datetime import datetime
 from typing import Any
 
 from fastapi import FastAPI, Form, HTTPException
@@ -32,6 +33,7 @@ _STYLE = """
 body { font: 14px/1.5 -apple-system, system-ui, sans-serif; margin: 2rem auto; max-width: 60rem;
        color: #222; }
 h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2rem; }
+h3 { font-size: .9rem; margin: 1.2rem 0 .2rem; color: #555; font-weight: 600; }
 table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
 th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid #e5e5e5;
          vertical-align: top; }
@@ -81,6 +83,74 @@ def _run_row(entry: dict[str, Any]) -> list[str]:
     ]
 
 
+def _stats_panel(app: FastAPI) -> str:
+    """What was asked of this server, in aggregate and only in aggregate.
+
+    Step 39's wording asked for "analytics per user". There is no user to
+    split by — the token belongs to the server, not to a person, and
+    `stats.py` deliberately records no identity — and inventing one would
+    mean per-user authentication *and* a log of other people's questions
+    attributed to them, which is a privacy decision rather than a feature
+    of a page. So: the same numbers `wsindex stats` prints, aggregated,
+    with the page saying whose they are.
+
+    Never raises. The stats database is a side note; the repo list and
+    the sync button are the page, and a locked or corrupt log must cost a
+    panel rather than the whole screen.
+    """
+    log = getattr(app.state.pipeline, "stats", None)
+    if log is None:
+        return (
+            '<p class="note">Recording is off — <code>[stats] enabled = false</code>. '
+            "Turn it on and this fills up as people search.</p>"
+        )
+    try:
+        summary = log.summary(top=5)
+    except Exception as exc:  # pragma: no cover - a locked or unreadable database
+        return f'<p class="err">the search log could not be read: {html.escape(str(exc))}</p>'
+    if not summary.searches:
+        return '<p class="note">nothing recorded yet — run a search or two</p>'
+    since = datetime.fromtimestamp(summary.since).strftime("%Y-%m-%d") if summary.since else "?"
+    empty = f" · empty {summary.empty} ({summary.empty_rate:.0%})" if summary.empty else ""
+    # `html.escape` on every query, and it is not decoration: these
+    # strings came from whoever typed them, and this is the one place in
+    # the project that puts them in a page.
+    worst = _table(
+        ["best score", "query"],
+        [[f"{score:.3f}", _mono(query)] for query, score in summary.weakest],
+    )
+    most = _table(
+        ["times", "query"],
+        [[str(count), _mono(query)] for query, count in summary.common],
+    )
+    # Not the CLI's label, deliberately. `wsindex stats` says "per
+    # command, model load included" and is right to: the model loads
+    # lazily inside the first search of a fresh process, so a CLI search
+    # reads 2.3 s. This server loaded it once at startup, so the same
+    # field means the search itself — 8 ms, not seconds. One field, two
+    # honest readings, and the interface that shows it has to say which.
+    latency = (
+        f"p50 {summary.p50_ms:.0f} ms · p95 {summary.p95_ms:.0f} ms (per search; the model "
+        "is loaded once, at startup, so the first request after a restart is not in this)"
+    )
+    return f"""<p class="note">
+ {summary.searches} search(es) since {html.escape(since)} · picked {summary.picks}{empty}<br>
+ {latency}</p>
+<p class="note">Everyone's questions on this server, together — nobody's
+ separately, and no record of who asked. Switch it off with
+ <code>[stats] enabled = false</code>; empty it with
+ <code>wsindex stats --forget</code>.</p>
+<h3>Answered worst</h3>
+{worst}
+<h3>Asked most</h3>
+{most}"""
+
+
+def _mono(text: str) -> str:
+    """Someone's query, escaped, in the monospace span the page uses."""
+    return f'<span class="mono">{html.escape(text)}</span>'
+
+
 def render(app: FastAPI) -> str:
     """The whole page for the current state of the workspace."""
     config = app.state.config
@@ -121,6 +191,9 @@ def render(app: FastAPI) -> str:
 
 <h2>Recent runs</h2>
 {_table(["at", "kind", "seconds", "detail"], runs)}
+
+<h2>What gets asked</h2>
+{_stats_panel(app)}
 </body></html>"""
 
 

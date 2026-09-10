@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ from wsindex.pipeline import Pipeline
 from wsindex.server import create_app
 from wsindex.server.api import Busy, RunLog, Writer
 from wsindex.server.metrics import CONTENT_TYPE
+from wsindex.stats import SearchLog
 from wsindex.store import LanceDBStore
 
 PY_TEXT = "def greet(name):\n    return f'hello {name}'\n"
@@ -750,3 +752,103 @@ def test_metrics_need_the_token_although_healthz_does_not(secured: TestClient) -
     assert secured.get("/healthz").status_code == 200
     assert secured.get("/metrics").status_code == 401
     assert secured.get("/metrics", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
+# --- what gets asked, on the page ------------------------------------------
+#
+# Step 39's wording asked for "analytics per user". There is no user to
+# split by, and inventing one would mean per-user authentication and a
+# log of other people's questions attributed to them. So the panel is the
+# aggregate, and these tests hold it to that.
+
+
+@pytest.fixture
+def recording(workspace: Path, pipeline: Pipeline) -> Iterator[tuple[TestClient, SearchLog]]:
+    """A server whose pipeline keeps a search log, as a configured one does.
+
+    Built with the log rather than given one afterwards: `Pipeline` is a
+    frozen dataclass, which is what stops a server from quietly swapping
+    its own engine out at run time.
+    """
+    with SearchLog(workspace / "idx") as log:
+        recorded = replace(pipeline, stats=log)
+        with TestClient(create_app(pipeline_factory=lambda: recorded)) as client:
+            yield client, log
+
+
+def test_the_panel_reports_what_was_asked(
+    recording: tuple[TestClient, SearchLog],
+) -> None:
+    client, log = recording
+    for _ in range(3):
+        log.searched("how are chunks deduplicated", k=5, repo=None, hits=3, top_score=0.6, ms=8.0)
+    log.searched("how do i bake sourdough", k=5, repo=None, hits=1, top_score=0.19, ms=9.0)
+
+    page = client.get("/admin").text
+
+    assert "4 search(es)" in page
+    assert "how are chunks deduplicated" in page
+    assert "0.190" in page, "the weakest answer is named, which is the point of the panel"
+
+
+def test_a_query_cannot_put_script_on_the_page(
+    recording: tuple[TestClient, SearchLog],
+) -> None:
+    """The one place in the project where somebody's text becomes a page.
+
+    A query is arbitrary input from whoever typed it — over HTTP, from an
+    agent, out of the shell — and it lands in the admin page's tables. The
+    repo-id test above guards a string an operator wrote; this guards a
+    string a stranger with the token wrote, which is a different threat.
+    """
+    client, log = recording
+    log.searched("<script>alert(1)</script>", k=5, repo=None, hits=0, top_score=None, ms=8.0)
+
+    page = client.get("/admin").text
+
+    assert "<script>alert(1)</script>" not in page
+    assert "&lt;script&gt;" in page
+
+
+def test_the_panel_says_so_when_recording_is_off(client: TestClient) -> None:
+    # The default pipeline in these tests keeps no log, which is exactly
+    # what `[stats] enabled = false` produces.
+    page = client.get("/admin").text
+
+    assert "Recording is off" in page
+    assert "[stats] enabled = false" in page
+
+
+def test_an_empty_log_says_nothing_recorded_rather_than_showing_zeroes(
+    recording: tuple[TestClient, SearchLog],
+) -> None:
+    client, _ = recording
+
+    assert "nothing recorded yet" in client.get("/admin").text
+
+
+def test_the_panel_names_nobody(recording: tuple[TestClient, SearchLog]) -> None:
+    # The decision, as a test: there is no user column, no "by user"
+    # heading, and the page says whose questions these are instead of
+    # implying they are attributable.
+    client, log = recording
+    log.searched("where is the store", k=5, repo=None, hits=2, top_score=0.5, ms=8.0)
+
+    page = client.get("/admin").text
+
+    assert "no record of who asked" in page
+    assert "per user" not in page.lower()
+
+
+def test_a_broken_log_costs_a_panel_not_the_page(
+    recording: tuple[TestClient, SearchLog],
+) -> None:
+    # The repo list and the sync button are the page; the search log is a
+    # side note, and a locked database must not take the screen down.
+    client, log = recording
+    log.close()
+
+    page = client.get("/admin").text
+
+    assert "could not be read" in page
+    assert "Sync and re-index" in page
