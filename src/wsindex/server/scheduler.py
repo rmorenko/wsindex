@@ -23,12 +23,15 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException
 
 from wsindex.ingest import GitCommandError, NotAGitRepositoryError, sync_repo
 from wsindex.snapshot import materialize
+
+if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
+    from wsindex.pipeline import IndexReport
 
 log = logging.getLogger(__name__)
 
@@ -55,20 +58,66 @@ def sync_and_index(app: FastAPI) -> dict[str, Any]:
             one pass, so it stops at the first. Recorded before it is
             re-raised, or a scheduled run would fail invisibly.
     """
-    from wsindex.server.api import Busy  # noqa: F401  (documented in Raises)
+    from wsindex.server.api import Busy
 
     started = time.time()
     clock = time.monotonic()
     synced: dict[str, str] = {}
+    metrics = app.state.metrics
+    try:
+        report = _sync_then_index(app, synced, started)
+    except Busy:
+        # Counted here rather than at the two callers, so that a
+        # scheduled tick skipped and a hook refused land on the same
+        # series: both mean the same thing to whoever reads the graph.
+        # `held()` is a generator context manager, so this has to wrap
+        # the `with` — the exception arrives on `__enter__`, not on the
+        # call that builds it.
+        metrics.indexed("busy")
+        raise
+    except NotAGitRepositoryError:
+        metrics.indexed("error")
+        raise
+    elapsed = time.monotonic() - clock
+    metrics.indexed("ok", seconds=elapsed, written=report.written, deleted=report.deleted)
+
+    from wsindex.server.api import run_detail
+
+    detail = {**run_detail(report, seconds=round(elapsed, 2)), "synced": synced}
+    app.state.runs.record("sync", started, detail)
+    return detail
+
+
+def _sync_then_index(app: FastAPI, synced: dict[str, str], started: float) -> IndexReport:
+    """Pull every repo, then index once — all under the one write lock.
+
+    Split out so that `sync_and_index` reads as what it records rather
+    than as a loop with recording wrapped around it.
+
+    Args:
+        app: The application, for its pipeline, lock and run log.
+        synced: Filled in with repo id -> outcome as each is pulled.
+        started: Wall-clock start, for the run log entry on failure.
+
+    Returns:
+        The indexing report.
+
+    Raises:
+        Busy: A run is already in progress.
+        NotAGitRepositoryError: A configured path is not a checkout.
+    """
     with app.state.writer.held():
         config = app.state.config
         for repo in config.repos:
             if repo.is_snapshot:
                 try:
-                    report = materialize(
+                    # Not `report`: that name belongs to the indexing run
+                    # below, and one of the two would have shadowed the
+                    # other in a function that now returns one of them.
+                    written = materialize(
                         Path(repo.path), urls=list(repo.urls), specs=config.connectors
                     )
-                    synced[repo.id] = report.summary()
+                    synced[repo.id] = written.summary()
                 except (ValueError, GitCommandError) as exc:
                     log.warning("snapshot %s failed: %s", repo.id, exc)
                     synced[repo.id] = f"failed — {exc}"
@@ -79,15 +128,10 @@ def sync_and_index(app: FastAPI) -> dict[str, Any]:
                     log.warning("sync %s failed: %s", repo.id, exc)
                     synced[repo.id] = f"failed — {exc}"
         try:
-            report = app.state.pipeline.index()
+            return app.state.pipeline.index()  # type: ignore[no-any-return]
         except NotAGitRepositoryError as exc:
             app.state.runs.record("sync", started, {"synced": synced, "error": str(exc)})
             raise
-    from wsindex.server.api import run_detail
-
-    detail = {**run_detail(report, seconds=round(time.monotonic() - clock, 2)), "synced": synced}
-    app.state.runs.record("sync", started, detail)
-    return detail
 
 
 class Ticker:

@@ -32,11 +32,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from wsindex.ingest import NotAGitRepositoryError
 from wsindex.model import Kind, SearchFilter
 from wsindex.server.admin import mount_admin
+from wsindex.server.metrics import CONTENT_TYPE, Meter, Metrics
 from wsindex.server.scheduler import mount_scheduler
 
 if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
@@ -215,6 +216,26 @@ def create_app(
         """
         return {"status": "ok"}
 
+    @app.get("/metrics", dependencies=guarded, response_class=PlainTextResponse)
+    def metrics() -> PlainTextResponse:
+        """Prometheus exposition, behind the token — unlike `/healthz`.
+
+        Behind it because these are not health, they are the shape of the
+        workspace: how many repos, how much was indexed, when. A probe
+        gets `/healthz` for free; a scraper is a reader and carries a
+        token like every other reader (`bearer_token_file` in the scrape
+        config). Safe methods skip the origin check, so a browser tab
+        cannot make this a CSRF.
+        """
+        return PlainTextResponse(
+            app.state.metrics.render(
+                version=app.version,
+                indexing=app.state.writer.busy,
+                repos=len(app.state.config.repos),
+            ),
+            media_type=CONTENT_TYPE,
+        )
+
     @app.get("/search", dependencies=guarded)
     def search(
         q: Annotated[str, Query(description="Natural-language query")],
@@ -285,6 +306,13 @@ def _assemble(pipeline_factory: Callable[[], Pipeline] | None, token: str | None
     app.state.writer = Writer()
     app.state.runs = RunLog()
     app.state.token = token
+    app.state.metrics = Metrics()
+    # Outermost, so it times what the caller waited for rather than what
+    # the handler did: authorization, validation and serialisation are
+    # all part of the latency somebody feels. It also means a 401 is
+    # counted, which is how a misconfigured client shows up as traffic
+    # instead of as silence.
+    app.add_middleware(Meter, metrics=app.state.metrics)
     return app
 
 
@@ -403,11 +431,19 @@ def run_index(app: FastAPI) -> dict[str, Any]:
         with app.state.writer.held():
             report = app.state.pipeline.index()
     except Busy as exc:
+        # A refusal, not a failure: the one-writer rule doing its job.
+        # Counted apart from `error` so that a dashboard showing a lot of
+        # these reads as "the scheduler ticks faster than a run takes",
+        # which is a tuning problem, not an outage.
+        app.state.metrics.indexed("busy")
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except NotAGitRepositoryError as exc:
+        app.state.metrics.indexed("error")
         app.state.runs.record("index", started, {"error": str(exc)})
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    detail = run_detail(report, seconds=round(time.monotonic() - clock, 2))
+    elapsed = time.monotonic() - clock
+    app.state.metrics.indexed("ok", seconds=elapsed, written=report.written, deleted=report.deleted)
+    detail = run_detail(report, seconds=round(elapsed, 2))
     app.state.runs.record("index", started, detail)
     return detail
 

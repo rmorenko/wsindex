@@ -92,6 +92,7 @@ dev = [
   # underline a working config in somebody's editor.
   "jsonschema>=4.25,<5",
   "types-jsonschema>=4.25",
+  "prometheus-client>=0.26.0",
 ]
 
 [tool.uv]
@@ -212,6 +213,10 @@ pytest examples/wsindex-lang-lua/tests examples/wsindex-connector-notion/tests
 [tool.poe.tasks.bench]
 help = "Performance benchmarks on the acceptance corpus (--save/--baseline to compare runs)"
 cmd = "python scripts/bench.py"
+
+[tool.poe.tasks.load]
+help = "Load the HTTP server and judge it against the SLO fixed in scripts/load.py"
+cmd = "python scripts/load.py"
 
 [tool.poe.tasks.acceptance]
 help = "Full MVP acceptance on a real corpus, writes acceptance_report.md"

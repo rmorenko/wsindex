@@ -594,6 +594,60 @@ incremental run needs to hear. OpenAPI comes free at `/openapi.json`.
 
 `/admin` is a page with the repo list, a sync button and the recent runs.
 
+`GET /metrics` is Prometheus exposition — request counts and durations by
+route, indexing runs by outcome, chunks written, when the last run
+succeeded. Behind the token, unlike `/healthz`: a probe is not a reader,
+and these describe the workspace. **No query text is ever a label**, which
+is both a cardinality rule and the same privacy rule `wsindex stats`
+follows. The 500 ms bucket is the SLO below, so compliance is a division
+of two scraped series rather than a recording rule:
+
+```
+wsindex_http_request_seconds_bucket{route="/search",method="GET",le="0.5"} 238
+wsindex_index_runs_total{outcome="busy"} 7
+wsindex_last_index_success_timestamp_seconds 1.7889e+09
+```
+
+**How much load it takes.** `poe load` starts a real server on a real
+corpus and judges it against an SLO fixed *before* the first run — p95
+under 500 ms, p99 under 1 s, no failed requests — the same discipline the
+acceptance criteria use, and for the same reason. Measured on an M-series
+laptop with eight concurrent clients:
+
+| Scenario                          |   p50 |     p95 | verdict                |
+| --------------------------------- | ----: | ------: | ---------------------- |
+| search, idle server               | 54 ms |   66 ms | PASS                   |
+| search during an ordinary sync    | 83 ms |  218 ms | PASS                   |
+| search during a **full** re-index | 98 ms | 1459 ms | **FAIL**               |
+| 8 simultaneous `POST /index`      |     — |       — | PASS: 1 run, 7 refused |
+
+The everyday path has eight times the headroom it needs. A full re-index
+— a first index, or an index directory that lost its state file — misses
+the budget by 3x, and what causes it is measured rather than guessed: the
+blame pass runs eight `git blame` processes at once, and **spawning from
+the process that holds the embedding model is where the time goes**. 117
+spawns of `git --version` — a command that does nothing — block a search
+for 1.4 s just the same, and eight threads doing it get no parallelism at
+all (9.7 ms per spawn either way). Three other explanations were measured
+and ruled out: the embedding batch size (chopping `encode` to 32 changes
+nothing), torch's thread count (one thread stalls the same 1.8 s) and the
+GIL (a continuous monitor loses 53 ms at worst).
+
+*Why* that process is a bad one to fork from is not established here. A
+1 GB single allocation does not reproduce it and four thousand small
+mappings barely do (0.80 s → 0.89 s), so "it has more memory regions" is
+a guess, not a finding. What is a finding is the shape, and the cure
+follows from it: let a small child do the spawning. One stdlib-only
+helper running the same eight-way pool makes the storm 27% faster (0.49 s
+→ 0.36 s) and puts search back at its idle latency (487.8 ms → 8.2 ms p50,
+14.2 ms worst) — no trade-off in either direction, and free when nothing
+is searching. Two cures that *were* trades got measured and dropped:
+`nice` does nothing (2079 ms → 2143 ms), and fewer blame workers work (2
+workers: p95 284 ms) at 48% of indexing throughput.
+
+All of this is macOS. Linux resolves `fork` differently and is not
+measured here.
+
 **It writes down what it did.** `serve` turns on uvicorn's access log
 and the library's own records; every CLI command stays silent, because a
 log line is not an interface for somebody watching a terminal. The

@@ -27,6 +27,7 @@ from wsindex.embed import FakeEmbedder
 from wsindex.pipeline import Pipeline
 from wsindex.server import create_app
 from wsindex.server.api import Busy, RunLog, Writer
+from wsindex.server.metrics import CONTENT_TYPE
 from wsindex.store import LanceDBStore
 
 PY_TEXT = "def greet(name):\n    return f'hello {name}'\n"
@@ -679,3 +680,73 @@ def test_an_index_run_reports_why_it_was_full(client: TestClient) -> None:
     assert detail["full_repos"] == {"repo1": "a first index"}
     assert detail["unreadable"] == []
     assert detail["seconds"] >= 0
+
+
+# --- metrics, where they meet the real application ------------------------
+#
+# The format and the counting are `test_metrics.py`'s. What is here is
+# the wiring: that the endpoint exists, that it is guarded, that real
+# traffic feeds it, and that nothing private rides along.
+
+
+def samples(body: str, name: str) -> dict[tuple[tuple[str, str], ...], float]:
+    """Every sample called `name` in an exposition body, keyed by its labels."""
+    from prometheus_client.parser import text_string_to_metric_families
+
+    return {
+        tuple(sorted(sample.labels.items())): sample.value
+        for family in text_string_to_metric_families(body)
+        for sample in family.samples
+        if sample.name == name
+    }
+
+
+def test_metrics_are_served_in_the_format_a_scraper_expects(client: TestClient) -> None:
+    answer = client.get("/metrics")
+
+    assert answer.status_code == 200
+    assert answer.headers["content-type"] == CONTENT_TYPE
+    assert samples(answer.text, "wsindex_build_info")[(("version", "0.1.0"),)] == 1.0
+
+
+def test_a_search_over_http_is_counted_by_route(client: TestClient) -> None:
+    client.post("/index")
+    client.get("/search?q=greet")
+
+    counted = samples(client.get("/metrics").text, "wsindex_http_requests_total")
+
+    assert counted[(("method", "GET"), ("route", "/search"), ("status", "200"))] == 1
+    runs = samples(client.get("/metrics").text, "wsindex_index_runs_total")
+    assert runs[(("outcome", "ok"),)] == 1
+
+
+def test_no_query_text_reaches_the_metrics(client: TestClient) -> None:
+    """The privacy rule, one endpoint further out than `stats.py`.
+
+    The search log keeps what was asked: locally, and switchable off. A
+    metrics endpoint is scraped by whoever runs the cluster, so a `query`
+    label would quietly hand them a copy of that log — as well as adding
+    a series per distinct question, which is how a metrics endpoint eats
+    a server's memory.
+    """
+    client.post("/index")
+    client.get("/search", params={"q": "how do i rotate the production key"})
+
+    assert "rotate the production key" not in client.get("/metrics").text
+
+
+def test_an_unmatched_path_does_not_become_a_label(client: TestClient) -> None:
+    client.get("/there-is-no-such-endpoint")
+
+    counted = samples(client.get("/metrics").text, "wsindex_http_requests_total")
+
+    assert (("method", "GET"), ("route", "other"), ("status", "404")) in counted
+    assert not any("there-is-no-such" in str(labels) for labels in counted)
+
+
+def test_metrics_need_the_token_although_healthz_does_not(secured: TestClient) -> None:
+    # A probe is not a reader; a scraper is. Repo counts, index sizes and
+    # when the last run happened all describe the workspace.
+    assert secured.get("/healthz").status_code == 200
+    assert secured.get("/metrics").status_code == 401
+    assert secured.get("/metrics", headers={"Authorization": "Bearer s3cret"}).status_code == 200
