@@ -162,15 +162,47 @@ def _blame(root: Path, rel_path: str) -> bytes | None:
         return None
 
 
-BLAME_WORKERS = 8
+BLAME_WORKERS = 16
 """How many `git blame` processes run at once.
 
-Blame is per file by nature, so a run forks once per indexed file, and
-waiting for them one at a time was 91% of an indexing run. The work
-happens in another process and `subprocess` releases the GIL while it
-does, so threads spend that wait in parallel. Measured over 122 files:
-one worker 2.20 s, eight 0.94 s, sixteen 1.16 s — past the machine's
-cores the forks only compete with each other."""
+Blame is per file by nature, so a run starts one process per indexed
+file, and waiting for them one at a time was 91% of an indexing run.
+
+**Re-measured after the pass moved into a child (ADR-12), and the old
+number did not survive it.** Eight came from a sweep taken when the forks
+happened in the engine process, where they cost 9.7 ms each and got no
+parallelism: one worker 2.20 s, eight 0.94 s, sixteen 1.16 s — sixteen
+was *worse*, so eight looked like the top of a curve. In the child the
+forks are cheap and the curve keeps going: over the same corpus, a full
+pass takes 4.31 s at one worker, 1.21 s at eight, 1.02 s at sixteen and
+0.93 s at thirty-two. A constant justified by a measurement that no
+longer applies is a constant nobody has checked.
+
+**And on the case that dominates it barely matters, which is the more
+useful half of the answer.** That sweep was a full re-index: the store
+already held the chunks, so nothing was embedded and the parent sat idle
+while blame ran. A *cold* index — the number anyone actually waits
+through — has the parent embedding thousands of chunks, and there eight,
+sixteen and thirty-two come out identical: 4.80 s, 4.80 s and 4.75 s,
+against 5.06 s at four. So this is not a tuning knob worth anybody's
+attention; it is a constant that had to stop citing a measurement that no
+longer held.
+
+Sixteen rather than thirty-two, because the sweep was repeated under
+different CPU limits and the ends are where the danger is. Blaming 178
+files in a container: at two CPUs the best is eight (0.32 s) and sixteen
+costs 0.42; at four and at eight CPUs the best is sixteen (0.22 s).
+Sixty-four is catastrophic everywhere — 2.44 s at two CPUs, seven times
+the optimum. Between eight and thirty-two everything sits within about
+30% of best on every machine tried, so this picks the middle of a wide
+flat band rather than the peak on one laptop.
+
+**Deliberately not derived from `os.cpu_count()`**, which is the obvious
+idea and is measurably wrong where it would matter most: inside a
+container limited to two CPUs it still reports fourteen. An
+auto-tuned value would be confidently wrong on exactly the CI runners and
+Docker hosts that need it, and it would make two benchmark runs
+incomparable for a reason nobody could see."""
 
 HELPER_FROM = 4
 """How many files it takes before the batch is worth a child process.
@@ -181,10 +213,12 @@ process holding the model costs ~9.7 ms and gets no parallelism from
 threads; from the small child the same spawns do parallelise across
 `BLAME_WORKERS`. So the child wins once
 
-    N * 9.7  >  21 + N * 9.7 / 8
+    N * 9.7  >  21 + N * 9.7 / BLAME_WORKERS
 
-which is N > 2.5. Four, for the margin — and below it the in-process
-path is the cheaper one, not merely the older one."""
+which is N > 2.3 at sixteen workers (it was 2.5 at eight — the threshold
+barely moves, because the child's start dominates it). Four, for the
+margin, and below it the in-process path is the cheaper one rather than
+merely the older one."""
 
 
 def blame_map(root: Path, rel_paths: Sequence[str]) -> dict[str, dict[int, str]]:
