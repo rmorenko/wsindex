@@ -1076,3 +1076,53 @@ def test_an_unreachable_links_database_is_a_sentence(
     assert result.exit_code == 1
     assert "cannot reach the links database" in result.output
     assert "Traceback" not in result.output
+
+
+# --- the local record -----------------------------------------------------
+
+
+def test_stats_says_so_when_nothing_is_recorded(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+
+    assert "nothing recorded yet" in runner.invoke(app, ["stats"]).output
+
+
+def test_searching_is_recorded_and_reported(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    runner.invoke(app, ["search", "how does greet work"])
+    runner.invoke(app, ["search", "how does greet work"])
+
+    output = runner.invoke(app, ["stats"]).output
+
+    assert "2 search(es)" in output
+    assert "2x  'how does greet work'" in output
+    assert "answered worst:" in output
+
+
+def test_stats_can_be_emptied(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    runner.invoke(app, ["search", "anything"])
+
+    forgot = runner.invoke(app, ["stats", "--forget"])
+
+    assert "forgot 1 recorded search" in forgot.output
+    assert "nothing recorded yet" in runner.invoke(app, ["stats"]).output
+
+
+def test_recording_can_be_turned_off(workspace: Path) -> None:
+    # A log somebody cannot switch off is a log they did not agree to.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(config.read_text() + "\n[stats]\nenabled = false\n")
+    runner.invoke(app, ["add-repo", "r", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+    runner.invoke(app, ["search", "anything"])
+
+    output = runner.invoke(app, ["stats"]).output
+
+    assert "recording is off" in output
+    assert "nothing recorded yet" in output

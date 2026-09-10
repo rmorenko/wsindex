@@ -92,6 +92,17 @@
         }
       }
     },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Record searches locally for `wsindex stats`. Nothing ever leaves the machine."
+        }
+      }
+    },
     "rank": {
       "type": "object",
       "additionalProperties": false,

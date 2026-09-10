@@ -321,6 +321,22 @@ class Config:
         return {str(prefix): str(template) for prefix, template in raw.items()}
 
     @property
+    def stats_enabled(self) -> bool:
+        """Whether searches are written to the local log.
+
+            [stats]
+            enabled = false
+
+        On by default, because the quality loop it feeds needs data and
+        the data is already on this machine — it sits in the same 0700
+        directory as the index, which holds the source code itself. Off
+        is one line, and `wsindex stats --forget` empties it. What makes
+        the default defensible is that nothing leaves: strictly local is
+        a rule here, with a test that a search opens no sockets.
+        """
+        return bool(self._setting("stats", "enabled", True))
+
+    @property
     def links_backend(self) -> LinksBackend:
         """Where the link store lives: `sqlite` (default) or `postgres`.
 

@@ -64,6 +64,7 @@ from wsindex.run import (
     _why_full,
     _Written,
 )
+from wsindex.stats import SearchLog
 from wsindex.store import VectorStore
 
 _CANDIDATE_MULTIPLIER = 4
@@ -100,6 +101,8 @@ class Pipeline:
         reranker: Optional second stage of the search funnel. Present
             means `search` over-fetches candidates and re-scores them;
             None means the store's own ranking is the answer.
+        stats: Where searches are recorded, or None to record nothing.
+            Local by construction and by rule — see `wsindex.stats`.
         links: Where code-to-config edges are recorded, or None to skip
             link extraction entirely. When present, `index` writes the
             links a file yields and — this is the part that matters —
@@ -111,6 +114,7 @@ class Pipeline:
     config: Config = field(default_factory=Config)
     reranker: Reranker | None = None
     links: LinkStore | None = None
+    stats: SearchLog | None = None
 
     def index(self, *, progress: Callable[[str], None] | None = None) -> IndexReport:
         """Index every repo into its own dataset (dataset name = repo id).
@@ -576,6 +580,7 @@ class Pipeline:
         Raises:
             ValueError: `repo` is set but not present in the config.
         """
+        started = time.perf_counter()
         repos = self._scope(repo)
         # Before reading, not after: a store holds the version it opened
         # at, so a long-lived process would answer from the corpus as it
@@ -593,7 +598,24 @@ class Pipeline:
         if self.reranker:
             scores = self.reranker.rank(query, [hit.text for hit in all_hits])
             all_hits = [replace(h, score=s) for h, s in zip(all_hits, scores, strict=True)]
-        return sorted(all_hits, key=lambda h: h.score, reverse=True)[:k]
+        best = sorted(all_hits, key=lambda h: h.score, reverse=True)[:k]
+        if self.stats is not None:
+            # After the answer is computed, and unable to affect it: a
+            # note about a question must not be able to break answering
+            # it. `searched` swallows its own failures for the same
+            # reason. Measured at 0.05 ms against an 8 ms search —
+            # 0.7%, which is below the run-to-run noise of the search
+            # itself.
+            self.stats.searched(
+                query,
+                k=k,
+                repo=repo,
+                hits=len(best),
+                top_score=best[0].score if best else None,
+                ms=round((time.perf_counter() - started) * 1000, 2),
+                reranked=self.reranker is not None,
+            )
+        return best
 
     def _scope(self, repo: str | None) -> list[Repository]:
         """The repos a query covers, or a named error for an unknown id."""

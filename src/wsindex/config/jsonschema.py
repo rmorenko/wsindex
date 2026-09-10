@@ -178,6 +178,20 @@ def _links() -> dict[str, Any]:
     )
 
 
+def _stats() -> dict[str, Any]:
+    """`[stats]`: whether searches are written to the local log."""
+    return _section(
+        {
+            "enabled": {
+                "type": "boolean",
+                "default": True,
+                "description": "Record searches locally for `wsindex stats`. "
+                "Nothing ever leaves the machine.",
+            }
+        }
+    )
+
+
 def _server() -> dict[str, Any]:
     """`[server]`: the token's variable name, and the sync interval."""
     return _section(
@@ -246,6 +260,7 @@ def build() -> dict[str, Any]:
             "embeddings": _embeddings(),
             "store": _store(),
             "links": _links(),
+            "stats": _stats(),
             "rank": _rank(),
             "server": _server(),
             "references": {

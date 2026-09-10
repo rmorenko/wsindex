@@ -11,6 +11,7 @@ from wsindex.config import Backend, Config, LinksBackend, Provider, Repository, 
 from wsindex.ingest import SKIP_REASONS
 from wsindex.ingest.git_state import STATE_FILE, IndexState
 from wsindex.paths import user_config_file, workspace_config_path
+from wsindex.stats import SearchLog
 
 
 def init(
@@ -219,3 +220,60 @@ def explain(
             f"  {report.chunks} chunk(s), but the {report.lang} grammar reported errors — "
             "the parts it could not read are indexed as text, not definitions"
         )
+
+
+def stats(
+    forget: Annotated[
+        bool, typer.Option("--forget", help="Delete everything recorded, then say how much")
+    ] = False,
+    top: Annotated[int, typer.Option("--top", help="How many queries to name")] = 5,
+) -> None:
+    """What this machine has asked, and how often it got nothing.
+
+    The quality loop: real questions beat invented ones for deciding
+    whether re-ranking earns its keep or a hybrid index would. The
+    acceptance criteria are ten queries somebody made up; this is
+    however many the tool was actually asked.
+
+    **Strictly local.** Nothing here leaves the machine, nothing is
+    aggregated anywhere, and a test asserts a search opens no sockets.
+    The file lives in the same 0700 directory as the index. Turn it off
+    with `[stats] enabled = false`, empty it with `--forget`.
+    """
+    config = config_or_default()
+    require_config_file(config)
+    with SearchLog(config.index_dir) as log:
+        if forget:
+            typer.echo(f"forgot {log.forget()} recorded search(es)")
+            return
+        summary = log.summary(top=top)
+    if not config.stats_enabled:
+        typer.echo("note: recording is off ([stats] enabled = false)", err=True)
+    if not summary.searches:
+        typer.echo("nothing recorded yet — run a search or two")
+        return
+    when = datetime.fromtimestamp(summary.since).strftime("%Y-%m-%d") if summary.since else "?"
+    typer.echo(f"{summary.searches} search(es) since {when}, picked {summary.picks}")
+    # Labelled, because the number is honest and reads wrong without it:
+    # a CLI search is a fresh process, so this is mostly the model load.
+    # `poe bench` measures the search alone.
+    typer.echo(
+        f"waited: p50 {summary.p50_ms / 1000:.1f}s  p95 {summary.p95_ms / 1000:.1f}s "
+        "(per command, model load included)"
+    )
+    if summary.empty:
+        # Rare: semantic search answers something unless a filter
+        # excluded everything. Worth naming when it does happen.
+        typer.echo(f"empty: {summary.empty} ({summary.empty_rate:.0%})")
+    if summary.weakest:
+        # The questions the corpus could not really answer — invisible
+        # from anywhere else, and the ones worth reading. Ranked rather
+        # than thresholded: the gap between an answered query and an
+        # unanswerable one belongs to the model, not to this file.
+        typer.echo("answered worst:")
+        for query, score in summary.weakest:
+            typer.echo(f"  {score:.3f}  {query!r}")
+    if summary.common:
+        typer.echo("asked most:")
+        for query, count in summary.common:
+            typer.echo(f"  {count:>4}x  {query!r}")

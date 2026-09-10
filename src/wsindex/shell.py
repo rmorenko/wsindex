@@ -203,6 +203,7 @@ class _Session:
         self.pipeline = pipeline
         self.out = out
         self.hits: list[Hit] = []
+        self.last_query = ""
 
     def handle(self, line: str) -> bool:
         """Answer one line. False means the session should end.
@@ -229,6 +230,7 @@ class _Session:
         """Parse a line as a query, run it, show what came back."""
         try:
             query = parse(line)
+            self.last_query = query.text
             self.hits = list(
                 self.pipeline.search(query.text, k=query.k, repo=query.repo, filters=query.filters)
             )
@@ -267,6 +269,15 @@ class _Session:
         chosen = self._chosen(argument)
         if chosen is None:
             return True
+        # The only signal in this project that anybody found what they
+        # were looking for. A search tells you what came back; a pick
+        # tells you which of it was right, and there is nowhere else to
+        # learn that. It is why the shell was worth building before the
+        # analytics were.
+        if self.pipeline.stats is not None:
+            self.pipeline.stats.picked(
+                self.last_query, rank=self.hits.index(chosen) + 1, chunk_id=chosen.native_id
+            )
         if verb == ":open":
             self.open(chosen)
         else:

@@ -654,6 +654,53 @@ The index directory is created `0700`. Everything a workspace knows is
 in it, and on a shared machine it used to be readable by every other
 account.
 
+## What you asked, and what it could not answer
+
+`wsindex stats` reads a log this machine keeps of its own searches — the
+quality loop the roadmap asks for, because ten invented acceptance
+queries decide less than however many the tool was actually asked.
+
+```console
+$ wsindex stats
+14 search(es) since 2026-09-10, picked 3
+waited: p50 2.3s  p95 2.4s (per command, model load included)
+answered worst:
+  0.190  'how do i bake sourdough bread'
+  0.233  'kubernetes ingress controller tls'
+asked most:
+     4x  'how are chunks deduplicated'
+```
+
+The metric the plan wanted was a zero-result rate, and it reads 0%
+forever: semantic search answers *something* whatever you ask it.
+Measured on the real model, an answered query tops out at 0.53–0.61 and
+one with no answer at 0.19–0.34 — so what is worth reading is the
+**weakest** answers, ranked. No threshold, deliberately: that gap
+belongs to this model and this corpus, and a ranking does not go stale.
+
+The latency is labelled because it is honest and reads wrong without the
+label: every `wsindex search` is a fresh process, so it is mostly the
+model load. `poe bench` measures the search itself, at 8 ms. The gap
+between those two numbers is the argument for `wsindex shell`.
+
+A pick — opening a hit from the shell — is the only signal in this
+project that somebody *found* what they wanted, which is why the shell
+was worth building before this was.
+
+**Strictly local, and tested rather than promised.** The log is a
+SQLite file in the same `0700` directory as the index, and a test
+asserts a search opens no sockets. Deliberately not in the link store:
+links may be a shared Postgres since ADR-11, and one person's questions
+do not belong in a team's database.
+
+```toml
+[stats]
+enabled = false     # default: true
+```
+
+`wsindex stats --forget` empties it. A log you cannot switch off or
+empty is a log you did not agree to.
+
 ## Reclaiming space
 
 Deleting a chunk hides it immediately but does not free its bytes, so an

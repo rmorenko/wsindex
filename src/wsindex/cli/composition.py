@@ -24,6 +24,7 @@ from wsindex.links import LinkStore
 from wsindex.paths import ConfigLocation, make_index_dir, resolve_cache_dir, searched_paths
 from wsindex.pipeline import Pipeline
 from wsindex.rank.reranker import CrossEncoderReranker
+from wsindex.stats import SearchLog
 from wsindex.store import LanceDBStore, VectorStore
 
 
@@ -104,6 +105,7 @@ def build_pipeline() -> Pipeline:
         state_dir=config.index_dir,
         reranker=reranker,
         links=build_links(config),
+        stats=SearchLog(config.index_dir) if config.stats_enabled else None,
     )
 
 

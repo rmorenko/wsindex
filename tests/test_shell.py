@@ -173,6 +173,8 @@ def drive(
         def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
             return ()
 
+        stats = None
+
     run(_Pipeline(), history_dir=tmp_path / "state")  # type: ignore[arg-type]
     return stream.getvalue()
 
@@ -280,6 +282,8 @@ class _NeverSearched:
     def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
         return ()
 
+    stats = None
+
 
 def test_an_unknown_repo_is_a_sentence_not_a_crash(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -299,6 +303,8 @@ def test_an_unknown_repo_is_a_sentence_not_a_crash(
 
         def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
             return ()
+
+        stats = None
 
     run(_Strict(), history_dir=tmp_path / "state")  # type: ignore[arg-type]
 

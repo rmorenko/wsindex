@@ -31,7 +31,7 @@ from wsindex.cli.external import fetch
 from wsindex.cli.indexing import compact, index, sync
 from wsindex.cli.interfaces import mcp, serve, shell
 from wsindex.cli.searching import refs, search, why
-from wsindex.cli.workspace import add_repo, explain, init, status
+from wsindex.cli.workspace import add_repo, explain, init, stats, status
 from wsindex.config import Config
 
 DEBUG_ENV = "WSINDEX_DEBUG"
@@ -64,6 +64,7 @@ for command in (
     add_repo,
     status,
     explain,
+    stats,
     index,
     search,
     sync,
