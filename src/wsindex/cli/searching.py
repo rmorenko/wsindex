@@ -5,8 +5,13 @@ from typing import Annotated
 
 import typer
 
-from wsindex.cli.composition import build_pipeline, config_or_default, require_config_file
-from wsindex.links import KIND_LABELS, LinkKind, LinkStore
+from wsindex.cli.composition import (
+    build_links,
+    build_pipeline,
+    config_or_default,
+    require_config_file,
+)
+from wsindex.links import KIND_LABELS, LinkKind
 from wsindex.model import Kind, SearchFilter
 from wsindex.pipeline import Authorship
 from wsindex.ui import render_hits
@@ -83,7 +88,7 @@ def refs(name: str) -> None:
     """
     config = config_or_default()
     require_config_file(config)
-    with LinkStore(config.index_dir) as links:
+    with build_links(config) as links:
         edges = links.by_name(name)
     if not edges:
         typer.echo(f"no links named {name!r}")

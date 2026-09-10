@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from types import TracebackType
+from typing import Any
 
 from wsindex.paths import make_index_dir
 
@@ -43,6 +44,44 @@ _COLUMNS = {
 """The table's columns, in order, so `_migrate` can tell what an older
 database is missing. Kept beside the CREATE rather than parsed out of it:
 two spellings of the same truth, but the alternative is parsing SQL."""
+
+
+_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS links (
+        src_chunk_id TEXT NOT NULL,
+        kind         TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        line         INTEGER NOT NULL,
+        dst_chunk_id TEXT,
+        url          TEXT,
+        repo         TEXT NOT NULL,
+        path         TEXT NOT NULL,
+        PRIMARY KEY (src_chunk_id, kind, name, line)
+    )
+    """,
+    # Three queries, three indexes. All equality lookups, which is the
+    # whole argument for keeping links in SQL rather than beside the
+    # vectors: `dangling` is an anti-join, which a vector store's filter
+    # language cannot express at all, and links are deleted per changed
+    # file on every run — measured at 13x against the columnar store.
+    #
+    # `links_by_name` covers (kind, name) and serves `dangling`, which
+    # constrains both. It does NOT serve `by_name`, which constrains only
+    # `name`: a composite index is sorted by its leading column, so a
+    # query that leaves that column free has nothing to descend. `refs` —
+    # the query this table exists to answer — was therefore reading every
+    # row, which EXPLAIN QUERY PLAN says plainly (SCAN, not SEARCH) and
+    # which costs 20 ms against 0.1 at a million links.
+    "CREATE INDEX IF NOT EXISTS links_by_name ON links (kind, name)",
+    "CREATE INDEX IF NOT EXISTS links_by_bare_name ON links (name)",
+    "CREATE INDEX IF NOT EXISTS links_by_src ON links (src_chunk_id)",
+)
+"""Every statement that builds the store, in order.
+
+Separate statements rather than one script: `executescript` is SQLite's
+and takes no parameters, and everything here is plain SQL both backends
+accept."""
 
 
 class LinkKind(StrEnum):
@@ -145,6 +184,56 @@ class Edge:
     path: str
 
 
+@dataclass(frozen=True, kw_only=True)
+class _Dialect:
+    """The four places SQLite and Postgres disagree, and no others.
+
+    Two full implementations was the obvious shape and the wrong one:
+    ADR-2 paired Tensorus with LocalStore and spent the rest of its life
+    keeping them at semantic parity, because their semantics really did
+    differ (HNSW against brute force). SQLite and Postgres are both SQL
+    with the same semantics — including the anti-join `dangling` needs —
+    so the queries are written once and only these four things vary.
+    Parity is then not a discipline anybody has to keep; there is only
+    one set of queries to be right.
+
+    Attributes:
+        placeholder: `?` for sqlite3, `%s` for psycopg. Every query in
+            this module is written with `?` and translated once, in
+            `_sql`, so the source reads in one dialect.
+        insert_prefix, insert_suffix: How each spells "skip a row that is
+            already there" — a prefix for SQLite, a suffix for Postgres.
+        columns_query: How to ask which columns a table has, for the
+            additive migration.
+    """
+
+    placeholder: str
+    insert_prefix: str
+    insert_suffix: str
+    columns_query: str
+
+
+SQLITE = _Dialect(
+    placeholder="?",
+    insert_prefix="INSERT OR IGNORE INTO",
+    insert_suffix="",
+    columns_query="SELECT name FROM pragma_table_info('links')",
+)
+"""The default, and the only one that needs no service."""
+
+POSTGRES = _Dialect(
+    placeholder="%s",
+    insert_prefix="INSERT INTO",
+    insert_suffix=" ON CONFLICT DO NOTHING",
+    columns_query=("SELECT column_name FROM information_schema.columns WHERE table_name = 'links'"),
+)
+"""For a workspace whose index is shared. Links are workspace data —
+every field of one is derived from content, so two machines indexing the
+same commit produce the same links — which is why they can be shared at
+all, and why leaving them on one machine while the vectors live in S3
+was an asymmetry rather than a design."""
+
+
 class LinkStore:
     """SQLite-backed link storage, one file inside the index directory.
 
@@ -153,59 +242,87 @@ class LinkStore:
     """
 
     def __init__(self, index_dir: Path) -> None:
-        """Open (creating if needed) the link database under `index_dir`.
+        """Open (creating if needed) the SQLite database under `index_dir`.
+
+        The default, and the only backend that needs no service running.
+        For a shared index see `postgres`.
 
         Args:
-            index_dir: Where the workspace keeps its index. Local by
-                definition, even when the vectors live in S3 — the same
-                reasoning that puts `state.json` there.
+            index_dir: Where this machine keeps its index.
         """
         make_index_dir(index_dir)
-        self.path = index_dir / LINKS_FILE
+        self.path: Path | None = index_dir / LINKS_FILE
+        self.dialect = SQLITE
         # `check_same_thread=False` because the server runs a sync
         # endpoint in a worker thread while this connection was opened in
         # the main one, and sqlite3 refuses that by default — measured as
         # a hard failure of `POST /index` before the flag went in. Safe
         # here on two counts: `sqlite3.threadsafety` is 3 (the library
         # serializes access itself), and every write goes through the
-        # server's one-writer lock (ADR-10). The default exists to catch
-        # accidental sharing; this sharing is the design.
-        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        # server's one-writer lock (ADR-10).
+        self._db: Any = sqlite3.connect(self.path, check_same_thread=False)
         # WAL: a reader no longer blocks the writer, and a crash mid-write
-        # leaves the database usable. Costs one extra file beside the
-        # database; the default journal locks the whole file per write.
+        # leaves the database usable. Postgres is journalled already.
         self._db.execute("PRAGMA journal_mode=WAL")
-        self._db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS links (
-                src_chunk_id TEXT NOT NULL,
-                kind         TEXT NOT NULL,
-                name         TEXT NOT NULL,
-                line         INTEGER NOT NULL,
-                dst_chunk_id TEXT,
-                url          TEXT,
-                repo         TEXT NOT NULL,
-                path         TEXT NOT NULL,
-                PRIMARY KEY (src_chunk_id, kind, name, line)
-            );
-            -- Three queries, three indexes. All equality lookups, which
-            -- is the whole argument for keeping links out of the vector
-            -- store.
-            --
-            -- `links_by_name` covers (kind, name) and serves `dangling`,
-            -- which constrains both. It does NOT serve `by_name`, which
-            -- constrains only `name`: a composite index is a sorted list
-            -- of its leading column first, so a query that leaves that
-            -- column free has nothing to descend. `refs` — the query
-            -- this whole table exists to answer — was therefore reading
-            -- every row, which `EXPLAIN QUERY PLAN` says plainly (SCAN,
-            -- not SEARCH) and which costs 20 ms against 0.1 at a million
-            -- links. Hence the second, single-column index.
-            CREATE INDEX IF NOT EXISTS links_by_name ON links (kind, name);
-            CREATE INDEX IF NOT EXISTS links_by_bare_name ON links (name);
-            CREATE INDEX IF NOT EXISTS links_by_src ON links (src_chunk_id);
-            """
-        )
+        self._create()
+
+    @classmethod
+    def postgres(cls, dsn: str) -> LinkStore:
+        """Open the same store against a Postgres database.
+
+        For a workspace whose index is shared — an `s3://` store makes
+        the vectors common to a team, and links are workspace data by
+        the same argument: every field of one is derived from content,
+        so two machines indexing the same commit produce identical
+        links. Leaving them on one machine while the vectors were shared
+        was an asymmetry, not a design.
+
+        One database per shared index, exactly as there is one
+        `[store] uri` per shared index: the table is keyed by repo id
+        and nothing else, so two workspaces pointing at one DSN merge
+        their links the way two workspaces pointing at one store uri
+        merge their datasets. The DSN is the boundary. (Found by
+        pointing a probe at the test database and watching `refs` answer
+        with rows the tests had left there.)
+
+        Args:
+            dsn: Connection string. It carries a password, so a config
+                names the *variable* that holds it and never the value —
+                the same rule `token_env` keeps.
+
+        Returns:
+            A store backed by Postgres, with the same queries.
+
+        Raises:
+            RuntimeError: psycopg is not installed.
+        """
+        try:
+            import psycopg
+        except ImportError as exc:
+            raise RuntimeError(
+                "postgres links need the `postgres` extra — `uv sync --extra postgres`"
+            ) from exc
+        store = cls.__new__(cls)
+        store.path = None
+        store.dialect = POSTGRES
+        store._db = psycopg.connect(dsn, autocommit=False)
+        store._create()
+        return store
+
+    def _sql(self, query: str) -> str:
+        """One query, in this backend's spelling.
+
+        Every statement in this module is written with `?`; this is the
+        single place that knows psycopg wants `%s`. Writing each query
+        twice is how two backends drift.
+        """
+        return query if self.dialect.placeholder == "?" else query.replace("?", "%s")
+
+    def _create(self) -> None:
+        """The table and its indexes; runs on every open, creates once."""
+        for statement in _SCHEMA:
+            self._db.execute(statement)
+        self._db.commit()
         self._migrate()
         self._db.commit()
 
@@ -224,10 +341,14 @@ class LinkStore:
         column, which is the truth — they were written when there was
         nothing to put there.
         """
-        present = {row[1] for row in self._db.execute("PRAGMA table_info(links)")}
+        present = {row[0] for row in self._db.execute(self.dialect.columns_query)}
         for column, ddl in _COLUMNS.items():
             if column not in present:
-                self._db.execute(f"ALTER TABLE links ADD COLUMN {column} {ddl}")
+                # NOT NULL cannot be added to a populated table without a
+                # default in either dialect, and every column this could
+                # add arrived optional. See the docstring.
+                self._db.execute(f"ALTER TABLE links ADD COLUMN {column} {ddl.split(' NOT')[0]}")
+        self._db.commit()
 
     def __enter__(self) -> LinkStore:
         return self
@@ -260,11 +381,19 @@ class LinkStore:
         """
         if not links:
             return 0
-        before = self._db.total_changes
-        self._db.executemany(
-            "INSERT OR IGNORE INTO links "
-            "(src_chunk_id, kind, name, line, dst_chunk_id, url, repo, path) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        # Through a cursor, and reading `rowcount` off it. Two portability
+        # facts, both learned the hard way against a real Postgres:
+        # `executemany` lives on the cursor in psycopg (sqlite3 also has
+        # it on the connection, which is what hid this), and
+        # `total_changes` is sqlite3's own attribute while `rowcount` is
+        # DB-API and both report it.
+        cursor = self._db.cursor()
+        cursor.executemany(
+            self._sql(
+                f"{self.dialect.insert_prefix} links "
+                "(src_chunk_id, kind, name, line, dst_chunk_id, url, repo, path) "
+                f"VALUES (?, ?, ?, ?, ?, ?, ?, ?){self.dialect.insert_suffix}"
+            ),
             [
                 (
                     link.src_chunk_id,
@@ -280,7 +409,7 @@ class LinkStore:
             ],
         )
         self._db.commit()
-        return self._db.total_changes - before
+        return max(int(cursor.rowcount), 0)
 
     def delete_by_source(self, ids: Iterable[str]) -> int:
         """Forget every link found in the given chunks.
@@ -300,10 +429,10 @@ class LinkStore:
         batch = [(chunk_id,) for chunk_id in ids]
         if not batch:
             return 0
-        before = self._db.total_changes
-        self._db.executemany("DELETE FROM links WHERE src_chunk_id = ?", batch)
+        cursor = self._db.cursor()
+        cursor.executemany(self._sql("DELETE FROM links WHERE src_chunk_id = ?"), batch)
         self._db.commit()
-        return self._db.total_changes - before
+        return max(int(cursor.rowcount), 0)
 
     def count(self) -> int:
         """How many links are stored. Mostly for reports and tests."""
@@ -313,8 +442,10 @@ class LinkStore:
     def _rows(self, where: str, params: tuple[object, ...]) -> list[Edge]:
         """Read edges matching a WHERE clause, ordered for reading."""
         rows = self._db.execute(
-            "SELECT kind, name, line, src_chunk_id, dst_chunk_id, url, repo, path "
-            f"FROM links WHERE {where} ORDER BY repo, path, line",
+            self._sql(
+                "SELECT kind, name, line, src_chunk_id, dst_chunk_id, url, repo, path "
+                f"FROM links WHERE {where} ORDER BY repo, path, line"
+            ),
             params,
         ).fetchall()
         return [

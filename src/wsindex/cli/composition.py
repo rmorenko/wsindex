@@ -13,11 +13,12 @@ MCP adapter build their pipelines through here too, so no interface can
 quietly acquire an engine of its own.
 """
 
+import os
 from typing import assert_never
 
 import typer
 
-from wsindex.config import Backend, Config, Provider
+from wsindex.config import Backend, Config, LinksBackend, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from wsindex.links import LinkStore
 from wsindex.paths import ConfigLocation, make_index_dir, resolve_cache_dir, searched_paths
@@ -93,15 +94,57 @@ def build_pipeline() -> Pipeline:
     make_index_dir(config.index_dir)
     store = build_store(config)
     reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
-    # index_dir, not store_uri: the incremental state and the link database
-    # are local, per-machine notes about this host, even when the vectors
-    # live in S3.
+    # `state_dir` is index_dir and always will be: the commit each repo
+    # was last indexed at is genuinely a note about *this* host, since
+    # two machines sit on different branches. Links are not — every
+    # field of one is derived from content — which is why they get a
+    # backend of their own rather than sharing that assumption.
     return Pipeline(
         store=store,
         state_dir=config.index_dir,
         reranker=reranker,
-        links=LinkStore(config.index_dir),
+        links=build_links(config),
     )
+
+
+def build_links(config: Config) -> LinkStore:
+    """Open the link store this workspace asks for.
+
+    Args:
+        config: The workspace.
+
+    Returns:
+        A store; SQLite unless `[links] backend = "postgres"`.
+
+    Raises:
+        typer.Exit: Postgres was asked for and cannot be reached — no
+            `dsn_env`, an unset variable, or a refused connection. All
+            three are the config's to fix, and starting on SQLite
+            instead would silently answer `refs` from a different set of
+            links than the one the workspace shares.
+    """
+    if config.links_backend is not LinksBackend.POSTGRES:
+        return LinkStore(config.index_dir)
+    name = config.links_dsn_env
+    if not name:
+        typer.echo(
+            'error: [links] backend = "postgres" needs `dsn_env` naming the variable '
+            "that holds the connection string (the name, never the string)",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    dsn = os.environ.get(name)
+    if not dsn:
+        typer.echo(f"error: ${name} is not set, and [links] dsn_env names it", err=True)
+        raise typer.Exit(code=1)
+    try:
+        return LinkStore.postgres(dsn)
+    except Exception as exc:
+        # Deliberately broad: psycopg raises a family of its own, and
+        # every one of them means the same thing to somebody reading
+        # this — the database named in the config did not answer.
+        typer.echo(f"error: cannot reach the links database — {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 def require_extra(name: str, packages: str) -> None:

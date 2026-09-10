@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from wsindex.cli.composition import build_pipeline, config_or_default, require_config_file
-from wsindex.config import Backend, Config, Provider, Repository, RepoSource
+from wsindex.config import Backend, Config, LinksBackend, Provider, Repository, RepoSource
 from wsindex.ingest import SKIP_REASONS
 from wsindex.ingest.git_state import STATE_FILE, IndexState
 from wsindex.paths import user_config_file, workspace_config_path
@@ -133,6 +133,24 @@ def status() -> None:
         typer.echo(f"config: {location.path} ({location.mode.value})")
     typer.echo(f"workspace: {config.name}")
     typer.echo(f"backend: {config.backend.value}")
+    typer.echo(f"links: {config.links_backend.value}")
+    # `location is not None` first: `store_uri` needs an index dir, and a
+    # config built from defaults has none. Status is the command people
+    # run *because* something is wrong, so it must survive that.
+    if (
+        location is not None
+        and config.links_backend is LinksBackend.SQLITE
+        and config.store_uri.startswith("s3://")
+    ):
+        # The vectors are shared and the links are not. Said out loud
+        # rather than left to be discovered, because `refs` and `why`
+        # then answer from this machine's links only — a partial answer
+        # that looks whole, which is what review 6 was about.
+        typer.echo(
+            "  note: the index is shared but links are local to this machine; "
+            'set [links] backend = "postgres" to share them too',
+            err=True,
+        )
     if not config.repos:
         typer.echo("repos: none — add one with `wsindex add-repo <id> <path>`")
         return

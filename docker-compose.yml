@@ -40,5 +40,32 @@ services:
         "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
         && mc mb --ignore-existing local/wsindex
 
+  # Links for a shared index. SQLite is the default and needs none of
+  # this; the tests against Postgres skip themselves when it is not
+  # running, the same way the tree-sitter ones skip a missing grammar.
+  postgres:
+    image: postgres:17-alpine
+    container_name: wsindex_postgres
+    ports:
+      - 5432:5432
+    environment:
+      # `WSINDEX_PG_*`, not the generic `POSTGRES_*`: a `.env` in this
+      # directory is shared by everything compose runs, and a leftover
+      # `POSTGRES_USER` from another project silently took this service
+      # over — the tests then skipped themselves saying "no Postgres"
+      # while one was running. A project-scoped name cannot collide.
+      - POSTGRES_USER=${WSINDEX_PG_USER:-wsindex}
+      - POSTGRES_PASSWORD=${WSINDEX_PG_PASSWORD:-wsindex}
+      - POSTGRES_DB=${WSINDEX_PG_DB:-wsindex}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U $${POSTGRES_USER:-wsindex}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   minio_data:
+  postgres_data:

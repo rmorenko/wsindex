@@ -20,7 +20,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from wsindex.config.schema import DEFAULT_RANK_MODEL, Backend, Provider, RepoSource
+from wsindex.config.schema import (
+    DEFAULT_RANK_MODEL,
+    Backend,
+    LinksBackend,
+    Provider,
+    RepoSource,
+)
 from wsindex.config.validate import REPO_KEYS
 from wsindex.model import Kind
 
@@ -33,7 +39,9 @@ rather than a path because a workspace config lives anywhere on disk,
 and a relative path would only be right for this repository."""
 
 
-def _enum(values: type[Backend] | type[Provider] | type[RepoSource] | type[Kind]) -> list[str]:
+def _enum(
+    values: type[Backend] | type[LinksBackend] | type[Provider] | type[RepoSource] | type[Kind],
+) -> list[str]:
     """The members of a StrEnum, in declaration order, as plain strings."""
     return [member.value for member in values]
 
@@ -151,6 +159,25 @@ def _rank() -> dict[str, Any]:
     )
 
 
+def _links() -> dict[str, Any]:
+    """`[links]`: which store answers `refs`, `why` and the drift report."""
+    return _section(
+        {
+            "backend": {
+                "type": "string",
+                "enum": _enum(LinksBackend),
+                "default": LinksBackend.SQLITE.value,
+                "description": "sqlite needs no service; postgres is for a shared index.",
+            },
+            "dsn_env": {
+                "type": "string",
+                "description": "Name of the variable holding the Postgres connection "
+                "string — the name, never the string.",
+            },
+        }
+    )
+
+
 def _server() -> dict[str, Any]:
     """`[server]`: the token's variable name, and the sync interval."""
     return _section(
@@ -218,6 +245,7 @@ def build() -> dict[str, Any]:
             "workspace": _workspace(),
             "embeddings": _embeddings(),
             "store": _store(),
+            "links": _links(),
             "rank": _rank(),
             "server": _server(),
             "references": {

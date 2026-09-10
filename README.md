@@ -788,8 +788,47 @@ column: past about 20 000 chunks a *filtered* search is faster than an
 unfiltered one, because the filter runs before the scan rather than
 after it.
 
-The design decision (LanceDB replacing the earlier Tensorus + LocalStore
-pair) is recorded in [ADR-7](docs/adr/adr-007-post-mvp-storage.md).
+**Links live in SQL, not beside the vectors**, and that is measured
+rather than assumed. Two things decide it, and neither is read speed —
+the columnar store is in fact 6.6x faster to write and 3.5x smaller.
+First, the drift report is an anti-join (`which reads_key has no declares`) and a vector store's filter language cannot express it at
+all. Second, links are deleted per changed file on every run, which is
+13x slower there and leaves 131 table versions behind for 120 files. A
+vector is written once and read by similarity; a link is rewritten
+constantly and read by exact key.
+
+```toml
+[links]
+backend = "postgres"          # default: sqlite, which needs no service
+dsn_env = "WSINDEX_LINKS_DSN" # the variable's name, never the string
+```
+
+SQLite is the default and the only backend that needs nothing — offline
+machines, single-user workspaces and every test get it. Postgres is for
+a **shared** index: `[store] uri = "s3://..."` makes the vectors common
+to a team, and links are workspace data by the same argument (every
+field of one is derived from content, so two machines indexing the same
+commit produce identical links). Leaving them on one machine was an
+asymmetry, and `wsindex status` says so when it sees one.
+
+One database per shared index, exactly as there is one `[store] uri`:
+the table is keyed by repo id and nothing else, so two workspaces
+pointing at one DSN merge their links the same way two workspaces
+pointing at one store uri merge their datasets.
+
+There is one set of queries, not two implementations — a four-field
+dialect carries everything SQLite and Postgres spell differently, so
+parity is a property of the code rather than a discipline. The contract
+suite runs against both; the Postgres half skips itself when no database
+answers (`docker compose up -d postgres` makes it run, and the compose
+service reads `WSINDEX_PG_*` rather than the generic `POSTGRES_*`, which
+a shared `.env` had already claimed).
+
+The design decisions are recorded in
+[ADR-7](docs/adr/adr-007-post-mvp-storage.md) (LanceDB replacing the
+earlier Tensorus + LocalStore pair) and
+[ADR-11](docs/adr/adr-011-links-backend.md) (why links are not in it,
+with the numbers).
 
 ## Extras
 

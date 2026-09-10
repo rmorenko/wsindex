@@ -994,3 +994,85 @@ def test_explain_says_when_the_grammar_gave_up(workspace: Path) -> None:
 
     assert "with a symbol" in whole.output
     assert "grammar reported errors" in torn.output
+
+
+# --- where the links live -------------------------------------------------
+
+
+def test_status_says_which_link_backend(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+
+    assert "links: sqlite" in runner.invoke(app, ["status"]).output
+
+
+def test_a_shared_index_with_local_links_says_so(workspace: Path) -> None:
+    # The vectors are common to a team and the links are not, so `refs`
+    # and `why` answer from this machine only — a partial answer that
+    # looks whole, which review 6 was about.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(config.read_text().replace("[store]", '[store]\nuri = "s3://team/index"'))
+
+    result = runner.invoke(app, ["status"])
+
+    assert "links are local to this machine" in result.output
+
+
+def test_a_shared_index_with_shared_links_is_quiet(workspace: Path) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(
+        config.read_text().replace("[store]", '[store]\nuri = "s3://team/index"')
+        + '\n[links]\nbackend = "postgres"\n'
+    )
+
+    result = runner.invoke(app, ["status"])
+
+    assert "links: postgres" in result.output
+    assert "local to this machine" not in result.output
+
+
+def test_postgres_without_a_dsn_env_refuses(workspace: Path) -> None:
+    # Falling back to SQLite would answer `refs` from a different set of
+    # links than the one the workspace shares — silently.
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(config.read_text() + '\n[links]\nbackend = "postgres"\n')
+
+    result = runner.invoke(app, ["refs", "8080"])
+
+    assert result.exit_code == 1
+    assert "needs `dsn_env`" in result.output
+
+
+def test_postgres_with_an_unset_variable_refuses(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(
+        config.read_text() + '\n[links]\nbackend = "postgres"\ndsn_env = "WSINDEX_NO_SUCH_DSN"\n'
+    )
+    monkeypatch.delenv("WSINDEX_NO_SUCH_DSN", raising=False)
+
+    result = runner.invoke(app, ["refs", "8080"])
+
+    assert result.exit_code == 1
+    assert "$WSINDEX_NO_SUCH_DSN is not set" in result.output
+
+
+def test_an_unreachable_links_database_is_a_sentence(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner.invoke(app, ["init", "ws", "--provider", "fake"])
+    config = workspace / CONFIG_FILE
+    config.write_text(
+        config.read_text() + '\n[links]\nbackend = "postgres"\ndsn_env = "WSINDEX_DEAD_DSN"\n'
+    )
+    monkeypatch.setenv("WSINDEX_DEAD_DSN", "postgresql://nobody@127.0.0.1:1/none")
+
+    result = runner.invoke(app, ["refs", "8080"])
+
+    assert result.exit_code == 1
+    assert "cannot reach the links database" in result.output
+    assert "Traceback" not in result.output

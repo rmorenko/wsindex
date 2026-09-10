@@ -73,6 +73,25 @@
         }
       }
     },
+    "links": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "sqlite",
+            "postgres"
+          ],
+          "default": "sqlite",
+          "description": "sqlite needs no service; postgres is for a shared index."
+        },
+        "dsn_env": {
+          "type": "string",
+          "description": "Name of the variable holding the Postgres connection string \u2014 the name, never the string."
+        }
+      }
+    },
     "rank": {
       "type": "object",
       "additionalProperties": false,

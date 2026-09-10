@@ -95,6 +95,13 @@ noise before any judgement about the idea was possible.
    have different lifetimes — re-chunking a file replaces its chunks and
    must not silently orphan what pointed at them.
 
+   *(Refined by **ADR-11**, 2026-09-10. That sentence was challenged and
+   is weaker than the real reason: measured, the vector store is faster
+   to write and smaller on disk. What decides it is that the drift
+   report is an anti-join it cannot express, and that links are deleted
+   on every run at 13x the cost. ADR-11 carries the numbers, and adds
+   Postgres for a shared index.)*
+
 1. **Edges come from the trees the chunkers already build.** Extraction
    is a second visitor over the same parse, not a second parse. This is
    what the spike established and it is what keeps links affordable.

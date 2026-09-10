@@ -28,6 +28,20 @@ class Backend(StrEnum):
     LOCAL = "local"
 
 
+class LinksBackend(StrEnum):
+    """Where the links live.
+
+    SQLite is the default and needs no service — it is what an offline
+    machine and every test get. Postgres is for a workspace whose index
+    is shared: links are workspace data, derived entirely from content,
+    so leaving them on one machine while `[store] uri` puts the vectors
+    in S3 was an asymmetry rather than a design (see ADR-11).
+    """
+
+    SQLITE = "sqlite"
+    POSTGRES = "postgres"
+
+
 class Provider(StrEnum):
     """Embedder selector: deterministic fake for tests, real model for work."""
 

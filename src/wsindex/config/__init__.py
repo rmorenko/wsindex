@@ -29,6 +29,7 @@ from wsindex.config.document import render, repo_entry
 from wsindex.config.schema import (
     DEFAULT_RANK_MODEL,
     Backend,
+    LinksBackend,
     Provider,
     Repository,
     RepoSource,
@@ -320,6 +321,33 @@ class Config:
         return {str(prefix): str(template) for prefix, template in raw.items()}
 
     @property
+    def links_backend(self) -> LinksBackend:
+        """Where the link store lives: `sqlite` (default) or `postgres`.
+
+            [links]
+            backend = "postgres"
+            dsn_env = "WSINDEX_LINKS_DSN"
+
+        SQLite is the default and needs no service; it is what tests run
+        on and what an offline machine gets. Postgres is for a workspace
+        whose index is shared — links are workspace data, derived
+        entirely from content, so leaving them on one machine while
+        `[store] uri` puts the vectors in S3 was an asymmetry.
+        """
+        return LinksBackend(self._setting("links", "backend", LinksBackend.SQLITE.value))
+
+    @property
+    def links_dsn_env(self) -> str | None:
+        """Name of the variable holding the Postgres connection string.
+
+        The name, never the value — a DSN carries a password, and this
+        is the rule `token_env`, the connectors and the S3 store all
+        keep (ADR-7).
+        """
+        value = self._setting("links", "dsn_env")
+        return str(value) if value else None
+
+    @property
     def server_token_env(self) -> str | None:
         """Name of the variable holding the server's bearer token.
 
@@ -467,6 +495,7 @@ __all__ = [
     "DEFAULT_RANK_MODEL",
     "Backend",
     "Config",
+    "LinksBackend",
     "Provider",
     "RepoSource",
     "Repository",

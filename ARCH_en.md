@@ -24,6 +24,7 @@
 | Why is the storage like that?                 | `docs/adr/adr-007-post-mvp-storage.md`              |
 | Where do the config and index live?           | `docs/adr/adr-008-path-resolution.md`               |
 | What are `refs` and `why` built on?           | `docs/adr/adr-009-links-as-entities.md`             |
+| Why are links not in the vector store?        | `docs/adr/adr-011-links-backend.md`                 |
 | Where is the line between library and server? | `docs/adr/adr-010-library-server-boundary.md`       |
 | What can `wsindex.toml` say?                  | `wsindex.schema.json` (generated) and the README    |
 | Why is this line of code like that?           | the docstring above it — 45% of `src/` is reasoning |
@@ -142,3 +143,5 @@ where they are read:
 - **ADR-8** — where the config and the index live, and how they are found.
 - **ADR-9** — links as entities: what `refs` and `why` are built on.
 - **ADR-10** — the library/server boundary, and the one-writer rule.
+- **ADR-11** — why links keep their own SQL store, and when it may be
+  shared. Refines ADR-9 with the measurements that decide it.

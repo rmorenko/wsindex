@@ -47,6 +47,9 @@ server = [
 ]
 shell = ["prompt-toolkit>=3.0,<4"]
 mcp = ["mcp>=1.2,<2"]
+# Links in Postgres, for a workspace whose index is shared. SQLite stays
+# the default and needs nothing.
+postgres = ["psycopg[binary]>=3.2,<4"]
 ast = [
   "tree-sitter>=0.26,<1",
   "tree-sitter-c-sharp>=0.23,<1",
@@ -127,6 +130,12 @@ warn_unused_ignores = true
 # guarded at runtime, so a missing sentence_transformers is fine to skip.
 [[tool.mypy.overrides]]
 module = "sentence_transformers.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional extra: the base install has no psycopg, and the import that
+# needs it is behind a try/except that says so.
+module = "psycopg.*"
 ignore_missing_imports = true
 
 [tool.codespell]
