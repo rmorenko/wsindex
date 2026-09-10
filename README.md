@@ -614,39 +614,45 @@ under 500 ms, p99 under 1 s, no failed requests — the same discipline the
 acceptance criteria use, and for the same reason. Measured on an M-series
 laptop with eight concurrent clients:
 
-| Scenario                          |   p50 |     p95 | verdict                |
-| --------------------------------- | ----: | ------: | ---------------------- |
-| search, idle server               | 54 ms |   66 ms | PASS                   |
-| search during an ordinary sync    | 83 ms |  218 ms | PASS                   |
-| search during a **full** re-index | 98 ms | 1459 ms | **FAIL**               |
-| 8 simultaneous `POST /index`      |     — |       — | PASS: 1 run, 7 refused |
+| Scenario                          |    p50 |    p95 | verdict                |
+| --------------------------------- | -----: | -----: | ---------------------- |
+| search, idle server               |  55 ms |  69 ms | PASS                   |
+| search during an ordinary sync    | 116 ms | 168 ms | PASS                   |
+| search during a **full** re-index |  90 ms | 123 ms | PASS                   |
+| 8 simultaneous `POST /index`      |      — |      — | PASS: 1 run, 7 refused |
 
-The everyday path has eight times the headroom it needs. A full re-index
-— a first index, or an index directory that lost its state file — misses
-the budget by 3x, and what causes it is measured rather than guessed: the
-blame pass runs eight `git blame` processes at once, and **spawning from
-the process that holds the embedding model is where the time goes**. 117
-spawns of `git --version` — a command that does nothing — block a search
-for 1.4 s just the same, and eight threads doing it get no parallelism at
-all (9.7 ms per spawn either way). Three other explanations were measured
-and ruled out: the embedding batch size (chopping `encode` to 32 changes
-nothing), torch's thread count (one thread stalls the same 1.8 s) and the
-GIL (a continuous monitor loses 53 ms at worst).
+Eleven rules of eleven — but only after the third row failed at
+**1459 ms** and was chased down rather than negotiated. What caused it:
+the blame pass runs eight `git blame` processes at once, and **starting a
+process from the process that holds the embedding model is where the time
+goes.** 117 spawns of `git --version` — a command that does nothing —
+block a search for 1.4 s just the same, and eight threads doing it get no
+parallelism at all (9.7 ms per spawn either way). Three tidier
+explanations were measured and ruled out first: the embedding batch size
+(chopping `encode` to 32 changes nothing), torch's thread count (one
+thread stalls the same 1.8 s) and the GIL (a continuous monitor loses
+53 ms at worst).
 
-*Why* that process is a bad one to fork from is not established here. A
+*Why* that process is a bad one to fork from is **not** established. A
 1 GB single allocation does not reproduce it and four thousand small
 mappings barely do (0.80 s → 0.89 s), so "it has more memory regions" is
-a guess, not a finding. What is a finding is the shape, and the cure
-follows from it: let a small child do the spawning. One stdlib-only
-helper running the same eight-way pool makes the storm 27% faster (0.49 s
-→ 0.36 s) and puts search back at its idle latency (487.8 ms → 8.2 ms p50,
-14.2 ms worst) — no trade-off in either direction, and free when nothing
-is searching. Two cures that *were* trades got measured and dropped:
-`nice` does nothing (2079 ms → 2143 ms), and fewer blame workers work (2
-workers: p95 284 ms) at 48% of indexing throughput.
+a guess and nothing here relies on it. The shape was enough to act on:
+[`wsindex.ingest.blame`](src/wsindex/ingest/blame.py) hands the batch to a
+small child that imports nothing from this package, and the child does
+the spawning. Search during a full re-index went **1459 ms → 123 ms** p95,
+and a cold index got **11% faster** (8.18 s → 7.29 s) — those forks were
+never necessary work. Under four files the batch still runs in-process,
+where a child would cost more than the forks it saves; that threshold is
+derived rather than chosen, and `index-one-file` is unmoved at 0.32 s.
 
-All of this is macOS. Linux resolves `fork` differently and is not
-measured here.
+Two cures that *were* trades got measured and dropped on the way. `nice`
+does nothing (2079 ms → 2143 ms). Fewer blame workers do work (2 workers:
+p95 284 ms) at 48% of indexing throughput. `posix_spawn` is faster again,
+but CPython only takes it with `close_fds=False`, and a probe showed the
+child then inherits seven of this process's descriptors.
+
+All of these numbers are macOS. Linux resolves `fork` differently and is
+not measured here; at worst the cure costs it 21 ms per batch.
 
 **It writes down what it did.** `serve` turns on uvicorn's access log
 and the library's own records; every CLI command stays silent, because a

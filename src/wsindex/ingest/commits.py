@@ -7,9 +7,11 @@ history is indexed alongside the files.
 Two halves. Reading the log is cheap — milliseconds for a whole history
 — and each message becomes one chunk under a synthetic path
 (`commits/2026-09-09-abc1234`), because a commit has no file. Blame is
-the expensive half: one fork per file, and it is paid per *indexed*
-file, which the incremental pass already keeps down to what changed.
-See `BLAME_WORKERS` for what one costs and why they run in a pool.
+the expensive half: one `git blame` per file, paid per *indexed* file,
+which the incremental pass already keeps down to what changed. See
+`BLAME_WORKERS` for why they run in a pool, `HELPER_FROM` for why a batch
+of any size runs in a small child process, and `wsindex.ingest.blame` for
+what that measurably buys.
 
 An untracked file has no history and simply gets no edges; git says so
 with an error, and that is a normal answer here rather than a failure.
@@ -17,15 +19,21 @@ with an error, and that is a normal answer here rather than a failure.
 
 from __future__ import annotations
 
-import re
-from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+import json
+import logging
+import os
+import subprocess
+import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from wsindex.ingest.git_state import GitCommandError, decode_path, run_git
+from wsindex.ingest import blame as blaming
+from wsindex.ingest.git_state import GIT_TIMEOUT, GitCommandError, decode_path, run_git
 from wsindex.links import Link, LinkKind
 from wsindex.model import Chunk, Kind
+
+log = logging.getLogger(__name__)
 
 MAX_COMMITS = 1000
 """How far back a full pass reaches. History is unbounded; the questions
@@ -39,10 +47,6 @@ them and `--lang python` never returns one."""
 _RECORD = "\x1e"
 _FIELD = "\x1f"
 _LOG_FORMAT = f"%H{_FIELD}%aI{_FIELD}%B{_RECORD}"
-
-_BLAME_LINE = re.compile(r"^([0-9a-f]{40}) \d+ (\d+)")
-"""A porcelain group header: `<sha> <orig-line> <final-line> [<count>]`.
-The final line number is the only other field this needs."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -142,30 +146,20 @@ def commit_chunks(commits: list[Commit], *, repo: str) -> list[Chunk]:
     ]
 
 
-def _blame(root: Path, rel_path: str) -> dict[int, str]:
-    """Line number -> the sha that last wrote it, for one file.
+def _blame(root: Path, rel_path: str) -> bytes | None:
+    """`git blame --porcelain` for one file, through the safe invoker.
 
-    One `git blame` per file rather than one per chunk: the porcelain
-    output already covers the whole file, and a chunk-sized `-L` range
-    would pay the process cost once per chunk instead of once per file.
-
-    An empty result is a normal answer, not a failure. A full pass
-    indexes untracked files too (`ls-files --others` lists them), and git
-    cannot blame a file that is in no
+    None when git refused the file, and that is a normal answer rather
+    than a failure. A full pass indexes untracked files too (`ls-files
+    --others` lists them), and git cannot blame a file that is in no
     commit: `fatal: no such path ... in HEAD`. A file with no history has
     no blame edges, which is exactly right — and letting that kill the
     run would mean one new file breaks indexing for the whole workspace.
     """
     try:
-        raw = decode_path(run_git(root, "blame", "--porcelain", "--", rel_path))
+        return run_git(root, "blame", "--porcelain", "--", rel_path)
     except GitCommandError:
-        return {}
-    by_line: dict[int, str] = {}
-    for line in raw.splitlines():
-        header = _BLAME_LINE.match(line)
-        if header is not None:
-            by_line[int(header.group(2))] = header.group(1)
-    return by_line
+        return None
 
 
 BLAME_WORKERS = 8
@@ -178,9 +172,29 @@ does, so threads spend that wait in parallel. Measured over 122 files:
 one worker 2.20 s, eight 0.94 s, sixteen 1.16 s — past the machine's
 cores the forks only compete with each other."""
 
+HELPER_FROM = 4
+"""How many files it takes before the batch is worth a child process.
+
+Derived rather than chosen. Starting the helper costs 21 ms (measured,
+and the reason it imports nothing from this package). A spawn from a
+process holding the model costs ~9.7 ms and gets no parallelism from
+threads; from the small child the same spawns do parallelise across
+`BLAME_WORKERS`. So the child wins once
+
+    N * 9.7  >  21 + N * 9.7 / 8
+
+which is N > 2.5. Four, for the margin — and below it the in-process
+path is the cheaper one, not merely the older one."""
+
 
 def blame_map(root: Path, rel_paths: Sequence[str]) -> dict[str, dict[int, str]]:
     """Blame every file at once: path -> {line -> commit sha}.
+
+    A batch of any size runs in a child process (see `wsindex.ingest.blame`
+    for what that is worth and what it is not known to be worth); a small
+    one runs here, because the child would cost more than the forks it
+    saves. Both paths are the same function over the same parser, so the
+    two cannot answer differently.
 
     Args:
         root: Repository root.
@@ -199,21 +213,53 @@ def blame_map(root: Path, rel_paths: Sequence[str]) -> dict[str, dict[int, str]]
     """
     if not rel_paths:
         return {}
-    with ThreadPoolExecutor(max_workers=BLAME_WORKERS) as pool:
-        blamed = pool.map(_named(root), rel_paths)
-        return dict(zip(rel_paths, blamed, strict=True))
+    if len(rel_paths) >= HELPER_FROM:
+        blamed = _in_child(root, rel_paths)
+        if blamed is not None:
+            return blamed
+    return blaming.blame_files(root, rel_paths, workers=BLAME_WORKERS, blame=_blame)
 
 
-def _named(root: Path) -> Callable[[str], dict[int, str]]:
-    """`_blame` for one root, with the path attached to any failure."""
+def _in_child(root: Path, rel_paths: Sequence[str]) -> dict[str, dict[int, str]] | None:
+    """The same batch, spawned from a small process; None if that failed.
 
-    def blame(rel_path: str) -> dict[int, str]:
-        try:
-            return _blame(root, rel_path)
-        except Exception as exc:
-            raise RuntimeError(f"blaming {rel_path}: {type(exc).__name__}: {exc}") from exc
-
-    return blame
+    None rather than an exception, always: this is an optimisation, and
+    an optimisation that can stop an index run is a liability. Whatever
+    went wrong — no interpreter to hand, a frozen build with no source
+    file, git missing, a wedged child — the caller does the work here
+    instead and any real error arrives from `run_git` with its own type
+    and message.
+    """
+    helper = getattr(blaming, "__file__", None)
+    if not helper or not sys.executable:  # pragma: no cover - frozen or embedded builds
+        return None
+    request = json.dumps(
+        {
+            "root": str(root),
+            "paths": list(rel_paths),
+            "workers": BLAME_WORKERS,
+            "timeout": GIT_TIMEOUT,
+        }
+    )
+    try:
+        finished = subprocess.run(
+            [sys.executable, helper],
+            input=request.encode("ascii"),
+            capture_output=True,
+            check=True,
+            # The read-only hint is set here and inherited by every git
+            # the child starts, so the child makes no policy of its own.
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+            # Per file, times the batch: each git inside has GIT_TIMEOUT
+            # of its own, and this only stops a child that stopped
+            # answering altogether.
+            timeout=GIT_TIMEOUT * len(rel_paths),
+        )
+        blamed = json.loads(finished.stdout)
+        return {path: {int(n): sha for n, sha in lines.items()} for path, lines in blamed.items()}
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        log.debug("blame helper unavailable, blaming in-process: %s", exc)
+        return None
 
 
 def blame_links(

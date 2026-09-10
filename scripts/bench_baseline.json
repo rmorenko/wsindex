@@ -1,7 +1,7 @@
 {
   "environment": {
-    "date": "2026-09-10 15:12",
-    "commit": "eb4b249-dirty",
+    "date": "2026-09-10 18:52",
+    "commit": "87296d3-dirty",
     "python": "3.12.12",
     "platform": "Darwin arm64",
     "embedder": "real"
@@ -9,101 +9,101 @@
   "runs": [
     {
       "scenario": "startup",
-      "seconds": 2.2580450829700567,
-      "peak_mb": 586.265625,
+      "seconds": 2.3113503330387175,
+      "peak_mb": 585.921875,
       "detail": {
         "runs": [
-          2.295,
-          2.258,
-          2.33
+          2.353,
+          2.311,
+          2.428
         ]
       }
     },
     {
       "scenario": "index-cold",
-      "seconds": 8.183360041992273,
-      "peak_mb": 978.453125,
+      "seconds": 7.286506582982838,
+      "peak_mb": 975.8125,
       "detail": {
         "files": 149,
         "chunks": 3458,
         "commits": 713,
-        "index_mb": 13.42,
+        "index_mb": 13.4,
         "runs": [
-          8.206,
-          8.183,
-          8.253
+          7.782,
+          7.665,
+          7.287
         ]
       }
     },
     {
       "scenario": "index-warm",
-      "seconds": 0.14187716704327613,
-      "peak_mb": 983.90625,
+      "seconds": 0.13718637503916398,
+      "peak_mb": 982.078125,
       "detail": {
         "files": 0,
         "written": 0,
         "runs": [
-          0.146,
-          0.142,
-          0.146
+          0.156,
+          0.158,
+          0.137
         ]
       }
     },
     {
       "scenario": "index-one-file",
-      "seconds": 0.3235996249713935,
-      "peak_mb": 978.859375,
+      "seconds": 0.33142979099648073,
+      "peak_mb": 982.40625,
       "detail": {
         "files": 1,
         "written": 1,
         "runs": [
-          0.324,
           0.344,
-          0.341
+          0.331,
+          0.338
         ]
       }
     },
     {
       "scenario": "search",
-      "seconds": 1.6470180000178516,
-      "peak_mb": 989.375,
+      "seconds": 1.6801626670057885,
+      "peak_mb": 995.140625,
       "detail": {
         "samples": 200,
-        "p50_ms": 7.7,
-        "p95_ms": 10.41,
+        "p50_ms": 7.89,
+        "p95_ms": 10.58,
         "runs": [
-          1.647,
-          1.706,
-          1.724
+          1.68,
+          1.728,
+          1.738
         ]
       }
     },
     {
       "scenario": "search-rerank",
-      "seconds": 12.510306584008504,
-      "peak_mb": 1030.65625,
+      "seconds": 12.514117916987743,
+      "peak_mb": 1040.40625,
       "detail": {
         "samples": 200,
-        "p50_ms": 72.15,
-        "p95_ms": 79.5,
+        "p50_ms": 72.56,
+        "p95_ms": 79.21,
         "runs": [
-          12.51,
-          12.513,
-          12.515
+          12.561,
+          12.514,
+          12.529
         ]
       }
     },
     {
       "scenario": "compact",
-      "seconds": 0.018047958030365407,
-      "peak_mb": 1000.53125,
+      "seconds": 0.018953750026412308,
+      "peak_mb": 1004.640625,
       "detail": {
         "versions": "6 -> 2",
-        "mb": "13.42 -> 13.42",
+        "mb": "13.38 -> 13.46",
         "runs": [
           0.019,
-          0.02,
-          0.018
+          0.019,
+          0.02
         ]
       }
     }

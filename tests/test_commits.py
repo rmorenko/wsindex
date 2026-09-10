@@ -322,7 +322,7 @@ def test_a_blame_failure_names_the_file(repo: Path, monkeypatch: pytest.MonkeyPa
     # idea which of a hundred files caused it.
     real = commits_module._blame
 
-    def flaky(root: Path, rel_path: str) -> dict[int, str]:
+    def flaky(root: Path, rel_path: str) -> bytes | None:
         if rel_path == "b.py":
             raise RuntimeError("blame blew up")
         return real(root, rel_path)
