@@ -19,8 +19,9 @@ Usage:
     uv run poe bench -- --baseline bench.json   # compare against one
 
 Environment:
-    WSINDEX_E2E_REPO   corpus repo (shared with scripts/acceptance.py)
-    WSINDEX_E2E_DIR    clone cache dir
+    WSINDEX_E2E_REPO   corpus repo (the same one acceptance grades on)
+    WSINDEX_BENCH_DIR  clone cache dir; separate from acceptance's on
+                       purpose — see `bench_corpus`
     WSINDEX_BENCH_FAST set to "1" for the fake embedder — for checking
                        the harness itself, never for a real number.
 """
@@ -42,7 +43,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from acceptance import CRITERIA, ensure_corpus
+from acceptance import CRITERIA, REPO_URL
 
 SEARCH_RUNS = 20
 """How many searches make one latency figure. Twenty of ten fixed
@@ -439,8 +440,7 @@ def main() -> int:
         print(json.dumps(asdict(measured)))
         return 0
 
-    corpus = ensure_corpus()
-    _ensure_history(corpus)
+    corpus = bench_corpus()
     wanted = args.only or list(SCENARIOS)
     runs = []
     for name in wanted:
@@ -458,22 +458,30 @@ def main() -> int:
     return 1 if drift else 0
 
 
-def _ensure_history(corpus: Path) -> None:
-    """The corpus needs its commits: blame is most of a cold index.
+def bench_corpus() -> Path:
+    """A clone of the acceptance corpus, with its history, of our own.
 
-    `scripts/acceptance.py` clones shallow, which is right for grading
-    search but would leave this benchmark blind to the path review 4
-    spent its time on — 91% of an indexing run before the pool went in.
+    Of our own, and that is the whole point. This benchmark needs the
+    commits — blame was 91% of an indexing run before review 4 put it in
+    a pool, and a shallow clone measures none of it. `acceptance.py`
+    needs the opposite: it grades search quality against fixed criteria
+    fixed before any run, and 713 commit messages entering the corpus
+    change what the top five hold.
+
+    That is not a guess. Unshallowing the *shared* cache took acceptance
+    from 10/10 to 9/10 — `expose dataset operations over http` fell out
+    of the top five, and a commit message outranked the code it
+    describes on `list_to_tensor`. A benchmark that changes another
+    harness's verdict is a benchmark with a bug, so the two keep
+    separate clones.
     """
-    shallow = subprocess.run(
-        ["git", "rev-parse", "--is-shallow-repository"],
-        cwd=corpus,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if shallow == "true":
-        print("  fetching corpus history (once) ...", file=sys.stderr)
-        subprocess.run(["git", "fetch", "--unshallow", "-q"], cwd=corpus, check=True)
+    home = Path(os.environ.get("WSINDEX_BENCH_DIR", Path.home() / ".cache" / "wsindex-bench"))
+    corpus = home / REPO_URL.rstrip("/").rsplit("/", 1)[-1]
+    if not corpus.exists():
+        print(f"  cloning corpus with history into {corpus} (once) ...", file=sys.stderr)
+        corpus.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "clone", "-q", REPO_URL, str(corpus)], check=True)
+    return corpus
 
 
 if __name__ == "__main__":
