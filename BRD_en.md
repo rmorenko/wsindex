@@ -272,7 +272,7 @@ flowchart LR
 
 The indexing pipeline is linear: `repos → walk(filters) → chunk → embed → store.upsert(dataset=repo)`. Search: `query → embed → store.search(dataset, k) → merge → output`. `search` works over a **single** dataset; iteration over datasets and the merge happen in the pipeline. Both branches go through the single `VectorStore` abstraction with the TensorusStore and LocalStore implementations.
 
-> **Mapping "pipeline step ↔ implementation module"** (details — in ARCHITECTURE): the `walk` step → the `walker` module; `chunk` → `chunker` (the dispatcher) + `ast_chunker`/`text_chunker`; `embed` → `embedder`; `store` → a `VectorStore` implementation. These are the same nodes at different levels of description, not different entities.
+> **Mapping "pipeline step ↔ implementation module"** (details — in ARCHITECTURE): the `walk` step → the `walker` module; `chunk` → `chunker` (the dispatcher) + `ingest.ast`/`text_chunker`; `embed` → `embedder`; `store` → a `VectorStore` implementation. These are the same nodes at different levels of description, not different entities.
 
 ______________________________________________________________________
 

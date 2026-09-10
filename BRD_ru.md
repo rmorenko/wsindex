@@ -272,7 +272,7 @@ flowchart LR
 
 Конвейер индексации линеен: `repos → walk(фильтры) → chunk → embed → store.upsert(dataset=repo)`. Поиск: `query → embed → store.search(dataset, k) → merge → вывод`. `search` работает по **одному** датасету; итерация по датасетам и объединение (merge) — в конвейере (pipeline). Обе ветви идут через единую абстракцию `VectorStore` с реализациями TensorusStore и LocalStore.
 
-> **Соответствие «шаг конвейера ↔ модуль реализации»** (детали — в ARCHITECTURE): шаг `walk` → модуль `walker`; `chunk` → `chunker` (диспетчер) + `ast_chunker`/`text_chunker`; `embed` → `embedder`; `store` → реализация `VectorStore`. Это одни и те же узлы на разных уровнях описания, а не разные сущности.
+> **Соответствие «шаг конвейера ↔ модуль реализации»** (детали — в ARCHITECTURE): шаг `walk` → модуль `walker`; `chunk` → `chunker` (диспетчер) + `ingest.ast`/`text_chunker`; `embed` → `embedder`; `store` → реализация `VectorStore`. Это одни и те же узлы на разных уровнях описания, а не разные сущности.
 
 ______________________________________________________________________
 

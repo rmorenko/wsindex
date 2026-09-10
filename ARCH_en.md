@@ -64,7 +64,7 @@ through every decision below.
   several repositories — hence a dataset per repository and merging in
   the pipeline.
 - **Polyglot corpus.** Hence tree-sitter with many grammars, and the
-  split between `ast_chunker` and `text_chunker`.
+  split between the `ingest.ast` package and `text_chunker`.
 - **Locality and privacy.** Code never leaves the machine.
 - **Deterministic re-indexing.** A chunk id is a hash of content and
   path, so re-indexing is reproducible and deduplication is free.

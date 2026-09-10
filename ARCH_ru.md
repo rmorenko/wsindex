@@ -53,7 +53,7 @@ ______________________________________________________________________
 **Драйверы (что формирует архитектуру):**
 
 - **Мульти-репо как первичный сценарий.** Один вопрос → ответы из нескольких репозиториев. Отсюда «датасет на репозиторий» и объединение результатов на клиенте.
-- **Полиглот-корпус.** Python + Rust + TypeScript + конфиги + Markdown. Отсюда tree-sitter с набором грамматик и разделение чанкеров на `ast_chunker` и `text_chunker`.
+- **Полиглот-корпус.** Python + Rust + TypeScript + конфиги + Markdown. Отсюда tree-sitter с набором грамматик и разделение чанкеров на пакет `ingest.ast` и `text_chunker`.
 - **Локальность и приватность.** Код не покидает машину. Отсюда self-hosted Tensorus и локальные эмбеддинги.
 - **Детерминированная переиндексация.** `id` чанка = хеш содержимого и пути → детерминированная, воспроизводимая переиндексация; конкретный механизм бездубликатности (пересоздание датасета либо пропуск по совпадению `id`) зависит от контракта Tensorus — см. §11.
 - **Расширяемость по фазам.** Архитектура должна принимать структурные фильтры, re-rank и граф без ломки ядра.
@@ -116,7 +116,7 @@ ______________________________________________________________________
 
 Внутренняя структура пакета `wsindex` следует линейному конвейеру. Каждый компонент — отдельный модуль/подпакет с узкой ответственностью.
 
-**Соответствие «шаг конвейера → модуль».** Имена шагов конвейера `repos -> walk -> chunk -> embed -> store` и имена модулей `wsindex` — это одни и те же узлы на разных уровнях описания: `walk`→`walker`; `chunk`→`chunker` (диспетчер) + `ast_chunker`/`text_chunker`; `embed`→`embedder`; `store`→пакет `store` (`VectorStore` + реализации). Дальше в документе они используются как синонимы.
+**Соответствие «шаг конвейера → модуль».** Имена шагов конвейера `repos -> walk -> chunk -> embed -> store` и имена модулей `wsindex` — это одни и те же узлы на разных уровнях описания: `walk`→`walker`; `chunk`→`chunker` (диспетчер) + `ingest.ast`/`text_chunker`; `embed`→`embedder`; `store`→пакет `store` (`VectorStore` + реализации). Дальше в документе они используются как синонимы.
 
 ```mermaid
 graph TB
@@ -127,7 +127,7 @@ graph TB
     subgraph ingest["ingest"]
         walker["walker<br/>обход репо, фильтры,<br/>определение lang/kind"]
         chunker["chunker<br/>диспетчер по kind"]
-        ast_chunker["ast_chunker<br/>tree-sitter:<br/>код и конфиги"]
+        ast["ingest.ast<br/>tree-sitter:<br/>код и конфиги"]
         text_chunker["text_chunker<br/>заголовки / скользящее окно:<br/>doc"]
     end
 
@@ -147,9 +147,9 @@ graph TB
     cli --> pipeline
     pipeline --> walker
     walker --> chunker
-    chunker --> ast_chunker
+    chunker --> ast
     chunker --> text_chunker
-    ast_chunker --> model
+    ast --> model
     text_chunker --> model
     pipeline --> embedder
     pipeline --> base
@@ -166,8 +166,8 @@ graph TB
 - **config** — загрузка и запись конфига рабочего пространства в TOML: список репозиториев (`repo_id` + путь), выбранный бэкенд (`tensorus`/`local`), имя модели эмбеддингов, размерность, base URL Tensorus, параметры чанкинга.
 - **pipeline** — оркестратор двух сценариев. `index()` гоняет `walk -> chunk -> embed -> store.upsert(dataset=repo)`; `search()` гоняет `embed(query) -> для каждого датасета store.search(dataset, k) -> merge(Hit) -> формат`. Единственное место, где компоненты соединяются и где происходит объединение и финальное ранжирование мульти-репо результатов.
 - **ingest.walker** — обходит рабочую копию репо, применяет фильтры (игнор `.git`, бинарников, слишком больших файлов, `node_modules`, `target`, `__pycache__`), определяет язык (`lang`) и тип (`kind` ∈ {code, config, doc}) по расширению/имени файла.
-- **ingest.chunker** — диспетчер: по `kind` выбирает `ast_chunker` (code/config) или `text_chunker` (doc). Возвращает список объектов `Chunk`.
-- **ingest.ast_chunker** — режет через tree-sitter. Для кода — функции/классы/методы/блоки; для конфигов (TOML/YAML/JSON/XML/Dockerfile) — по структурным узлам (таблицы/ключи/секции/стадии/серии элементов). Заполняет `symbol`, `node_type`, `start_line`, `end_line`.
+- **ingest.chunker** — диспетчер: по `kind` выбирает `ingest.ast` (code/config) или `text_chunker` (doc). Возвращает список объектов `Chunk`.
+- **ingest.ast** — режет через tree-sitter. Для кода — функции/классы/методы/блоки; для конфигов (TOML/YAML/JSON/XML/Dockerfile) — по структурным узлам (таблицы/ключи/секции/стадии/серии элементов). Заполняет `symbol`, `node_type`, `start_line`, `end_line`.
 - **ingest.text_chunker** — режет документацию (Markdown/txt/rst, текстовые ячейки ноутбуков) по заголовкам либо скользящим окном с перекрытием.
 - **embed.embedder** — интерфейс `Embedder` + реализация на sentence-transformers (`encode(texts) -> vectors`). Батчинг, нормализация.
 - **store.base** — интерфейс `VectorStore` с методами `create(dataset)`, `upsert(dataset, items)`, `search(dataset, vector, k) -> List[Hit]`. Поиск идёт по **одному** датасету; объединение результатов нескольких датасетов — забота `pipeline`, а не стора (Tensorus тоже ищет внутри одного датасета). Тип `Hit` — единый, не зависящий от бэкенда результат поиска `{score, metadata}` (плюс опционально нативный id); обе реализации нормализуют свой нативный ответ (Tensorus — `tensor_id`, Local — `id`) в `Hit`, поэтому `pipeline` читает поля чанка из `metadata`, а не из id конкретного стора.
@@ -217,7 +217,7 @@ sequenceDiagram
         loop по каждому файлу
             P->>Ch: chunk(file)
             alt kind == code | config
-                Ch->>Ch: ast_chunker (tree-sitter)
+                Ch->>Ch: ingest.ast (tree-sitter)
             else kind == doc
                 Ch->>Ch: text_chunker (окна/заголовки)
             end
@@ -232,7 +232,7 @@ sequenceDiagram
     CLI-->>Dev: отчёт индексации
 ```
 
-Пример: индексация репозитория `tensorus/mcp`. Walker находит `server.py` (kind=code, lang=python), `ast_chunker` режет его на функции/классы, каждый чанк эмбеддится и пишется тензором `shape=[dim]` в датасет `mcp` с `metadata`, где `path="server.py"`, `symbol="search_similar"`, `node_type="function_definition"`, `start_line`/`end_line`.
+Пример: индексация репозитория `tensorus/mcp`. Walker находит `server.py` (kind=code, lang=python), `ingest.ast` режет его на функции/классы, каждый чанк эмбеддится и пишется тензором `shape=[dim]` в датасет `mcp` с `metadata`, где `path="server.py"`, `symbol="search_similar"`, `node_type="function_definition"`, `start_line`/`end_line`.
 
 **Инкрементальная индексация** (`index --incremental`): в MVP — пропуск чанков, чей `id` уже присутствует в датасете (приоритет *Should*; предполагает возможность проверить наличие `id` — см. допущение в §11); в Э2 — переиндексация только изменённых файлов по `git diff`. Таким образом, **MVP-инкремент = пропуск по совпадению `id`, а git-diff-инкремент = Э2**.
 
@@ -483,7 +483,7 @@ wsindex/
 │   ├── __init__.py
 │   ├── walker.py           # обход репо, фильтры, определение lang/kind
 │   ├── chunker.py          # диспетчер по kind
-│   ├── ast_chunker.py      # tree-sitter: code + config
+│   ├── ast/                # tree-sitter: code + config
 │   └── text_chunker.py     # заголовки / скользящее окно: doc
 ├── embed/
 │   ├── __init__.py
@@ -497,7 +497,7 @@ wsindex/
 
 tests/
 ├── test_walker.py
-├── test_ast_chunker.py
+├── test_ast_chunker.py  # имя теста пережило переезд модуля
 ├── test_text_chunker.py
 ├── test_local_store.py     # офлайн, без Tensorus
 ├── test_pipeline_index.py
@@ -539,7 +539,7 @@ ______________________________________________________________________
 
 **Э2 — структурные метаданные и инкрементальность.**
 
-- Затрагивает `ingest/ast_chunker.py`: из AST извлекаются дополнительные признаки — `node_type` (уже есть), модификаторы `pub`/`async`, декораторы, видимость. Они кладутся в `metadata`.
+- Затрагивает пакет `ingest/ast/`: из AST извлекаются дополнительные признаки — `node_type` (уже есть), модификаторы `pub`/`async`, декораторы, видимость. Они кладутся в `metadata`.
 - `pipeline.search()` получает клиентские фильтры по этим полям (например, «только `async` функции», «только `pub` в Rust репо `v1`»).
 - `walker` + новый ход по `git diff`: инкрементальная переиндексация только изменённых файлов. Детерминированные `id` для этого уже готовы (см. §5.1).
 - Store не меняется.
@@ -566,7 +566,7 @@ ______________________________________________________________________
 
 | Фаза | Главные изменения                        | Затронутые компоненты                          |
 | ---- | ---------------------------------------- | ---------------------------------------------- |
-| Э2   | Структурные фильтры, инкрементальность   | `ast_chunker`, `walker`, `pipeline.search`     |
+| Э2   | Структурные фильтры, инкрементальность   | `ingest.ast`, `walker`, `pipeline.search`      |
 | Э3   | Тензорный re-rank (MaxSim / contraction) | новый `Reranker`, `model`, `store`, `pipeline` |
 | Э4   | Граф пространства разработки             | новые источники, `GraphStore`, `pipeline`      |
 | Э5   | Производительность, Rust                 | реализации `store`/`embed`, hot paths          |
