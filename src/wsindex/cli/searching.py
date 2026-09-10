@@ -6,9 +6,9 @@ from typing import Annotated
 import typer
 
 from wsindex.cli.composition import build_pipeline, config_or_default, require_config_file
-from wsindex.links import KIND_LABELS, Edge, LinkKind, LinkStore
-from wsindex.model import Hit, Kind, SearchFilter
-from wsindex.pipeline import Pipeline
+from wsindex.links import KIND_LABELS, LinkKind, LinkStore
+from wsindex.model import Kind, SearchFilter
+from wsindex.pipeline import Authorship
 from wsindex.ui import render_hits
 
 
@@ -69,21 +69,6 @@ def search(
     render_hits(hits)
 
 
-def _definitions(pipeline: Pipeline, symbol: str, *, limit: int = 20) -> list[Hit]:
-    """Chunks whose symbol contains `symbol`, nearest match first.
-
-    Goes through `search` rather than a dedicated store lookup: the
-    `symbol` filter is a prefilter, so the store narrows to
-    exactly the matching chunks and the ranking is what breaks ties among
-    them. Adding an exact-lookup method to `VectorStore` for this would
-    grow the contract for one caller.
-    """
-    # No `repo` scope, so no ValueError to guard against: `Pipeline.search`
-    # raises only for an unknown repo id, and a dataset that was never
-    # indexed is skipped silently.
-    return pipeline.search(symbol, k=limit, filters=SearchFilter(symbol=symbol))
-
-
 def refs(name: str) -> None:
     """Everything that names something: a port, a ticket, a commit, a url.
 
@@ -130,9 +115,8 @@ def why(symbol: str) -> None:
     """
     config = config_or_default()
     require_config_file(config)
-    pipeline = build_pipeline()
-    found = _definitions(pipeline, symbol)
-    if not found:
+    definitions = build_pipeline().why(symbol)
+    if not definitions:
         # Exit 0, like `refs`. Looking and not finding is an answer, and
         # the two commands used to disagree about that — `why` exited 1
         # where `refs` exited 0 for the same situation, which is the kind
@@ -140,17 +124,15 @@ def why(symbol: str) -> None:
         # for "could not look".
         typer.echo(f"no definition found for {symbol!r}")
         return
-    with LinkStore(config.index_dir) as links:
-        for hit in found[:3]:
-            typer.echo(f"{hit.symbol}  {hit.location}")
-            blame = links.out_of([str(hit.native_id)], kind=LinkKind.BLAMED_BY)
-            if not blame:
-                typer.echo("  (no commit recorded — run `wsindex index` to build blame edges)")
-                continue
-            typer.echo("  written by:")
-            for edge in blame:
-                _echo_commit(pipeline, links, edge)
-            typer.echo("")
+    for definition in definitions:
+        typer.echo(f"{definition.hit.symbol}  {definition.hit.location}")
+        if not definition.commits:
+            typer.echo("  (no commit recorded — run `wsindex index` to build blame edges)")
+            continue
+        typer.echo("  written by:")
+        for author in definition.commits:
+            _echo_commit(author)
+        typer.echo("")
 
 
 _TRAILER = re.compile(r"^[A-Z][A-Za-z-]+:\s")
@@ -172,21 +154,17 @@ def _reasoning(message: str) -> list[str]:
     return lines
 
 
-def _echo_commit(pipeline: Pipeline, links: LinkStore, edge: "Edge") -> None:
-    """One commit behind a definition: its subject, then what it points at."""
-    if edge.dst_chunk_id is None:
+def _echo_commit(author: Authorship) -> None:
+    """One commit behind a definition: its subject, then the rest of it."""
+    if author.message is None:
         # Blamed to a commit an earlier run indexed, or one outside the
         # window. Knowing which commit still answers "when did this
         # change" — see `blame_links`.
-        typer.echo(f"    {edge.name}  (message not indexed)")
+        typer.echo(f"    {author.commit}  (message not indexed)")
         return
-    message = pipeline.commit_message(edge.repo, edge.dst_chunk_id)
-    if message is None:
-        typer.echo(f"    {edge.name}  (message not indexed)")
-        return
-    lines = _reasoning(message)
-    typer.echo(f"    {edge.name}  {lines[0]}")
+    lines = _reasoning(author.message)
+    typer.echo(f"    {author.commit}  {lines[0]}")
     for line in lines[1:]:
         typer.echo(f"        {line}")
-    for reference in links.out_of([edge.dst_chunk_id], kind=LinkKind.REFERENCES):
+    for reference in author.references:
         typer.echo(f"        see {reference.name} -> {reference.url}")

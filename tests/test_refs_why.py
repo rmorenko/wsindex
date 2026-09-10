@@ -231,3 +231,43 @@ def test_why_labels_a_commit_from_before_this_run(workspace: Path) -> None:
     # The older commit is named even though this run did not index its
     # message: an edge with no destination is still an answer.
     assert "message not indexed" in result.output
+
+
+# --- one answer, three renderings -----------------------------------------
+
+
+def test_why_is_one_library_call(workspace: Path) -> None:
+    # It used to be assembled separately by `wsindex why` and the MCP
+    # tool, from the same three moves — and they had already drifted:
+    # one showed three definitions, the other all of them, and only one
+    # showed what a commit pointed at.
+    from wsindex.cli import build_pipeline
+
+    definitions = build_pipeline().why("connect")
+
+    assert definitions, "the fixture workspace defines `connect`"
+    assert all(definition.hit.symbol for definition in definitions)
+
+
+def test_a_definition_carries_the_commits_that_wrote_it(workspace: Path) -> None:
+    from wsindex.cli import build_pipeline
+
+    first = build_pipeline().why("connect")[0]
+
+    assert first.commits, "indexing built blame edges for it"
+    assert all(author.commit for author in first.commits)
+
+
+def test_why_without_links_still_answers(workspace: Path) -> None:
+    # A pipeline built without a LinkStore is a valid pipeline; it simply
+    # has no authorship to report.
+    from wsindex.cli.composition import build_store, config_or_default
+    from wsindex.pipeline import Pipeline
+
+    config = config_or_default()
+    bare = Pipeline(store=build_store(config), state_dir=config.index_dir, links=None)
+
+    definitions = bare.why("connect")
+
+    assert definitions
+    assert all(definition.commits == () for definition in definitions)

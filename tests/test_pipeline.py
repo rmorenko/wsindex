@@ -25,7 +25,7 @@ import pytest
 import wsindex.pipeline
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
-from wsindex.ingest import IndexState, NotAGitRepositoryError, chunk_file
+from wsindex.ingest import IndexState, NotAGitRepositoryError, Skip, chunk_file
 from wsindex.model import Chunk, Kind, SearchFilter, SourceFile
 from wsindex.pipeline import _CANDIDATE_MULTIPLIER, FullPass, Pipeline
 from wsindex.rank.reranker import FakeReranker
@@ -723,3 +723,59 @@ def test_a_file_the_grammar_could_not_read_is_reported(
 
 def test_a_file_the_grammar_reads_is_not_reported(pipeline: Pipeline) -> None:
     assert pipeline.index().unparsed == ()
+
+
+# --- the questions a finished index answers --------------------------------
+
+
+def test_describe_reports_an_indexed_file(tmp_path: Path, pipeline: Pipeline) -> None:
+    # `wsindex explain` in library terms. It used to live in the CLI,
+    # which cost that adapter eight imports out of `wsindex.ingest` and
+    # put real analysis — parsed, or merely windowed — in a renderer.
+    report = pipeline.describe(tmp_path / "repo1" / "src" / "main.py")
+
+    assert report is not None
+    assert (report.repo, report.rel_path) == ("repo1", "src/main.py")
+    assert report.skipped is None
+    assert report.lang == "python"
+    assert report.chunks >= 1
+    assert report.parsed_cleanly
+
+
+def test_describe_names_the_rule_that_excluded_a_file(tmp_path: Path, pipeline: Pipeline) -> None:
+    (tmp_path / "repo1" / "notes.unknownsuffix").write_text("hello\n")
+
+    report = pipeline.describe(tmp_path / "repo1" / "notes.unknownsuffix")
+
+    assert report is not None
+    assert report.skipped is Skip.UNKNOWN_SUFFIX
+    assert report.chunks == 0
+
+
+def test_describe_says_when_the_grammar_gave_up(tmp_path: Path, pipeline: Pipeline) -> None:
+    broken = tmp_path / "repo1" / "src" / "broken.py"
+    broken.write_text("def alpha(:\n    return 1\n\n\ndef beta(\n    return 2\n")
+
+    report = pipeline.describe(broken)
+
+    assert report is not None
+    assert report.skipped is None
+    assert not report.parsed_cleanly
+
+
+def test_describe_is_none_outside_every_repo(tmp_path: Path, pipeline: Pipeline) -> None:
+    assert pipeline.describe(tmp_path / "elsewhere.py") is None
+
+
+def test_references_uses_the_pipelines_own_link_store(tmp_path: Path, pipeline: Pipeline) -> None:
+    # The MCP tool opened a second LinkStore on every call, ignoring the
+    # one it had been handed.
+    pipeline.index()
+
+    assert isinstance(pipeline.references("no_such_name_at_all"), list)
+
+
+def test_references_without_links_is_empty(config: Config, store: LanceDBStore) -> None:
+    bare = Pipeline(store=store, state_dir=Path("/nonexistent"), config=config, links=None)
+
+    assert bare.references("8080") == []

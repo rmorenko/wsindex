@@ -189,24 +189,7 @@ def create_app(
         The application, with `state.pipeline`, `state.writer`,
         `state.runs` and `state.token` attached for the routers.
     """
-    if pipeline_factory is None:
-        from wsindex.cli import build_pipeline
-
-        pipeline_factory = build_pipeline
-
-    app = FastAPI(
-        title="wsindex",
-        summary="Semantic search across the repositories of a workspace.",
-        version="0.1.0",
-    )
-    app.state.pipeline = pipeline_factory()
-    # One workspace per server, and one object for it: the pipeline was
-    # built against a config, and every reader here uses that same one
-    # rather than asking the singleton again.
-    app.state.config = app.state.pipeline.config
-    app.state.writer = Writer()
-    app.state.runs = RunLog()
-    app.state.token = token
+    app = _assemble(pipeline_factory, token)
 
     def authorize(request: Request) -> None:
         """Reject a request with the wrong token or the wrong origin."""
@@ -243,80 +226,65 @@ def create_app(
         symbol: Annotated[str | None, Query(description="Substring of the symbol")] = None,
     ) -> dict[str, Any]:
         """Search the workspace. The CLI's `search`, with its flags as query params."""
-        candidate = SearchFilter(
-            lang=tuple(lang or ()),
-            kind=tuple(kind or ()),
-            path=path,
-            symbol=symbol,
+        return run_search(
+            app.state.pipeline,
+            query=q,
+            k=k,
+            repo=repo,
+            filters=SearchFilter(
+                lang=tuple(lang or ()), kind=tuple(kind or ()), path=path, symbol=symbol
+            ),
         )
-        try:
-            hits = app.state.pipeline.search(
-                q, k=k, repo=repo, filters=None if candidate.is_empty else candidate
-            )
-            # Part of the answer, not a footnote: a caller that cannot
-            # see which repos were left out has no way to know its result
-            # is partial, and an agent will report it as complete.
-            skipped = app.state.pipeline.unsearched(repo)
-        except ValueError as exc:
-            # An unknown repo id is the caller's mistake, not the
-            # server's — the CLI exits 1 on it, and 400 is the same
-            # sentence in HTTP.
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {
-            "query": q,
-            "count": len(hits),
-            "hits": [hit.to_json() for hit in hits],
-            "unsearched": list(skipped),
-        }
 
     @app.post("/index", dependencies=guarded)
     def index() -> dict[str, Any]:
         """Re-index every configured repo. Incremental, exactly as the CLI is."""
-        started = time.time()
-        clock = time.monotonic()
-        try:
-            with app.state.writer.held():
-                report = app.state.pipeline.index()
-        except Busy as exc:
-            # 409, not 429: nothing is rate-limiting the caller, the
-            # resource is in a state that forbids the request.
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except NotAGitRepositoryError as exc:
-            # A repo in the config that is not a checkout. The CLI prints
-            # this and exits 1; letting it out as a 500 would say the
-            # server broke, when the answer is in the config file.
-            app.state.runs.record("index", started, {"error": str(exc)})
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        detail = run_detail(report, seconds=round(time.monotonic() - clock, 2))
-        app.state.runs.record("index", started, detail)
-        return detail
+        return run_index(app)
 
     @app.get("/status", dependencies=guarded)
     def status() -> dict[str, Any]:
         """What this server is serving: workspace, repos, recent runs."""
-        config = app.state.config
-        return {
-            "workspace": config.name,
-            "backend": config.backend.value,
-            "store": config.store_uri,
-            "rank": config.rank_enabled,
-            "indexing": app.state.writer.busy,
-            "repos": [
-                {
-                    "id": repo.id,
-                    "path": repo.path,
-                    "remote": repo.remote,
-                    "source": repo.source.value if repo.source else None,
-                    "documents": len(repo.urls),
-                }
-                for repo in config.repos
-            ],
-            "runs": list(app.state.runs.entries),
-        }
+        return describe_server(app)
 
     mount_scheduler(app, guarded)
     mount_admin(app, guarded)
     _mount_mcp(app)
+    return app
+
+
+def _assemble(pipeline_factory: Callable[[], Pipeline] | None, token: str | None) -> FastAPI:
+    """The application and its shared state, before any route exists.
+
+    Split from `create_app` so that what the server *registers* reads as
+    a list rather than as a list preceded by a paragraph of setup.
+
+    Args:
+        pipeline_factory: Builds the shared Pipeline; None means the
+            CLI's composition root, so the server and the CLI cannot
+            drift into different engines.
+        token: Bearer token every request must carry, or None.
+
+    Returns:
+        The app, with `state.pipeline`, `state.config`, `state.writer`,
+        `state.runs` and `state.token` attached.
+    """
+    if pipeline_factory is None:
+        from wsindex.cli import build_pipeline
+
+        pipeline_factory = build_pipeline
+    app = FastAPI(
+        title="wsindex",
+        summary="Semantic search across the repositories of a workspace.",
+        version="0.1.0",
+    )
+    app.state.pipeline = pipeline_factory()
+    # One workspace per server, and one object for it: the pipeline was
+    # built against a config, and every reader here uses that same one
+    # rather than asking the singleton again.
+    app.state.config = app.state.pipeline.config
+    app.state.writer = Writer()
+    app.state.runs = RunLog()
+    app.state.token = token
     return app
 
 
@@ -369,6 +337,102 @@ class Guard:
         ):
             return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
         return None
+
+
+# The bodies of the routes above. Out of `create_app` because a factory
+# that is also three algorithms is a factory nobody can skim: what it
+# registers should read as a list. Plain functions rather than methods,
+# since the only state they need arrives as arguments.
+
+
+def run_search(
+    pipeline: Pipeline, *, query: str, k: int, repo: str | None, filters: SearchFilter
+) -> dict[str, Any]:
+    """`GET /search`, as data.
+
+    Args:
+        pipeline: The engine to ask.
+        query: Natural-language query.
+        k: How many hits.
+        repo: Restrict to one repo id, or None for the workspace.
+        filters: Structural narrowing; an empty one is dropped.
+
+    Returns:
+        The answer body, `unsearched` included.
+
+    Raises:
+        HTTPException: 400 when `repo` names nothing in the config — the
+            caller's mistake, not the server's. The CLI exits 1 on it,
+            and 400 is the same sentence in HTTP.
+    """
+    try:
+        hits = pipeline.search(query, k=k, repo=repo, filters=None if filters.is_empty else filters)
+        # Part of the answer, not a footnote: a caller that cannot see
+        # which repos were left out has no way to know its result is
+        # partial, and an agent will report it as complete.
+        skipped = pipeline.unsearched(repo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "query": query,
+        "count": len(hits),
+        "hits": [hit.to_json() for hit in hits],
+        "unsearched": list(skipped),
+    }
+
+
+def run_index(app: FastAPI) -> dict[str, Any]:
+    """`POST /index`: one indexing run, under the one-writer lock.
+
+    Args:
+        app: The application, for its pipeline, lock and run log.
+
+    Returns:
+        What happened, in the shape `run_detail` defines.
+
+    Raises:
+        HTTPException: 409 when a run is already in progress — not 429,
+            because nothing is rate-limiting the caller; the resource is
+            in a state that forbids the request. 400 when a configured
+            path is not a checkout, since the answer is in the config
+            file and a 500 would say the server broke.
+    """
+    started = time.time()
+    clock = time.monotonic()
+    try:
+        with app.state.writer.held():
+            report = app.state.pipeline.index()
+    except Busy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except NotAGitRepositoryError as exc:
+        app.state.runs.record("index", started, {"error": str(exc)})
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    detail = run_detail(report, seconds=round(time.monotonic() - clock, 2))
+    app.state.runs.record("index", started, detail)
+    return detail
+
+
+def describe_server(app: FastAPI) -> dict[str, Any]:
+    """`GET /status`: what this server is serving."""
+    config = app.state.config
+    return {
+        "workspace": config.name,
+        "backend": config.backend.value,
+        "store": config.store_uri,
+        "rank": config.rank_enabled,
+        "indexing": app.state.writer.busy,
+        "repos": [
+            {
+                "id": repo.id,
+                "path": repo.path,
+                "remote": repo.remote,
+                "source": repo.source.value if repo.source else None,
+                "documents": len(repo.urls),
+            }
+            for repo in config.repos
+        ],
+        "runs": list(app.state.runs.entries),
+    }
 
 
 def run_detail(report: IndexReport, *, seconds: float) -> dict[str, Any]:

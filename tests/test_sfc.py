@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from conftest import needs_grammar
+from helpers import needs_grammar
 from wsindex.ingest import REGISTRY, chunk_file
 from wsindex.model import Chunk, Kind, SourceFile
 

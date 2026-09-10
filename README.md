@@ -838,7 +838,9 @@ lists them.
 
 - Concept — [CONCEPT_en.md](CONCEPT_en.md)
 - Business requirements — [BRD_en.md](BRD_en.md)
-- Architecture — [ARCH_en.md](ARCH_en.md)
+- Quality attributes and the early decisions (ADR-1 to ADR-6) —
+  [ARCH_en.md](ARCH_en.md). A map, deliberately short: what the tool does
+  today is this file, which is measured and tested against the CLI.
 
 _(Russian originals: `CONCEPT_ru.md`, `BRD_ru.md`, `ARCH_ru.md`.)_
 

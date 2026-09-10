@@ -175,17 +175,15 @@ def inspect_file(
 ) -> WalkedFile | None:
     """Apply the indexing policy to one named file; None means "skip it".
 
-    The per-file half of `walk_repo`, split out so an incremental run can
-    ask about the handful of paths git reported as changed without
-    walking the tree. Both callers must agree on what counts as
-    indexable — if they drifted, a file would be indexed by a full pass
-    and ignored by an incremental one (or the reverse), and the index
-    would depend on which run happened to touch it.
+    The convenience wrapper over `examine`, for the callers that only
+    need a yes or a no. Both paths through the pipeline — the full pass
+    and the incremental one — decide with the same function, because if
+    they drifted a file would be indexed by one and ignored by the other,
+    and the index would depend on which run happened to touch it.
 
-    Unlike `walk_repo` this receives a path from the outside, so it
-    cannot assume the file is there: a path may have been deleted between
-    git reporting it and this call, or point at a directory. Both mean
-    "nothing to index", not an error.
+    Every path arrives from outside, so nothing here may assume the file
+    is there: it may have been deleted between git listing it and this
+    call, or be a directory. Both mean "nothing to index", not an error.
 
     Args:
         root: Repository root.
@@ -199,9 +197,6 @@ def inspect_file(
     Returns:
         The WalkedFile, or None when the policy excludes it.
     """
-    # Directory pruning, which walk_repo does by not descending, has to be
-    # re-checked here: git happily reports a tracked file under
-    # `node_modules/`, and the two callers must select the same set.
     found = examine(root, rel_path, ignore=ignore, formats=formats)
     return found if isinstance(found, WalkedFile) else None
 

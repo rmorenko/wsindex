@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import Field
 
-from wsindex.links import KIND_LABELS, LinkKind, LinkStore
+from wsindex.links import KIND_LABELS, LinkKind
 from wsindex.model import Kind, SearchFilter
 
 if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
@@ -72,80 +72,110 @@ def build(pipeline: Pipeline | None = None) -> FastMCP:
         symbol: Annotated[str | None, Field(description="Substring of the symbol name")] = None,
     ) -> dict[str, Any]:
         """Search the workspace by meaning; returns chunks with file:line."""
-        try:
-            kinds = tuple(Kind(value) for value in kind or ())
-        except ValueError as exc:
-            # Named back to the caller: an agent can fix a wrong enum on
-            # its next turn if it is told which values exist.
-            raise ValueError(f"kind must be one of {', '.join(k.value for k in Kind)}") from exc
-        candidate = SearchFilter(lang=tuple(lang or ()), kind=kinds, path=path, symbol=symbol)
-        hits = engine.search(
-            query, k=k, repo=repo, filters=None if candidate.is_empty else candidate
+        return _search(
+            engine, query, k=k, repo=repo, lang=lang, kind=kind, path=path, symbol=symbol
         )
-        # Named, because an agent reporting "there is no such code" on a
-        # workspace half of which was never indexed is worse than an
-        # agent that says it does not know.
-        skipped = engine.unsearched(repo)
-        return {
-            "count": len(hits),
-            "hits": [hit.to_json() for hit in hits],
-            "unsearched": list(skipped),
-        }
 
     @server.tool()
     def refs(
         name: Annotated[str, Field(description="A port, ticket, commit sha or url")],
     ) -> dict[str, Any]:
         """Everything that names this: who reads a port, which commits mention a ticket."""
-        with LinkStore(engine.config.index_dir) as links:
-            edges = links.by_name(name)
-        found = [
-            {
-                "relation": KIND_LABELS[edge.kind],
-                "repo": edge.repo,
-                "path": edge.path,
-                "line": edge.line,
-                "url": edge.url,
-            }
-            for edge in edges
-        ]
-        drifted = any(edge.kind is LinkKind.READS_KEY for edge in edges) and not any(
-            edge.kind is LinkKind.DECLARES for edge in edges
-        )
-        return {"name": name, "count": len(found), "links": found, "unresolved": drifted}
+        return _refs(engine, name)
 
     @server.tool()
     def why(
         symbol: Annotated[str, Field(description="A function, class or method name")],
     ) -> dict[str, Any]:
         """The commits that wrote a definition, and what they said about it."""
-        found = engine.search(symbol, k=3, filters=SearchFilter(symbol=symbol))
-        if not found:
-            return {"symbol": symbol, "definitions": []}
-        definitions = []
-        with LinkStore(engine.config.index_dir) as links:
-            for hit in found:
-                commits = []
-                for edge in links.out_of([str(hit.native_id)], kind=LinkKind.BLAMED_BY):
-                    message = (
-                        engine.commit_message(edge.repo, edge.dst_chunk_id)
-                        if edge.dst_chunk_id is not None
-                        else None
-                    )
-                    commits.append({"commit": edge.name, "message": message})
-                definitions.append(
-                    {
-                        "symbol": hit.symbol,
-                        "repo": hit.repo,
-                        "path": hit.path,
-                        "start_line": hit.start_line,
-                        "end_line": hit.end_line,
-                        "commits": commits,
-                    }
-                )
-        return {"symbol": symbol, "definitions": definitions}
+        return _why(engine, symbol)
 
     return server
+
+
+# The three tool bodies. Out of `build` because the factory should read
+# as the list of tools it registers — what each one answers is a
+# question of its own. Each is a library call plus a rendering, which is
+# ADR-10's rule read from this side.
+
+
+def _search(
+    engine: Pipeline,
+    query: str,
+    *,
+    k: int,
+    repo: str | None,
+    lang: list[str] | None,
+    kind: list[str] | None,
+    path: str | None,
+    symbol: str | None,
+) -> dict[str, Any]:
+    """`search`, as data.
+
+    Raises:
+        ValueError: `kind` names something that is not a Kind. Named back
+            to the caller so an agent can fix it on its next turn.
+    """
+    try:
+        kinds = tuple(Kind(value) for value in kind or ())
+    except ValueError as exc:
+        raise ValueError(f"kind must be one of {', '.join(k.value for k in Kind)}") from exc
+    candidate = SearchFilter(lang=tuple(lang or ()), kind=kinds, path=path, symbol=symbol)
+    hits = engine.search(query, k=k, repo=repo, filters=None if candidate.is_empty else candidate)
+    return {
+        "count": len(hits),
+        "hits": [hit.to_json() for hit in hits],
+        # Named, because an agent reporting "there is no such code" about
+        # a workspace half of which was never indexed is worse than an
+        # agent that says it does not know.
+        "unsearched": list(engine.unsearched(repo)),
+    }
+
+
+def _refs(engine: Pipeline, name: str) -> dict[str, Any]:
+    """`refs`, as data, with the drift flag the CLI also reports."""
+    edges = engine.references(name)
+    found = [
+        {
+            "relation": KIND_LABELS[edge.kind],
+            "repo": edge.repo,
+            "path": edge.path,
+            "line": edge.line,
+            "url": edge.url,
+        }
+        for edge in edges
+    ]
+    drifted = any(edge.kind is LinkKind.READS_KEY for edge in edges) and not any(
+        edge.kind is LinkKind.DECLARES for edge in edges
+    )
+    return {"name": name, "count": len(found), "links": found, "unresolved": drifted}
+
+
+def _why(engine: Pipeline, symbol: str) -> dict[str, Any]:
+    """`why`, as data. The definitions come from the library, whole."""
+    return {
+        "symbol": symbol,
+        "definitions": [
+            {
+                "symbol": definition.hit.symbol,
+                "repo": definition.hit.repo,
+                "path": definition.hit.path,
+                "start_line": definition.hit.start_line,
+                "end_line": definition.hit.end_line,
+                "commits": [
+                    {
+                        "commit": author.commit,
+                        "message": author.message,
+                        "references": [
+                            {"name": ref.name, "url": ref.url} for ref in author.references
+                        ],
+                    }
+                    for author in definition.commits
+                ],
+            }
+            for definition in engine.why(symbol)
+        ],
+    }
 
 
 __all__ = ["INSTRUCTIONS", "build"]

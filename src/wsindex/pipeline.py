@@ -8,6 +8,14 @@ constructor; which repositories to index and with which metric comes from
 threading those two values through the composition root only to hand them
 back unchanged was ceremony.
 
+This module is the engine and nothing else. What a run *produces* — its
+tallies, its report, the rule that decides why a repo was read whole,
+the shapes an answer comes back in — lives in `wsindex.run`, and is
+re-exported from here so that no caller had to move when the two
+separated. They separated when this file reached four roles and 992
+lines, which is the threshold its own docstring had named one review
+earlier.
+
 `index` is incremental against git. Both of its paths — the
 full pass and the incremental one — end in the same two lines: add the
 chunks the working tree currently produces, then delete every stored
@@ -21,17 +29,13 @@ left its old chunks in the index forever.
 import logging
 import time
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from enum import StrEnum
 from pathlib import Path
 
 from wsindex.config import Config, Repository
 from wsindex.ingest import (
-    PARSE_ERROR,
     IndexState,
     RepoDiff,
-    Skip,
     WalkedFile,
     chunk_file,
     diff_since,
@@ -40,18 +44,27 @@ from wsindex.ingest import (
 )
 from wsindex.ingest.commits import blame_links, blame_map, commit_chunks, read_commits
 from wsindex.ingest.link_extract import links_for
-from wsindex.links import LinkStore
+from wsindex.links import Edge, LinkKind, LinkStore
 from wsindex.model import Chunk, Hit, SearchFilter, SourceFile
 from wsindex.rank.reranker import Reranker
+from wsindex.run import (
+    _WRITE_BATCH,
+    Authorship,
+    Definition,
+    FileReport,
+    FullPass,
+    IndexReport,
+    Reference,
+    _blaming,
+    _History,
+    _selection,
+    _Tally,
+    _Totals,
+    _unparsed,
+    _why_full,
+    _Written,
+)
 from wsindex.store import VectorStore
-
-_WRITE_BATCH = 2000
-"""How many chunks accumulate before one write to the store.
-
-Every write is a round trip for deduplication and a version in the store,
-so writing per file made both proportional to the file count. Two
-thousand chunks is a few megabytes in flight and turns a 3458-chunk repo
-into two writes instead of 149."""
 
 _CANDIDATE_MULTIPLIER = 4
 
@@ -61,254 +74,6 @@ What is logged here is what an operator asks about afterwards — which
 repo was read, how much of it, how long, and what could not be read at
 all. The CLI says the same things in its own words to a person who is
 watching; a log is for the reader who was not."""
-
-
-@dataclass(frozen=True, kw_only=True)
-class _Totals:
-    """One repo's contribution to an IndexReport; summed by `index`."""
-
-    files: int
-    chunks: int
-    written: int
-    deleted: int
-    commits: int
-    unreadable: tuple[str, ...] = ()
-    unparsed: tuple[str, ...] = ()
-
-
-class FullPass(StrEnum):
-    """Why a repo was read whole instead of by delta.
-
-    The note this feeds used to list three possible causes and let the
-    reader guess, which is fine until the real cause is a fourth one —
-    a state file that could not be read named none of them. Each member
-    is the sentence itself: there is no second place where these are
-    turned into words, so they cannot drift out of step.
-    """
-
-    NEVER_INDEXED = "a first index"
-    STATE_LOST = "the index state file could not be read, so the last run is unknown"
-    MARKUP_CHANGED = "its ignore/formats markup changed"
-    DIRTY_TREE = "uncommitted work, which a commit-to-commit diff cannot see; commit or stash it"
-    HISTORY_MOVED = "the commit it was last indexed at is gone (a rebase, a gc, a re-clone)"
-
-
-@dataclass(frozen=True, kw_only=True)
-class _History:
-    """What indexing one repo's commit messages produced.
-
-    Attributes:
-        written: Message chunks the store actually wrote.
-        ids: Their chunk ids, which count as fresh (see `_index_commits`).
-        by_sha: Commit sha -> its chunk id, which is what a blame edge
-            needs to point at the message that explains a line.
-    """
-
-    written: int
-    ids: set[str]
-    by_sha: dict[str, str]
-
-
-@dataclass(frozen=True, kw_only=True)
-class _Written:
-    """Running totals over the files of one repo."""
-
-    files: int = 0
-    chunks: int = 0
-    written: int = 0
-    ids: frozenset[str] = frozenset()
-    unparsed: tuple[str, ...] = ()
-
-    def read(self, *, chunks: int, ids: set[str], path: str | None = None) -> "_Written":
-        """This plus one more file, read and chunked but not yet written.
-
-        `path` is given only when that file's grammar reported errors, so
-        the count of them costs one boolean per file rather than a second
-        parse.
-        """
-        return replace(
-            self,
-            files=self.files + 1,
-            chunks=self.chunks + chunks,
-            ids=self.ids | ids,
-            unparsed=(*self.unparsed, path) if path is not None else self.unparsed,
-        )
-
-    def wrote(self, written: int) -> "_Written":
-        """This plus one batch that reached the store."""
-        return replace(self, written=self.written + written)
-
-
-@dataclass(frozen=True, kw_only=True)
-class _Selection:
-    """What one repo's changed paths turned into.
-
-    Attributes:
-        indexable: The files worth reading.
-        forget: Paths whose stored chunks must go — deleted ones, plus
-            paths that changed into something unindexable.
-        unreadable: Paths git tracks that could not be opened. Neither
-            indexable nor forgettable: they are a problem to report, not
-            a decision to act on, and folding them into either list is
-            how they went unmentioned for as long as they did.
-    """
-
-    indexable: list[WalkedFile]
-    forget: list[str]
-    unreadable: list[str]
-
-
-def _selection(
-    repo: Repository, *, root: Path, changed: tuple[str, ...], deleted: tuple[str, ...]
-) -> _Selection:
-    """Split the changed paths into what to read, what to forget, what broke.
-
-    A path that changed into something unindexable — renamed to a `.png`,
-    grown past the size limit, turned binary — is a deletion as far as the
-    store is concerned, which is why it joins the second list rather than
-    being skipped.
-
-    Args:
-        repo: The repo, for its own `ignore` and `formats` markup.
-        root: Repository root.
-        changed: Paths git reports as added or modified.
-        deleted: Paths git reports as gone.
-
-    Returns:
-        The three lists; see `_Selection`.
-    """
-    indexable: list[WalkedFile] = []
-    forget: list[str] = list(deleted)
-    unreadable: list[str] = []
-    for rel_path in changed:
-        walked = examine(root, rel_path, ignore=repo.ignore, formats=repo.formats)
-        if isinstance(walked, WalkedFile):
-            indexable.append(walked)
-            continue
-        if walked is Skip.UNREADABLE:
-            unreadable.append(rel_path)
-        # Unreadable paths are forgotten too: whatever the store still
-        # holds for one is from a version nobody can confirm any more.
-        forget.append(rel_path)
-    return _Selection(indexable=indexable, forget=forget, unreadable=unreadable)
-
-
-@dataclass(frozen=True, kw_only=True)
-class IndexReport:
-    """Immutable summary of one index() run, totals across all repos.
-
-    Attributes:
-        files: How many files were read and chunked. In an incremental
-            run this counts the changed files only, so it is a measure
-            of work done, not of corpus size.
-        chunks: How many chunks those files produced.
-        written: How many chunks the store actually wrote; below `chunks`
-            means dedup skipped already-stored ones.
-        deleted: How many stored chunks were removed as stale — chunks
-            of deleted files, and chunks a changed file no longer
-            produces.
-        commits: How many commit messages were newly indexed. Counted
-            apart from `chunks` on purpose: folding them in would make
-            `files: 2  chunks: 4` fail to add up for the reader, since
-            two of those chunks came from no file at all.
-        missing_repos: Ids of configured repos whose directory does not
-            exist; they were skipped, not failed on.
-        full_repos: Repos that could not go incremental this run, each
-            with the reason it could not. A pair rather than a bare id
-            because "why did this take nine seconds" is the question the
-            field exists to answer.
-        unreadable: Paths git tracks that could not be opened, as
-            `repo/path`. Not a policy skip: these were meant to be
-            indexed and are not, and a run that only printed `files: 1`
-            when there were two said something untrue.
-        unparsed: Paths whose grammar reported errors, as `repo/path`.
-            They are in the index, as text windows rather than
-            definitions — worse to search and, until now, impossible to
-            notice.
-        seconds: How long the run took. The server already recorded this
-            per run; a person at a terminal deserves the same, and it is
-            the only number that makes two runs comparable.
-    """
-
-    files: int
-    chunks: int
-    written: int
-    deleted: int
-    commits: int
-    missing_repos: tuple[str, ...]
-    full_repos: tuple[tuple[str, FullPass], ...]
-    unreadable: tuple[str, ...] = ()
-    unparsed: tuple[str, ...] = ()
-    seconds: float = 0.0
-
-
-def _unparsed(chunks: list[Chunk]) -> bool:
-    """True when the grammar could not read the file these came from."""
-    return any(chunk.node_type == PARSE_ERROR for chunk in chunks)
-
-
-@contextmanager
-def _blaming(repo_id: str, rel_path: str) -> Iterator[None]:
-    """Make sure a failure in here says which file it was reading.
-
-    An index run touches a hundred-odd files, and a bug in chunking one
-    of them used to surface as `error: the chunker fell over` — measured,
-    with no way to tell which of five files in a toy repo, let alone
-    which of 122. The loop knows the path at exactly that moment and was
-    dropping it.
-
-    Always a RuntimeError, never `type(exc)(...)`: not every exception
-    can be rebuilt from one string — `UnicodeDecodeError` takes five
-    arguments — and a TypeError raised from inside an `except` would bury
-    the failure it was meant to describe. The original type is named in
-    the message and chained underneath, so nothing is lost and
-    `WSINDEX_DEBUG` still shows every frame.
-
-    Args:
-        repo_id: The repo being indexed.
-        rel_path: The file being read, repo-relative.
-
-    Yields:
-        Nothing; this is here for the `except`.
-    """
-    try:
-        yield
-    except Exception as exc:
-        raise RuntimeError(f"{repo_id}/{rel_path}: {type(exc).__name__}: {exc}") from exc
-
-
-def _why_full(repo: Repository, *, state: IndexState, dirty: bool) -> FullPass:
-    """Which of the five reasons made this repo a full pass.
-
-    Ordered by which one the reader can still do something about, which
-    is not the same as which came first. A dirty tree wins even when the
-    repo has also never been indexed: a dirty tree *is* why nothing was
-    recorded, and it will cost a full pass on every run until somebody
-    commits, while "a first index" is true once and then never again.
-    Found by watching a live server call a workspace it had indexed all
-    week "a first index" — correct, and useless.
-
-    Then the lost state file, because it looks exactly like a first index
-    and is not; then the markup, which the user changed on purpose; and
-    last the one nobody chose.
-
-    Args:
-        repo: The repo just planned.
-        state: The state as it was loaded, before this run wrote to it.
-        dirty: Whether its working tree has uncommitted work.
-
-    Returns:
-        The reason, as the sentence the note will print.
-    """
-    if dirty:
-        return FullPass.DIRTY_TREE
-    if state.commits.get(repo.id) is None:
-        return FullPass.STATE_LOST if state.lost else FullPass.NEVER_INDEXED
-    if state.markup.get(repo.id) != repo.markup_key:
-        return FullPass.MARKUP_CHANGED
-    # A `since` was known, the tree is clean, the markup is the same, and
-    # the diff still came back full: git no longer resolves that commit.
-    return FullPass.HISTORY_MOVED
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -391,11 +156,7 @@ class Pipeline:
         started = time.monotonic()
         config = self.config
         state = IndexState.load(self.state_dir)
-        files = chunks_count = written = deleted = commits = 0
-        missing_repos: list[str] = []
-        full_repos: list[tuple[str, FullPass]] = []
-        unreadable: list[str] = []
-        unparsed: list[str] = []
+        tally = _Tally()
         for repo in config.repos:
             # The engine says *who* is being read; what to draw with that
             # is the caller's business (see `wsindex.ui`). A plain
@@ -405,23 +166,17 @@ class Pipeline:
             root = Path(repo.path)
             if not root.is_dir():
                 log.warning("skipping %s: %s does not exist", repo.id, root)
-                missing_repos.append(repo.id)
+                tally.missing.append(repo.id)
                 continue
             self.store.create_dataset(dataset_name=repo.id, metric=config.metric)
             diff, dirty = self._plan(repo, root=root, state=state)
             if diff.full:
                 reason = _why_full(repo, state=state, dirty=dirty)
                 log.info("full pass for %s: %s", repo.id, reason)
-                full_repos.append((repo.id, reason))
+                tally.full.append((repo.id, reason))
             if diff.full or diff.changed or diff.deleted:
                 totals = self._index_repo(repo, root=root, diff=diff, config=config)
-                files += totals.files
-                chunks_count += totals.chunks
-                written += totals.written
-                deleted += totals.deleted
-                commits += totals.commits
-                unreadable.extend(f"{repo.id}/{path}" for path in totals.unreadable)
-                unparsed.extend(f"{repo.id}/{path}" for path in totals.unparsed)
+                tally.add(repo.id, totals)
                 log.info(
                     "indexed %s: %d files, %d chunks, %d written, %d deleted",
                     repo.id,
@@ -446,21 +201,10 @@ class Pipeline:
         log.info(
             "index finished in %.2fs: %d files, %d chunks",
             time.monotonic() - started,
-            files,
-            chunks_count,
+            tally.files,
+            tally.chunks,
         )
-        return IndexReport(
-            files=files,
-            chunks=chunks_count,
-            written=written,
-            deleted=deleted,
-            commits=commits,
-            missing_repos=tuple(missing_repos),
-            full_repos=tuple(full_repos),
-            unreadable=tuple(unreadable),
-            unparsed=tuple(unparsed),
-            seconds=round(time.monotonic() - started, 2),
-        )
+        return tally.report(seconds=round(time.monotonic() - started, 2))
 
     def _plan(self, repo: Repository, *, root: Path, state: IndexState) -> tuple[RepoDiff, bool]:
         """Work out what to read for one repo, and whether HEAD describes it.
@@ -673,6 +417,111 @@ class Pipeline:
             self.links.delete_by_source(stale)
         return deleted
 
+    def why(self, symbol: str, *, limit: int = 3) -> list[Definition]:
+        """Definitions of `symbol`, each with the commits that wrote it.
+
+        Lives here because two adapters wanted it and each built it
+        itself — `wsindex why` and the MCP tool — from the same three
+        moves: find the definitions, walk their BLAMED_BY edges, fetch
+        each commit's message. They had already drifted (one showed three
+        definitions, the other all of them), which is what a rule in
+        ADR-10 exists to prevent: an interface that cannot be written as
+        a library call means the library is missing something.
+
+        The `symbol` filter is a prefilter, so the store narrows to
+        exactly the matching chunks and ranking only breaks ties among
+        them.
+
+        Args:
+            symbol: Name to look for; matched as a substring.
+            limit: How many definitions to return, best match first.
+
+        Returns:
+            The definitions, empty when nothing matches. A definition
+            with no commits is normal — links may be off, or the repo
+            may not have been indexed since blame edges existed.
+        """
+        found = self.search(symbol, k=limit, filters=SearchFilter(symbol=symbol))
+        if not found or self.links is None:
+            return [Definition(hit=hit, commits=()) for hit in found]
+        return [Definition(hit=hit, commits=tuple(self._authors(hit))) for hit in found]
+
+    def _authors(self, hit: Hit) -> Iterator[Authorship]:
+        """The commits a blame edge attributes this chunk to."""
+        assert self.links is not None
+        for edge in self.links.out_of([str(hit.native_id)], kind=LinkKind.BLAMED_BY):
+            if edge.dst_chunk_id is None:
+                yield Authorship(commit=edge.name, message=None)
+                continue
+            pointed = self.links.out_of([edge.dst_chunk_id], kind=LinkKind.REFERENCES)
+            yield Authorship(
+                commit=edge.name,
+                message=self.commit_message(edge.repo, edge.dst_chunk_id),
+                references=tuple(Reference(name=ref.name, url=ref.url) for ref in pointed),
+            )
+
+    def describe(self, path: Path) -> FileReport | None:
+        """What the index knows about one file, or None if it owns none.
+
+        `wsindex explain` in library terms. It used to do this itself,
+        which cost the CLI eight imports out of `wsindex.ingest` and put
+        real analysis — is this file parsed or merely windowed — in an
+        adapter.
+
+        Args:
+            path: The file, absolute or relative to the current
+                directory.
+
+        Returns:
+            The report, or None when the path lies outside every
+            configured repo.
+        """
+        target = path.expanduser().resolve()
+        for repo in self.config.repos:
+            root = Path(repo.path).expanduser().resolve()
+            if root != target and root not in target.parents:
+                continue
+            rel = target.relative_to(root).as_posix()
+            found = examine(root, rel, ignore=repo.ignore, formats=repo.formats)
+            if not isinstance(found, WalkedFile):
+                return FileReport(repo=repo.id, rel_path=rel, skipped=found)
+            return self._read_report(repo.id, target, found)
+        return None
+
+    @staticmethod
+    def _read_report(repo_id: str, target: Path, found: WalkedFile) -> FileReport:
+        """Chunk one file to see what it becomes; the second half of `describe`."""
+        text = target.read_text(encoding="utf-8", errors="replace")
+        source = SourceFile(repo=repo_id, path=found.rel_path, lang=found.lang, kind=found.kind)
+        chunks = chunk_file(text, source)
+        return FileReport(
+            repo=repo_id,
+            rel_path=found.rel_path,
+            skipped=None,
+            lang=found.lang,
+            kind=found.kind,
+            chunks=len(chunks),
+            symbols=sum(1 for chunk in chunks if chunk.symbol),
+            parsed_cleanly=not _unparsed(chunks),
+        )
+
+    def references(self, name: str) -> list[Edge]:
+        """Every link that names this thing — a port, a ticket, a sha.
+
+        A thin pass-through, and it earns its place by removing a
+        second connection: the MCP tool opened its own `LinkStore` on
+        every call, ignoring the one this Pipeline was handed. The
+        resource was injected and then bypassed.
+
+        Args:
+            name: Exactly as it was recorded — `8080`, `PROJ-412`.
+
+        Returns:
+            The edges, ordered by file then line; empty when links are
+            switched off for this pipeline.
+        """
+        return [] if self.links is None else self.links.by_name(name)
+
     def commit_message(self, repo: str, chunk_id: str) -> str | None:
         """The text of one indexed commit message, or None if it is gone.
 
@@ -782,3 +631,17 @@ class Pipeline:
         """
         known = self.store.datasets()
         return tuple(r.id for r in self._scope(repo) if r.id not in known)
+
+
+__all__ = [
+    # Re-exported from `wsindex.run`, which is where they live now: every
+    # adapter already imports them from here, and a split of this module
+    # is not a reason for four other files to change.
+    "Authorship",
+    "Definition",
+    "FileReport",
+    "FullPass",
+    "IndexReport",
+    "Pipeline",
+    "Reference",
+]

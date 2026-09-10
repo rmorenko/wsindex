@@ -170,6 +170,9 @@ def drive(
                 return [hit()]
             return hits
 
+        def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
+            return ()
+
     run(_Pipeline(), history_dir=tmp_path / "state")  # type: ignore[arg-type]
     return stream.getvalue()
 
@@ -274,6 +277,9 @@ class _NeverSearched:
     def search(self, *args: Any, **kwargs: Any) -> list[Hit]:
         raise AssertionError("nothing should have been searched")
 
+    def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
+        return ()
+
 
 def test_an_unknown_repo_is_a_sentence_not_a_crash(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -290,6 +296,9 @@ def test_an_unknown_repo_is_a_sentence_not_a_crash(
     class _Strict:
         def search(self, *args: Any, **kwargs: Any) -> list[Hit]:
             raise ValueError("unknown repo id: 'nope'")
+
+        def unsearched(self, repo: str | None = None) -> tuple[str, ...]:
+            return ()
 
     run(_Strict(), history_dir=tmp_path / "state")  # type: ignore[arg-type]
 

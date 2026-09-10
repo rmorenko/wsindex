@@ -7,8 +7,9 @@ history is indexed alongside the files.
 Two halves. Reading the log is cheap — milliseconds for a whole history
 — and each message becomes one chunk under a synthetic path
 (`commits/2026-09-09-abc1234`), because a commit has no file. Blame is
-the expensive half at ~28 ms per file, so it is paid per *indexed* file,
-which the incremental pass already keeps down to what changed.
+the expensive half: one fork per file, and it is paid per *indexed*
+file, which the incremental pass already keeps down to what changed.
+See `BLAME_WORKERS` for what one costs and why they run in a pool.
 
 An untracked file has no history and simply gets no edges; git says so
 with an error, and that is a normal answer here rather than a failure.

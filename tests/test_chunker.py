@@ -9,7 +9,7 @@ from textwrap import dedent
 
 import pytest
 
-from conftest import needs_grammar
+from helpers import needs_grammar
 from wsindex.ingest import chunk_file
 from wsindex.ingest.languages import REGISTRY
 from wsindex.model import Kind, SourceFile

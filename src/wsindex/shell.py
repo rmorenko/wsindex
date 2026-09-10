@@ -232,11 +232,19 @@ class _Session:
             self.hits = list(
                 self.pipeline.search(query.text, k=query.k, repo=query.repo, filters=query.filters)
             )
+            skipped = self.pipeline.unsearched(query.repo)
         except (ShellError, ValueError) as exc:
             # A bad line is a sentence, not an exit: the loop's whole job
             # is to keep going.
             self.out.print(f"[red]{exc}[/]")
             return
+        if skipped:
+            # The CLI, the API and the MCP tools all say this; the shell
+            # was the one adapter over the same search that did not. A
+            # repo nobody indexed takes no part in any answer, and an
+            # answer that skipped half the workspace must not look like
+            # one that did not.
+            self.out.print(f"[yellow]not searched (never indexed): {', '.join(skipped)}[/]")
         if not self.hits:
             self.out.print("[dim]no results[/]")
             return

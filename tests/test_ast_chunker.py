@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from conftest import needs_grammar
+from helpers import needs_grammar
 from wsindex.ingest.ast import HAS_TREE_SITTER
 from wsindex.ingest.ast.nested import _preamble_start
 from wsindex.ingest.ast.rust import POLICY as RUST_POLICY
