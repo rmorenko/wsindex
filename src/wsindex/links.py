@@ -188,10 +188,21 @@ class LinkStore:
                 path         TEXT NOT NULL,
                 PRIMARY KEY (src_chunk_id, kind, name, line)
             );
-            -- The two queries that exist: resolve a name, and forget a
-            -- chunk. Both are equality lookups, which is the whole
-            -- argument for keeping links out of the vector store.
+            -- Three queries, three indexes. All equality lookups, which
+            -- is the whole argument for keeping links out of the vector
+            -- store.
+            --
+            -- `links_by_name` covers (kind, name) and serves `dangling`,
+            -- which constrains both. It does NOT serve `by_name`, which
+            -- constrains only `name`: a composite index is a sorted list
+            -- of its leading column first, so a query that leaves that
+            -- column free has nothing to descend. `refs` — the query
+            -- this whole table exists to answer — was therefore reading
+            -- every row, which `EXPLAIN QUERY PLAN` says plainly (SCAN,
+            -- not SEARCH) and which costs 20 ms against 0.1 at a million
+            -- links. Hence the second, single-column index.
             CREATE INDEX IF NOT EXISTS links_by_name ON links (kind, name);
+            CREATE INDEX IF NOT EXISTS links_by_bare_name ON links (name);
             CREATE INDEX IF NOT EXISTS links_by_src ON links (src_chunk_id);
             """
         )

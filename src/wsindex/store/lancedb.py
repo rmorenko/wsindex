@@ -134,6 +134,8 @@ class LanceDBStore(VectorStore):
             "datasets", schema=datasets_schema, exist_ok=True
         )
         self._known_datasets: dict[str, dict[str, Any]] = {}
+        self._query_memo: tuple[str, list[float]] | None = None
+        self._ids_of: tuple[str, set[str]] | None = None
 
     def _get_datasets(self) -> dict[str, dict[str, Any]]:
         """Registry rows by dataset name; one scan per store instance.
@@ -195,8 +197,7 @@ class LanceDBStore(VectorStore):
         """
         if self._get_datasets().get(dataset_name) is None:
             raise ValueError("Dataset is not present in the store")
-        predicate = f"dataset = '{_sql_quote(dataset_name)}'"
-        known = {r["id"] for r in self.tbl.search().where(predicate).select(["id"]).to_list()}
+        known = self._dataset_ids(dataset_name)
         new_chunks = []
         for chunk in chunks:
             if chunk.id in known:
@@ -249,8 +250,7 @@ class LanceDBStore(VectorStore):
         if filters is not None and not filters.is_empty:
             parts.extend(_filter_predicates(filters))
         predicate = " AND ".join(parts)
-        vec = self.embedder.embed([query])[0]
-        builder = cast("LanceVectorQueryBuilder", self.tbl.search(vec))
+        builder = cast("LanceVectorQueryBuilder", self.tbl.search(self._query_vector(query)))
         rows = builder.where(predicate, prefilter=True).distance_type("cosine").limit(k).to_list()
         return [
             Hit(
@@ -264,6 +264,52 @@ class LanceDBStore(VectorStore):
             )
             for row in rows
         ]
+
+    def _query_vector(self, query: str) -> list[float]:
+        """The query's embedding, remembered for exactly one string.
+
+        `Pipeline.search` asks one dataset at a time, so a workspace of R
+        repositories ran the same sentence through the model R times —
+        3.9 ms each, and 48% of a single-repo search. Not a cache for
+        users who repeat themselves (measured, they do not): the repeat
+        is inside one search and is guaranteed.
+
+        The memo is one tuple, read into a local and written whole. A
+        server shares this store across threads, and a pair of separate
+        fields would let one thread's query meet another thread's vector
+        — the wrong answer, silently. A tuple cannot be half-replaced.
+        """
+        memo = self._query_memo
+        if memo is not None and memo[0] == query:
+            return memo[1]
+        vector: list[float] = self.embedder.embed([query])[0]
+        self._query_memo = (query, vector)
+        return vector
+
+    def _dataset_ids(self, dataset_name: str) -> set[str]:
+        """Every id in one dataset, read once and kept for this run.
+
+        Dedup used to re-read the whole dataset for every batch of two
+        thousand chunks, so indexing N chunks cost O(N²/B) — 200 000
+        chunks took 5.38 s against 2.12 s when the set is read once.
+
+        One dataset at a time, not a map of all of them: the pipeline
+        indexes repo by repo, so this holds the same peak the per-batch
+        read already held (400 000 ids is about 40 MB) rather than the
+        sum over every repo.
+
+        Dropped by `refresh`, which is what a long-lived server calls
+        before it reads. Within one indexing run the set can only go
+        stale if somebody else writes to the same dataset at the same
+        time, which ADR-10's one-writer rule already forbids.
+        """
+        held = self._ids_of
+        if held is not None and held[0] == dataset_name:
+            return held[1]
+        predicate = f"dataset = '{_sql_quote(dataset_name)}'"
+        ids = {r["id"] for r in self.tbl.search().where(predicate).select(["id"]).to_list()}
+        self._ids_of = (dataset_name, ids)
+        return ids
 
     def chunk_ids(self, dataset_name: str, *, paths: Sequence[str] | None = None) -> set[str]:
         """Ids stored for the given paths, scoped to one dataset.
@@ -334,12 +380,25 @@ class LanceDBStore(VectorStore):
             raise ValueError("Dataset is not present in the store")
         if not ids:
             return 0
+        held = self._ids_of
+        if held is not None and held[0] == dataset_name:
+            # Or a re-index in the same process would refuse to write
+            # back a chunk it had just deleted: the kept set would still
+            # claim to hold it. Discarding costs nothing and keeps the
+            # set meaning "what is in the dataset", which is the only
+            # meaning it can safely have.
+            held[1].difference_update(ids)
+        # One predicate for every id, however many that is. Batching was
+        # tried and measured: 200 000 ids cost 4.7 s whether they went in
+        # one call or a hundred, because the time is Lance rewriting data
+        # files, not parsing a 13 MB predicate. The batching would have
+        # been code and extra commits for nothing.
         id_list = ", ".join(f"'{_sql_quote(x)}'" for x in ids)
         predicate = f"dataset = '{_sql_quote(dataset_name)}' AND id IN ({id_list})"
         result = self.tbl.delete(predicate)
-        # LanceDB's DeleteResult carries num_deleted_rows at runtime (see
-        # measured), but the field is missing from
-        # the stubs as of 0.21+; the cast + ignore is self-cleaning via
+        # LanceDB's DeleteResult carries num_deleted_rows at runtime
+        # (measured), but the field is missing from the stubs as of
+        # 0.21+; the cast + ignore is self-cleaning via
         # `warn_unused_ignores` when the stubs catch up.
         return cast("int", result.num_deleted_rows)  # type: ignore[attr-defined]
 
@@ -422,6 +481,10 @@ class LanceDBStore(VectorStore):
         # a new dict is one atomic store; the other thread keeps reading
         # the old, complete one.
         self._known_datasets = {}
+        # Same reasoning for the two memos below, and the same fix: a new
+        # binding rather than a mutation of one another thread may hold.
+        self._query_memo = None
+        self._ids_of = None
 
     def compact(self, *, older_than: timedelta = timedelta(0)) -> CompactReport:
         """Merge small files and drop old versions, on every table.

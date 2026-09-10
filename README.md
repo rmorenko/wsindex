@@ -576,6 +576,13 @@ written that way would mean the library was missing something, not that
 the server should grow it. See
 [ADR-10](docs/adr/adr-010-library-server-boundary.md).
 
+**One search embeds its query once.** The store is asked one dataset at
+a time, so a workspace of eight repositories used to run the same
+sentence through the model eight times — measured at 52.4 ms against
+25.6 ms now, exactly twice the work. The vector is remembered for one
+query string, which is what a single search actually repeats; caching
+across searches was measured separately and does not pay.
+
 **Two processes, one index.** Measured rather than assumed: concurrent
 writers lose nothing, a stale writer is still a correct writer, and
 deduplication holds across processes. The one real hazard is reading —
@@ -716,6 +723,26 @@ storages return bit-identical results (cross-check delta 0.0000). A MinIO
 for local experiments ships in the compose file
 (`docker compose up -d minio minio-init` — the init service creates the
 `wsindex` bucket).
+
+**Search is an exact scan, and that has a ceiling.** No approximate
+index is built: every vector in the dataset is compared, which is the
+right trade for a workspace — an ANN index costs build time, recall and
+a tuning surface, and buys nothing until the corpus is large. Where
+"large" starts, measured:
+
+| Chunks  | Search  | Filtered |
+| ------- | ------- | -------- |
+| 2 000   | 2.2 ms  | 3.3 ms   |
+| 20 000  | 4.3 ms  | 3.7 ms   |
+| 100 000 | 12.5 ms | 7.5 ms   |
+| 400 000 | 36.0 ms | 20.7 ms  |
+
+Linear at the margin, so **a million chunks is about 90 ms** — roughly
+60 000 files, and the point where a search stops feeling instant. Until
+then the scan is cheaper than any index would be. Note the second
+column: past about 20 000 chunks a *filtered* search is faster than an
+unfiltered one, because the filter runs before the scan rather than
+after it.
 
 The design decision (LanceDB replacing the earlier Tensorus + LocalStore
 pair) is recorded in [ADR-7](docs/adr/adr-007-post-mvp-storage.md).
