@@ -873,6 +873,33 @@ index is already as compact and as fast to search as a compacted one
 (2.4 ms per search against 2.3 ms). Compaction earns its keep on an index
 that has been re-indexed many times, not on a new one.
 
+## A chunk the model cannot read is a chunk nobody can find
+
+The embedding model reads 256 tokens and stops. Anything past that is not
+in the vector, so no query reaches it — and nothing said so, because the
+index still reported the chunk as written.
+
+Measured within one run: a line the model read is found by its own words
+50% of the time at median depth 2; a line past the cut, 18% of the time
+at median depth 33. Then counted exactly across two real repositories:
+**74.1% and 32.5% of the indexed text sat past that cut.**
+
+Chunks are therefore bounded in characters as well as in lines — about
+900, calibrated against the 3.5-4.0 characters per token that real code
+runs at. The parts that could be fixed were: the sliding window and the
+gap pass between AST definitions held 38.0% and 5.2% of the text, and now
+hold 13.5% and 0.1%. It costs 5% more chunks on ordinary code and 41% on
+a repository full of minified vendored assets, where a single 8 000-character
+line still cannot be split — a chunk's text has to stay a verbatim slice
+of its line range, which is what makes a hit point at a real location.
+
+What is left is inside definitions: a function longer than the model
+reads stays one chunk, because halving it changes what a hit means.
+That is 31.8% and 27.2% respectively, and it is the open question here
+rather than an oversight. The acceptance criteria score the same 9/10
+either way, which is worth knowing about both the fix and the measure:
+ten hand-written queries do not see most of what these numbers describe.
+
 ## Front-end components
 
 A `.vue` or `.svelte` file is not one language, it is three: a template,

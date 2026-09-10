@@ -12,11 +12,12 @@ from typing import TYPE_CHECKING
 import pytest
 
 from helpers import needs_grammar
-from wsindex.ingest.ast import HAS_TREE_SITTER
+from wsindex.ingest.ast import HAS_TREE_SITTER, gap_spans
 from wsindex.ingest.ast.nested import _preamble_start
 from wsindex.ingest.ast.rust import POLICY as RUST_POLICY
 from wsindex.ingest.chunker import chunk_file
 from wsindex.ingest.languages import REGISTRY
+from wsindex.ingest.text_chunker import MAX_CHUNK_CHARS
 from wsindex.model import Chunk, Kind, SourceFile
 
 if TYPE_CHECKING:
@@ -765,3 +766,65 @@ def test_batch_two_broken_files_do_not_crash(lang: str) -> None:
     if lang not in _installed():
         pytest.skip(f"no {lang} grammar installed")
     assert isinstance(_chunk("class Broken {\n", lang=lang), list)
+
+
+# --- gaps the model could not read whole ----------------------------------
+
+
+def test_a_long_gap_is_cut_into_readable_pieces() -> None:
+    """A gap used to become one span however long it was.
+
+    On a minified or generated file — where the parser recognises almost
+    nothing — that is the whole file in one chunk, and everything past
+    its 256th token is unreachable by any query. Counted exactly on a
+    real repository, gaps and windows held 38% of the indexed text past
+    that cut before this; afterwards, 13.5%.
+    """
+    lines = [f"{'q' * 200} {n}" for n in range(20)]
+
+    spans = gap_spans(
+        lines,
+        covered=[False] * (len(lines) + 1),
+        start=1,
+        end=len(lines),
+        symbol=None,
+        node_type=None,
+    )
+
+    assert len(spans) > 1
+    for span in spans:
+        text = "\n".join(lines[span.start_line - 1 : span.end_line])
+        assert len(text) <= MAX_CHUNK_CHARS or span.start_line == span.end_line
+
+
+def test_cutting_a_gap_loses_no_lines() -> None:
+    # The line-coverage invariant: every line of an uncovered run has to
+    # end up in exactly one span, or the split quietly drops code.
+    lines = [f"{'w' * 150} {n}" for n in range(30)]
+
+    spans = gap_spans(
+        lines,
+        covered=[False] * (len(lines) + 1),
+        start=1,
+        end=len(lines),
+        symbol=None,
+        node_type=None,
+    )
+
+    covered_lines = [n for span in spans for n in range(span.start_line, span.end_line + 1)]
+    assert covered_lines == list(range(1, len(lines) + 1))
+
+
+def test_a_short_gap_is_still_one_span() -> None:
+    lines = ["short", "also short"]
+
+    spans = gap_spans(
+        lines,
+        covered=[False] * (len(lines) + 1),
+        start=1,
+        end=len(lines),
+        symbol=None,
+        node_type=None,
+    )
+
+    assert len(spans) == 1
