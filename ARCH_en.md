@@ -95,6 +95,11 @@ through every decision below.
 - **`domains.py`** — the analysis side rather than the search side: what
   a repository is made of and what crosses its own package lines, from
   the vectors and the commit history already indexed.
+- **`dupes.py`** — the same code in two places, found by token shingles
+  rather than by meaning (vectors were measured against it and lost).
+  Pairs are collapsed by the directories they connect, because most
+  duplication in a real codebase is one vendored library, not a hundred
+  findings.
 - **`stats.py`** — what this machine asked, kept locally and switchably.
   Never in the link store: links may be a shared Postgres, and one
   person's questions do not belong in a team's database.

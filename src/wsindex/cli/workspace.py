@@ -351,3 +351,64 @@ def domains(
                 f"  {pair.commits:3} commits  similarity {pair.similarity:+.3f}   "
                 f"{pair.left} + {pair.right}"
             )
+
+
+def dupes(
+    repo: Annotated[
+        str | None, typer.Option("--repo", help="Which repo to read; the only one by default")
+    ] = None,
+    minimum: Annotated[
+        float,
+        typer.Option("--min", help="Shared shingles a pair must reach", min=0.1, max=1.0),
+    ] = 0.45,
+    limit: Annotated[int, typer.Option("--limit", help="How many groups to print")] = 15,
+) -> None:
+    """The same code in two places, grouped by where it lives.
+
+    Found by what the code is *made of* — runs of five identifiers,
+    hashed and compared — not by what it means. Vectors were measured
+    against this and lost; see `wsindex.dupes` for the numbers.
+
+    **The grouping is the point.** On a real codebase most duplication is
+    a vendored library checked in twice or a tree of generated classes:
+    thousands of pairs that are one decision somebody made once. Those
+    collapse to a line each, marked `wholesale`, and what is left
+    underneath is the copy-paste a person can act on — a form's `save.php`
+    copied into the next form.
+
+    Lower `--min` to see more and worse: below 0.45 the report fills with
+    generated code that is duplicated by construction.
+    """
+    from wsindex.dupes import find
+
+    config = config_or_default()
+    require_config_file(config)
+    pipeline = build_pipeline()
+    chosen = repo or (config.repos[0].id if len(config.repos) == 1 else None)
+    if chosen is None:
+        typer.echo("error: this workspace holds several repos — name one with --repo", err=True)
+        raise typer.Exit(code=1)
+    try:
+        found = find(pipeline, repo=chosen, minimum=minimum)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    pairs = sum(len(group.pairs) for group in found.between)
+    typer.echo(
+        f"{found.compared} of {found.chunks} code chunks were long enough to fingerprint; "
+        f"{pairs} duplicate pair(s) in {len(found.between)} place(s)"
+    )
+    if not found.between:
+        typer.echo("nothing above the threshold — try a lower --min")
+        return
+    for group in found.between[:limit]:
+        where = (
+            f"within {group.left}" if group.within else f"{group.left}\n            {group.right}"
+        )
+        tag = "wholesale" if group.wholesale else "  copied "
+        typer.echo(f"\n{tag} {len(group.pairs):5} pair(s)  {where}")
+        for pair in group.pairs[:3]:
+            typer.echo(
+                f"    {pair.overlap:.2f}  {pair.left}:{pair.left_lines[0]}"
+                f"  <->  {pair.right}:{pair.right_lines[0]}"
+            )

@@ -197,6 +197,27 @@ class SourceFile:
 
 
 @dataclass(frozen=True, kw_only=True)
+class ChunkMeta:
+    """What a stored chunk is, without its text or its vector.
+
+    The descriptive half of a chunk, for callers that want to know where
+    something lives without paying to read it. `chunk_text` fetches the
+    expensive half and `vectors` the very expensive one; this is what a
+    report needs to say *about* a chunk.
+
+    Attributes:
+        path: Repo-relative path, or a synthetic one for a commit.
+        start_line, end_line: The lines this chunk covers, inclusive.
+        kind: What sort of file it came from.
+    """
+
+    path: str
+    start_line: int
+    end_line: int
+    kind: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class Hit:
     """Backend-independent search result (ARCH §6.4).
 

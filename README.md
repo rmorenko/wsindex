@@ -972,6 +972,43 @@ also **no graph viewer**, deliberately: the useful output is three short
 answers, and an interactive graph is what these tools become instead of
 answering them.
 
+## The same code in two places
+
+```
+$ uv run wsindex dupes
+29543 of 86837 code chunks were long enough to fingerprint; 26288 duplicate pair(s) in 2230 place(s)
+
+wholesale  4911 pair(s)  within Documentation/EHI_Export/docs/tables
+wholesale  3539 pair(s)  within src/FHIR/R4/FHIRDomainResource
+wholesale   547 pair(s)  Documentation/EHI_Export/docs/bower/admin-lte/plugins/jQueryUI
+                         Documentation/EHI_Export/schemaspy/layout/bower/admin-lte/plugins/jQueryUI
+
+  copied      9 pair(s)  contrib/forms/ped_fever
+                         contrib/forms/ped_pain
+    1.00  contrib/forms/ped_fever/view.php:1  <->  contrib/forms/ped_pain/view.php:1
+```
+
+Found by what the code is made of — runs of five identifiers, hashed and
+compared — not by what it means. Embeddings were measured against this
+and lost: real copies score 0.994, 0.840 and 0.717 as they are edited
+more heavily, unrelated pairs sit at a median of 0.135, but the tails
+overlap (unrelated p99 of 0.860 against adapted p90 of 0.864), so a
+threshold that catches an adapted copy flags two or three percent of
+everything else. The near-identical copies embeddings *do* separate are
+separated exactly and far more cheaply by a fingerprint.
+
+**The grouping is the feature.** Run on a twenty-year codebase, a plain
+list of pairs is twelve thousand lines of generated FHIR classes and
+jQuery checked in twice. Collapsed by the directories they connect, that
+becomes a handful of `wholesale` lines — one decision somebody made once
+— and underneath them the copy-paste a person can act on: a form's
+`view.php` copied verbatim into the next form.
+
+The threshold was placed by reading what sits on either side of it rather
+than by picking a round number. Below 0.45 the report fills with
+generated classes that are duplicated by construction; from 0.45 up it is
+copies. `--min` moves it.
+
 ## Front-end components
 
 A `.vue` or `.svelte` file is not one language, it is three: a template,

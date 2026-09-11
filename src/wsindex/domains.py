@@ -236,12 +236,12 @@ def _centroids(pipeline: Pipeline, *, repo: str, prefix: str) -> dict[str, list[
     if repo not in pipeline.store.datasets():
         raise ValueError(f"no repo {repo!r} in this index")
     vectors = pipeline.store.vectors(repo, kind=Kind.CODE)
-    paths = pipeline.store.paths_of(repo, ids=list(vectors))
+    meta = pipeline.store.metadata_of(repo, ids=list(vectors))
     grouped: dict[str, list[list[float]]] = {}
     for chunk_id, vector in vectors.items():
-        path = paths.get(chunk_id, "")
-        if path.startswith(prefix):
-            grouped.setdefault(path, []).append(vector)
+        found = meta.get(chunk_id)
+        if found is not None and found.path.startswith(prefix):
+            grouped.setdefault(found.path, []).append(vector)
     centroids: dict[str, list[float]] = {}
     for path, group in grouped.items():
         mean = [sum(values) / len(group) for values in zip(*group, strict=True)]

@@ -28,7 +28,7 @@ from lancedb.query import LanceVectorQueryBuilder
 from lancedb.table import Table
 
 from wsindex.embed.embedder import Embedder
-from wsindex.model import Chunk, Hit, Kind, SearchFilter
+from wsindex.model import Chunk, ChunkMeta, Hit, Kind, SearchFilter
 from wsindex.store.base import CompactReport, VectorStore
 
 
@@ -229,12 +229,21 @@ class LanceDBStore(VectorStore):
             if row["dataset"] == dataset_name and (kind is None or row["kind"] == kind.value)
         }
 
-    def paths_of(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, str]:
-        """Where each of these chunks came from."""
+    def metadata_of(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, ChunkMeta]:
+        """Where each of these chunks came from, and what sort of file it was."""
         wanted = set(ids)
-        rows = self.tbl.to_arrow().select(["id", "dataset", "path"]).to_pylist()
+        rows = (
+            self.tbl.to_arrow()
+            .select(["id", "dataset", "path", "start_line", "end_line", "kind"])
+            .to_pylist()
+        )
         return {
-            str(row["id"]): str(row["path"])
+            str(row["id"]): ChunkMeta(
+                path=str(row["path"]),
+                start_line=int(row["start_line"]),
+                end_line=int(row["end_line"]),
+                kind=str(row["kind"]),
+            )
             for row in rows
             if row["dataset"] == dataset_name and str(row["id"]) in wanted
         }

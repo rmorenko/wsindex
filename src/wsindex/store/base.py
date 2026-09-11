@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from wsindex.embed import estimate_tokens
-from wsindex.model import Chunk, Hit, Kind, SearchFilter
+from wsindex.model import Chunk, ChunkMeta, Hit, Kind, SearchFilter
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -218,12 +218,13 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
-    def paths_of(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, str]:
-        """Chunk id -> the path it came from, for the ids given.
+    def metadata_of(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, ChunkMeta]:
+        """Chunk id -> where it lives and what it is, for the ids given.
 
-        Split from `vectors` rather than returned beside it: a caller
-        grouping vectors by file wants both, and a caller checking one
-        chunk wants neither. Two small answers beat one wide one.
+        Split from `vectors` and from `chunk_text` rather than bundled
+        with either: the three answers cost wildly different amounts, and
+        a caller grouping by file has no use for 384 floats it did not
+        ask for. This is the cheap one.
         """
 
     @abstractmethod
