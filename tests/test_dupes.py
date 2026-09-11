@@ -132,7 +132,10 @@ def test_a_copied_directory_is_one_line_not_a_hundred(indexed: Pipeline) -> None
 
     vendored = [b for b in found.between if b.wholesale]
     assert len(vendored) == 1
-    assert {vendored[0].left, vendored[0].right} == {"vendor/lib", "third_party/lib"}
+    # Qualified by repository, the way a search hit is: `dupes` now spans
+    # a workspace, so a bare path would not say which one.
+    assert {vendored[0].left, vendored[0].right} == {"r/vendor/lib", "r/third_party/lib"}
+    assert not vendored[0].cross_repo
     assert len(vendored[0].pairs) >= 10
 
 
@@ -142,9 +145,9 @@ def test_a_hand_copy_is_reported_separately(indexed: Pipeline) -> None:
     handmade = [b for b in found.between if not b.wholesale]
     paths = {(p.left, p.right) for b in handmade for p in b.pairs}
 
-    assert ("app/report.py", "app/summary.py") in paths or (
-        "app/summary.py",
-        "app/report.py",
+    assert ("r/app/report.py", "r/app/summary.py") in paths or (
+        "r/app/summary.py",
+        "r/app/report.py",
     ) in paths
 
 
@@ -214,8 +217,8 @@ def test_a_shingle_everybody_has_is_dropped() -> None:
     with `public function`.
     """
     shared = fingerprint(WORDS)
-    crowd = {f"c{n}": set(shared) for n in range(COMMON_SHINGLE + 5)}
-    chunks = {name: (f"file_{name}.py", "", (1, 2)) for name in crowd}
+    crowd = {("r", f"c{n}"): set(shared) for n in range(COMMON_SHINGLE + 5)}
+    chunks = {where: (f"r/file_{where[1]}.py", "", (1, 2)) for where in crowd}
 
     assert _pairs(chunks, crowd, minimum=0.1) == []
 
@@ -224,14 +227,104 @@ def test_two_windows_of_one_file_are_not_a_copy() -> None:
     # The sliding chunker shares lines between neighbours on purpose, so
     # without this every long file reports itself.
     marks = fingerprint(WORDS)
-    chunks = {"a": ("same.py", "", (1, 40)), "b": ("same.py", "", (30, 70))}
+    chunks = {("r", "a"): ("r/same.py", "", (1, 40)), ("r", "b"): ("r/same.py", "", (30, 70))}
 
-    assert _pairs(chunks, {"a": marks, "b": marks}, minimum=0.1) == []
+    assert _pairs(chunks, {("r", "a"): marks, ("r", "b"): marks}, minimum=0.1) == []
 
 
 def test_two_windows_of_different_files_are_a_copy() -> None:
     # The control for the test above: the only difference is the path.
     marks = fingerprint(WORDS)
-    chunks = {"a": ("one.py", "", (1, 40)), "b": ("two.py", "", (1, 40))}
+    chunks = {("r", "a"): ("r/one.py", "", (1, 40)), ("r", "b"): ("r/two.py", "", (1, 40))}
 
-    assert len(_pairs(chunks, {"a": marks, "b": marks}, minimum=0.1)) == 1
+    assert len(_pairs(chunks, {("r", "a"): marks, ("r", "b"): marks}, minimum=0.1)) == 1
+
+
+# --- across repositories, which is what a workspace tool is for -----------
+
+
+def two_repos(tmp_path_factory: pytest.TempPathFactory) -> Pipeline:
+    """Two repositories sharing a vendored library at identical paths."""
+    home = tmp_path_factory.mktemp("across")
+
+    def body(name: str, seed: int) -> str:
+        lines = [f"def {name}(payload_{seed}, options_{seed}, registry_{seed}):"]
+        lines += [
+            f"    value_{seed}_{n} = registry_{seed}.lookup_{seed}("
+            f"payload_{seed}, options_{seed}, 'field_{seed}_{n}')"
+            for n in range(14)
+        ]
+        lines.append(f"    return value_{seed}_0")
+        return "\n".join(lines) + "\n"
+
+    Config.reset()
+    config = Config.default("across")
+    config._data["store"] = {"uri": str(home / "db")}
+    for repo_id in ("alpha", "beta"):
+        root = home / repo_id
+        (root / "vendor" / "lib").mkdir(parents=True)
+        for n in range(12):
+            # The same content at the same relative path in both repos —
+            # which is exactly what vendoring produces, and exactly what
+            # a chunk id (a hash of text and path, with no repo in it)
+            # cannot tell apart.
+            (root / "vendor" / "lib" / f"mod_{n}.py").write_text(body(f"helper_{n}", n))
+        (root / "own.py").write_text(f"def only_in_{repo_id}():\n    return '{repo_id}'\n")
+        start = ["init", "-q", "--initial-branch=main"]
+        for args in (start, ["add", "-A"], ["commit", "-qm", "x"]):
+            subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+        config.add_repo(Repository(id=repo_id, path=str(root)))
+    pipeline = Pipeline(
+        store=LanceDBStore(uri=str(home / "db"), embedder=FakeEmbedder(dim=8)),
+        state_dir=home,
+        config=config,
+    )
+    pipeline.index()
+    return pipeline
+
+
+def test_the_same_library_in_two_repos_is_found(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    # The question a per-repository report could not ask. The field trial
+    # picked a workspace *because* its three adapter gems are near-copies
+    # of each other, and `dupes` reported almost nothing — it was looking
+    # inside one repo at a time.
+    found = find(two_repos(tmp_path_factory))
+
+    across = [group for group in found.between if group.cross_repo]
+
+    assert found.repos == ("alpha", "beta")
+    assert len(across) == 1
+    assert {across[0].left, across[0].right} == {"alpha/vendor/lib", "beta/vendor/lib"}
+    assert len(across[0].pairs) >= 10
+
+
+def test_an_exact_copy_at_an_identical_path_is_not_swallowed(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    # The trap this change had to step around rather than into. A chunk
+    # id hashes text and path and knows nothing about repositories, so
+    # keying the workspace's chunks by id alone would have made one copy
+    # overwrite the other — hiding the strongest duplication there is,
+    # an exact one, from the report meant to find it.
+    found = find(two_repos(tmp_path_factory))
+
+    exact = [
+        pair
+        for group in found.between
+        if group.cross_repo
+        for pair in group.pairs
+        if pair.overlap == 1.0
+    ]
+
+    assert exact
+    assert all(p.left.split("/", 1)[1] == p.right.split("/", 1)[1] for p in exact)
+
+
+def test_narrowing_to_one_repo_still_works(tmp_path_factory: pytest.TempPathFactory) -> None:
+    # The old behaviour is a flag now, not the only behaviour.
+    found = find(two_repos(tmp_path_factory), repo="alpha")
+
+    assert found.repos == ("alpha",)
+    assert not [group for group in found.between if group.cross_repo]

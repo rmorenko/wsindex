@@ -375,7 +375,8 @@ def domains(
 
 def dupes(
     repo: Annotated[
-        str | None, typer.Option("--repo", help="Which repo to read; the only one by default")
+        str | None,
+        typer.Option("--repo", help="Narrow to one repo; every indexed repo by default"),
     ] = None,
     minimum: Annotated[
         float,
@@ -404,19 +405,18 @@ def dupes(
     config = config_or_default()
     require_config_file(config)
     pipeline = build_pipeline()
-    chosen = repo or (config.repos[0].id if len(config.repos) == 1 else None)
-    if chosen is None:
-        typer.echo("error: this workspace holds several repos — name one with --repo", err=True)
-        raise typer.Exit(code=1)
     try:
-        found = find(pipeline, repo=chosen, minimum=minimum)
+        found = find(pipeline, repo=repo, minimum=minimum)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     pairs = sum(len(group.pairs) for group in found.between)
+    across = sum(1 for group in found.between if group.cross_repo)
+    scope = f"{len(found.repos)} repos" if len(found.repos) > 1 else found.repos[0]
     typer.echo(
-        f"{found.compared} of {found.chunks} code chunks were long enough to fingerprint; "
-        f"{pairs} duplicate pair(s) in {len(found.between)} place(s)"
+        f"{found.compared} of {found.chunks} code chunks in {scope} were long enough to "
+        f"fingerprint; {pairs} duplicate pair(s) in {len(found.between)} place(s)"
+        + (f", {across} of them across repos" if across else "")
     )
     if not found.between:
         typer.echo("nothing above the threshold — try a lower --min")
@@ -426,7 +426,11 @@ def dupes(
             f"within {group.left}" if group.within else f"{group.left}\n            {group.right}"
         )
         tag = "wholesale" if group.wholesale else "  copied "
-        typer.echo(f"\n{tag} {len(group.pairs):5} pair(s)  {where}")
+        # Said out loud: two repositories holding the same code is the
+        # fact a workspace-wide report exists for, and it is invisible in
+        # a pair of paths unless somebody reads the first component.
+        mark = "  ACROSS REPOS" if group.cross_repo else ""
+        typer.echo(f"\n{tag} {len(group.pairs):5} pair(s)  {where}{mark}")
         for pair in group.pairs[:3]:
             typer.echo(
                 f"    {pair.overlap:.2f}  {pair.left}:{pair.left_lines[0]}"

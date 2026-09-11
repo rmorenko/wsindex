@@ -116,6 +116,16 @@ class Between:
         return self.left == self.right
 
     @property
+    def cross_repo(self) -> bool:
+        """Whether the two sides live in different repositories.
+
+        The fact a workspace-wide tool exists to report, and the one a
+        per-repository report could not reach at all. Paths are qualified
+        as `repo/path`, so the repository is the first component.
+        """
+        return self.left.split("/", 1)[0] != self.right.split("/", 1)[0]
+
+    @property
     def wholesale(self) -> bool:
         """Whether this looks like a copied directory rather than copied code.
 
@@ -130,7 +140,7 @@ class Between:
 class Duplication:
     """What `wsindex dupes` found."""
 
-    repo: str
+    repos: tuple[str, ...]
     chunks: int
     compared: int
     between: tuple[Between, ...]
@@ -151,49 +161,75 @@ def fingerprint(text: str) -> set[int]:
     }
 
 
-def find(pipeline: Pipeline, *, repo: str, minimum: float = MIN_OVERLAP) -> Duplication:
-    """Duplicate code in one repository, grouped by where it lives.
+def find(
+    pipeline: Pipeline, *, repo: str | None = None, minimum: float = MIN_OVERLAP
+) -> Duplication:
+    """Duplicate code across a workspace, grouped by where it lives.
+
+    **Across, not within, and that is the point.** This used to take one
+    repository and could therefore not answer the question a multi-repo
+    tool exists for. The field trial made that concrete: the workspace
+    chosen *because* its three adapter gems are near-copies of each other
+    reported almost nothing, and could not have reported otherwise.
 
     Args:
-        pipeline: A pipeline whose store holds the repository's chunks.
-        repo: Repo id, as the config names it.
+        pipeline: A pipeline whose store holds the workspace's chunks.
+        repo: One repo id to narrow to, or None for every indexed repo.
         minimum: Shared-shingle fraction a pair must reach.
 
     Returns:
         The report, directory pairs first, each worst-overlap first.
+        Paths are qualified as `repo/path`, the same way a search hit is.
 
     Raises:
         ValueError: `repo` names nothing the store holds.
     """
-    if repo not in pipeline.store.datasets():
+    known = pipeline.store.datasets()
+    if repo is not None and repo not in known:
         raise ValueError(f"no repo {repo!r} in this index")
-    chunks = _code(pipeline, repo=repo)
-    prints = {chunk_id: fingerprint(text) for chunk_id, (_, text, _) in chunks.items()}
-    prints = {chunk_id: marks for chunk_id, marks in prints.items() if marks}
+    repos = [repo] if repo is not None else sorted(known)
+    chunks = _code(pipeline, repos=repos)
+    prints = {where: fingerprint(text) for where, (_, text, _) in chunks.items()}
+    prints = {where: marks for where, marks in prints.items() if marks}
     pairs = _pairs(chunks, prints, minimum=minimum)
     return Duplication(
-        repo=repo,
+        repos=tuple(repos),
         chunks=len(chunks),
         compared=len(prints),
         between=_group(pairs),
     )
 
 
-def _code(pipeline: Pipeline, *, repo: str) -> dict[str, tuple[str, str, tuple[int, int]]]:
-    """Chunk id -> (path, text, line range) for the repository's code."""
-    ids = sorted(pipeline.store.chunk_ids(repo))
-    meta = pipeline.store.metadata_of(repo, ids=ids)
-    code = [chunk_id for chunk_id, found in meta.items() if found.kind == Kind.CODE.value]
-    texts = pipeline.store.chunk_text(repo, ids=code)
-    return {
-        chunk_id: (meta[chunk_id].path, text, (meta[chunk_id].start_line, meta[chunk_id].end_line))
-        for chunk_id, text in texts.items()
-    }
+def _code(
+    pipeline: Pipeline, *, repos: list[str]
+) -> dict[tuple[str, str], tuple[str, str, tuple[int, int]]]:
+    """(repo, chunk id) -> (`repo/path`, text, line range) for the workspace's code.
+
+    **Keyed by the pair, not by the chunk id alone**, and that is not
+    defensive: a chunk id is a hash of text and path with no repository
+    in it, so a vendored library copied into two repos — which keeps its
+    paths — produces the *same* id twice. Keying by the id would make one
+    of them overwrite the other and hide the strongest duplication there
+    is, an exact copy, from the report meant to find it.
+    """
+    found: dict[tuple[str, str], tuple[str, str, tuple[int, int]]] = {}
+    for repo in repos:
+        ids = sorted(pipeline.store.chunk_ids(repo))
+        meta = pipeline.store.metadata_of(repo, ids=ids)
+        code = [chunk_id for chunk_id, m in meta.items() if m.kind == Kind.CODE.value]
+        for chunk_id, text in pipeline.store.chunk_text(repo, ids=code).items():
+            entry = meta[chunk_id]
+            found[(repo, chunk_id)] = (
+                f"{repo}/{entry.path}",
+                text,
+                (entry.start_line, entry.end_line),
+            )
+    return found
 
 
 def _pairs(
-    chunks: dict[str, tuple[str, str, tuple[int, int]]],
-    prints: dict[str, set[int]],
+    chunks: dict[tuple[str, str], tuple[str, str, tuple[int, int]]],
+    prints: dict[tuple[str, str], set[int]],
     *,
     minimum: float,
 ) -> list[Pair]:
@@ -206,11 +242,11 @@ def _pairs(
     boilerplate, they connect the whole repository to itself, and keeping
     them would restore the quadratic behaviour the index exists to avoid.
     """
-    postings: dict[int, list[str]] = defaultdict(list)
-    for chunk_id, marks in prints.items():
+    postings: dict[int, list[tuple[str, str]]] = defaultdict(list)
+    for where, marks in prints.items():
         for mark in marks:
-            postings[mark].append(chunk_id)
-    candidates: Counter[tuple[str, str]] = Counter()
+            postings[mark].append(where)
+    candidates: Counter[tuple[tuple[str, str], tuple[str, str]]] = Counter()
     for holders in postings.values():
         if len(holders) > COMMON_SHINGLE:
             continue
@@ -220,7 +256,7 @@ def _pairs(
     found: list[Pair] = []
     for (left, right), _ in candidates.items():
         if chunks[left][0] == chunks[right][0]:
-            continue  # the same file: overlapping windows, not a copy
+            continue  # the same file in the same repo: overlapping windows, not a copy
         a, b = prints[left], prints[right]
         overlap = len(a & b) / len(a | b)
         if overlap >= minimum:

@@ -1078,17 +1078,34 @@ answering them.
 
 ```
 $ uv run wsindex dupes
-29543 of 86837 code chunks were long enough to fingerprint; 26288 duplicate pair(s) in 2230 place(s)
+29543 of 86837 code chunks in openemr were long enough to fingerprint; 26288 duplicate pair(s) in 2230 place(s)
 
-wholesale  4911 pair(s)  within Documentation/EHI_Export/docs/tables
-wholesale  3539 pair(s)  within src/FHIR/R4/FHIRDomainResource
-wholesale   547 pair(s)  Documentation/EHI_Export/docs/bower/admin-lte/plugins/jQueryUI
-                         Documentation/EHI_Export/schemaspy/layout/bower/admin-lte/plugins/jQueryUI
+wholesale  4911 pair(s)  within openemr/Documentation/EHI_Export/docs/tables
+wholesale  3539 pair(s)  within openemr/src/FHIR/R4/FHIRDomainResource
+wholesale   547 pair(s)  openemr/Documentation/EHI_Export/docs/bower/admin-lte/plugins/jQueryUI
+                         openemr/Documentation/EHI_Export/schemaspy/layout/bower/admin-lte/plugins/jQueryUI
 
-  copied      9 pair(s)  contrib/forms/ped_fever
-                         contrib/forms/ped_pain
-    1.00  contrib/forms/ped_fever/view.php:1  <->  contrib/forms/ped_pain/view.php:1
+  copied      9 pair(s)  openemr/contrib/forms/ped_fever
+                         openemr/contrib/forms/ped_pain
+    1.00  openemr/contrib/forms/ped_fever/view.php:1  <->  openemr/contrib/forms/ped_pain/view.php:1
 ```
+
+**It reads the whole workspace, not one repository**, which is the
+question a multi-repo tool exists to answer and the one it could not ask
+until the field trial pointed that out. Groups that span two repos are
+marked `ACROSS REPOS`; `--repo` narrows to one. Measured on three of the
+trial's workspaces, going workspace-wide found duplication that was
+structurally invisible before: 24 cross-repo groups in `0no-co`, several
+at an overlap of 1.00 — the same build script copied between
+repositories — and 77 in `caddyserver`, the largest being 155 pairs
+shared between `certmagic` and `xcaddy`.
+
+There is a trap under that, worth knowing if you read the code: a chunk
+id is a hash of text and path with **no repository in it**, so a vendored
+library copied into two repos — which keeps its paths — produces the same
+id twice. Keying the workspace's chunks by id alone would make one copy
+overwrite the other and hide the strongest duplication there is. A test
+pins it.
 
 Found by what the code is made of — runs of five identifiers, hashed and
 compared — not by what it means. Embeddings were measured against this
