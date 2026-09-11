@@ -25,12 +25,13 @@ BASELINE = {
 }
 
 
-def graded(klass: str, rank: int | None) -> Graded:
+def graded(klass: str, rank: int | None, *, reachable: bool = True) -> Graded:
     return Graded(
         id="q1",
         klass=klass,
         text="?",
         truth="repo/path.py",
+        reachable=reachable,
         rank=rank,
         deep_rank=rank,
         control="missed",
@@ -103,3 +104,13 @@ def test_a_baseline_from_another_model_is_not_a_baseline() -> None:
     reported = compare({"literal": 13, "literal@3": 7, "descriptive": 2, "cross-repo": 3}, saved)
 
     assert "another model" in reported[0]
+
+
+def test_an_unreachable_question_still_counts_as_not_found() -> None:
+    # A file wsindex never indexed cannot be retrieved, and the baseline
+    # must keep seeing that as zero — otherwise a coverage regression
+    # would hide behind "well, it was unreachable anyway". Reachability
+    # is reported beside the score, not subtracted from it.
+    space = Workspace(org="w", graded=[graded("descriptive", None, reachable=False)])
+
+    assert counted([space])["descriptive"] == 0

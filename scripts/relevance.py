@@ -106,6 +106,7 @@ class Graded:
     klass: str
     text: str
     truth: str
+    reachable: bool
     rank: int | None
     deep_rank: int | None
     control: str
@@ -119,6 +120,39 @@ class Graded:
     @property
     def hit10(self) -> bool:
         return self.rank is not None
+
+
+def covered(pipeline: Pipeline, repo: str, path: str, lines: list[int]) -> bool:
+    """Whether any indexed chunk holds the lines the answer lives on.
+
+    Counted apart from ranking, because mixing them hides both. Twelve of
+    the eighty-four questions are about files wsindex never indexed —
+    eleven in an Elixir workspace with no grammar, one a `Makefile` — and
+    scoring those as retrieval failures taxed every model the step 4
+    spike graded, equally and invisibly. Worse, it would make a future
+    fix to *coverage* look like a gain in *relevance*.
+
+    Measured when this was added: no answer is missed for any other
+    reason. Every file that is indexed has a chunk covering its answer,
+    so the chunker is not where anything is lost.
+    """
+    spans = _spans(pipeline, repo)
+    lo, hi = lines
+    return any(start <= hi and end >= lo for start, end in spans.get(path, ()))
+
+
+_SPANS: dict[str, dict[str, list[tuple[int, int]]]] = {}
+
+
+def _spans(pipeline: Pipeline, repo: str) -> dict[str, list[tuple[int, int]]]:
+    """Path -> the line ranges this repo has chunks for, read once."""
+    if repo not in _SPANS:
+        meta = pipeline.store.metadata_of(repo, ids=sorted(pipeline.store.chunk_ids(repo)))
+        found: dict[str, list[tuple[int, int]]] = {}
+        for entry in meta.values():
+            found.setdefault(entry.path, []).append((entry.start_line, entry.end_line))
+        _SPANS[repo] = found
+    return _SPANS[repo]
 
 
 @dataclass
@@ -268,6 +302,9 @@ def grade(org: str, repos: list[Repo]) -> Workspace:
                 klass=item["class"],
                 text=item["text"],
                 truth=truth,
+                reachable=covered(
+                    pipeline, item["truth"]["repo"], item["truth"]["path"], item["truth"]["lines"]
+                ),
                 rank=rank_of(hits, truth),
                 deep_rank=rank_of(deep, truth),
                 control=outcome,
@@ -306,8 +343,12 @@ def report_on(spaces: list[Workspace]) -> str:
         "",
         "## By class",
         "",
-        "| Class | Questions | hit@1 | hit@3 | hit@10 | deep (k=50, code+doc) | rg found |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "Reachable means some indexed chunk holds the lines the answer is on. "
+        "Anything else is a coverage failure in a retrieval failure's clothes, so "
+        "it is counted beside the score rather than folded into it.",
+        "",
+        "| Class | Questions | Reachable | hit@1 | hit@3 | hit@10 | deep | rg found |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for klass in ("literal", "descriptive", "cross-repo"):
         group = [g for g in every if g.klass == klass]
@@ -315,13 +356,25 @@ def report_on(spaces: list[Workspace]) -> str:
             continue
         n = len(group)
         lines.append(
-            f"| {klass} | {n} | {sum(g.rank == 1 for g in group)} | {sum(g.hit3 for g in group)} | "
+            f"| {klass} | {n} | {sum(g.reachable for g in group)} | "
+            f"{sum(g.rank == 1 for g in group)} | {sum(g.hit3 for g in group)} | "
             f"{sum(g.hit10 for g in group)} | {sum(g.deep_rank is not None for g in group)} | "
             f"{sum(g.control == 'found' for g in group)} |"
         )
+    unreachable = [g for g in every if not g.reachable]
+    if unreachable:
+        lines += [
+            "",
+            f"**{len(unreachable)} of {len(every)} questions are unreachable**: no chunk "
+            "covers the answer, because the file was never indexed. Not a model's fault, "
+            "and no model can move them.",
+            "",
+            *[f"- `{g.id}` {g.truth}" for g in unreachable],
+        ]
     said = [g for g in every if g.klass == "descriptive"]
-    if said:
-        share = sum(g.hit10 for g in said) / len(said)
+    reachable = [g for g in said if g.reachable]
+    if said and reachable:
+        share = sum(g.hit10 for g in reachable) / len(reachable)
         lines += [
             "",
             "## The gate",
