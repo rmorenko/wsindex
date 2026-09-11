@@ -1205,6 +1205,19 @@ lists them.
   into gap chunks.
 - Oversized functions stay whole — no window splitting inside a definition.
 
+## Is it any good? — the field trial
+
+wsindex was run on twenty workspaces that are not its own: 105
+repositories from twenty GitHub organizations, with 204 questions written
+down before it was allowed to start, and a `ripgrep` control on every one.
+It indexes fourteen of the twenty properly, crashes outright on three, and
+answers **one of 102** plain-English questions in its top three — on
+questions where ripgrep answers none.
+
+- What happened, with the numbers — [docs/field-trial.md](docs/field-trial.md)
+- Whether to install it — [docs/for-developers.md](docs/for-developers.md)
+- Whether a team should adopt it — [docs/for-teams.md](docs/for-teams.md)
+
 ## Design docs
 
 - Concept — [docs/design/concept.md](docs/design/concept.md)
@@ -1214,7 +1227,8 @@ lists them.
   today is this file, which is measured and tested against the CLI.
 
 _(Russian versions sit beside each: `concept.ru.md`, `brd.ru.md`,
-`architecture.ru.md`.)_
+`architecture.ru.md`, `field-trial.ru.md`, `for-developers.ru.md`,
+`for-teams.ru.md`.)_
 
 ## Toolchain
 
