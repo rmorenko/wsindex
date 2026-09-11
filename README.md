@@ -23,6 +23,7 @@ uv run wsindex why chunk_markdown        # the commits that wrote it, and why
 uv run wsindex refs 8080                 # everything that names this port
 uv run wsindex status                    # what is configured, and what the index holds
 uv run wsindex explain src/thing.tf      # why a file is (or is not) searchable
+uv run wsindex domains                   # what it is made of, and what is tangled
 ```
 
 Real output on this very repository:

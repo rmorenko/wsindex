@@ -77,16 +77,29 @@ through every decision below.
 
 - **`cli/`** — the commands. Adapters only: each is a call into the
   library and a rendering of the answer (ADR-10).
-- **`pipeline.py`** — the engine: plan a run against git state, read and
-  chunk, merge a search, and answer questions about a finished index.
+- **`pipeline.py`**, **`run.py`** — the engine: plan a run against git
+  state, read and chunk, merge a search, and answer questions about a
+  finished index. `run.py` holds what one indexing *run* is made of; the
+  two were one file until it passed a thousand lines.
 - **`ingest/`** — what to index and how to cut it: the walker's policy,
   the chunkers, git state, commits and blame, link extraction.
 - **`store/`** — the `VectorStore` contract and its LanceDB
   implementation. The pipeline sees only the contract.
 - **`embed/`** — text in, vectors out. Loads its model lazily, from the
   local cache before the network.
-- **`links.py`** — SQLite, the inverted index behind `refs` and `why`
-  (ADR-9).
+- **`links.py`** — SQL, the inverted index behind `refs` and `why`
+  (ADR-9); SQLite by default, Postgres for a shared index (ADR-11).
+- **`rank/`** — the cross-encoder that re-sorts a search's candidates.
+  Off by default: it loads a second model and caps a server at six
+  concurrent searches (measured, see the README).
+- **`domains.py`** — the analysis side rather than the search side: what
+  a repository is made of and what crosses its own package lines, from
+  the vectors and the commit history already indexed.
+- **`stats.py`** — what this machine asked, kept locally and switchably.
+  Never in the link store: links may be a shared Postgres, and one
+  person's questions do not belong in a team's database.
+- **`model.py`** — `Chunk`, `Hit`, `SourceFile` and the filters. The
+  vocabulary every other module is written in.
 - **`connectors/`**, **`snapshot.py`** — documents from outside the
   repositories, materialized into a git snapshot repo.
 - **`server/`**, **`mcp_server.py`**, **`shell.py`**, **`ui.py`** — three

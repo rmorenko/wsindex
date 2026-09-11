@@ -1126,3 +1126,31 @@ def test_recording_can_be_turned_off(workspace: Path) -> None:
 
     assert "recording is off" in output
     assert "nothing recorded yet" in output
+
+
+def test_every_module_is_named_in_the_architecture_document() -> None:
+    """ARCH_en.md lists the components; nothing regenerates that either.
+
+    The same guard as `test_every_command_is_documented`, added for the
+    same reason and after the same thing happened: the list had gone
+    stale by five modules — `run.py`, `stats.py`, `domains.py`, `rank/`
+    and `model.py` — each added in a session that documented everything
+    except the map. A generated list would read like one; what this needs
+    is to fail when the two part company.
+    """
+    source = Path("src/wsindex")
+    shipped = {
+        path.name
+        for path in source.iterdir()
+        if (path.is_dir() and not path.name.startswith("__"))
+        or (path.suffix == ".py" and path.name != "__init__.py")
+    }
+    described = Path("ARCH_en.md").read_text()
+    components = described.split("## Components, in one line each")[1].split("\n## ")[0]
+
+    # A package is written with its slash — `cli/` — and a module without.
+    missing = {
+        name for name in shipped if f"`{name}`" not in components and f"`{name}/`" not in components
+    }
+
+    assert not missing, f"not in the component list: {sorted(missing)}"
