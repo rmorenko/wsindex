@@ -4,11 +4,14 @@
     {
       "id": "q1",
       "class": "literal",
-      "text": "The README lists a `:reset_ids` option for the deletion strategy — what does it actually do, and does every adapter support it?",
+      "text": "The README lists a `:reset_ids` option for the deletion strategy \u2014 what does it actually do, and does every adapter support it?",
       "truth": {
         "repo": "database_cleaner-active_record",
         "path": "lib/database_cleaner/active_record/deletion.rb",
-        "lines": [29, 40]
+        "lines": [
+          29,
+          40
+        ]
       },
       "how_found": "Read database_cleaner-active_record/README.md (line 64 documents :reset_ids), then opened lib/database_cleaner/active_record/deletion.rb. `delete_tables` calls `reset_id_sequence` per table when @reset_ids is set; `reset_id_sequence` (29-40) switches on connection.adapter_name: Mysql2/Trilogy -> ALTER TABLE ... AUTO_INCREMENT = 1, SQLite -> delete from sqlite_sequence, PostgreSQL -> reset_pk_sequence!, anything else raises \"reset_id option not supported for ...\". So no, not every adapter.",
       "rg_query": "rg -n 'reset_ids'",
@@ -21,20 +24,26 @@
       "truth": {
         "repo": "database_cleaner-active_record",
         "path": "lib/database_cleaner/active_record/truncation.rb",
-        "lines": [8, 17]
+        "lines": [
+          8,
+          17
+        ]
       },
-      "how_found": "Grepped the workspace for truncate_option. Truncation#initialize (8-9) rejects any key outside [:only, :except, :pre_count, :cache_tables, :reset_ids, :truncate_option] with an ArgumentError, and line 17 defaults it to :restrict. It is passed through #clean (24, 26) and only PostgreSQLAdapter#truncate_tables (202) interpolates it: \"TRUNCATE TABLE ... RESTART IDENTITY #{opts[:truncate_option]};\" — so :cascade/:restrict, Postgres only.",
+      "how_found": "Grepped the workspace for truncate_option. Truncation#initialize (8-9) rejects any key outside [:only, :except, :pre_count, :cache_tables, :reset_ids, :truncate_option] with an ArgumentError, and line 17 defaults it to :restrict. It is passed through #clean (24, 26) and only PostgreSQLAdapter#truncate_tables (202) interpolates it: \"TRUNCATE TABLE ... RESTART IDENTITY #{opts[:truncate_option]};\" \u2014 so :cascade/:restrict, Postgres only.",
       "rg_query": "rg -n 'truncate_option'",
       "why_asked": "Newcomers hit Postgres foreign-key errors on truncation and want to know whether CASCADE is available and how to ask for it."
     },
     {
       "id": "q3",
       "class": "literal",
-      "text": "Our suite dies with \"As you have more than one active sequel database you have to specify the one to use manually!\" — where does that come from and what do I set?",
+      "text": "Our suite dies with \"As you have more than one active sequel database you have to specify the one to use manually!\" \u2014 where does that come from and what do I set?",
       "truth": {
         "repo": "database_cleaner-sequel",
         "path": "lib/database_cleaner/sequel/base.rb",
-        "lines": [6, 10]
+        "lines": [
+          6,
+          10
+        ]
       },
       "how_found": "Grepped for the message text. DatabaseCleaner::Sequel::Base#db returns @db only when it was explicitly set to something other than :default; otherwise it raises if ::Sequel::DATABASES.count > 1, and falls back to ::Sequel::DATABASES.first. The fix is documented in the sequel README (lines 65-75): DatabaseCleaner[:sequel].db = Sequel.connect(uri), or DatabaseCleaner[:sequel, db: ...].",
       "rg_query": "rg -n 'more than one active sequel database'",
@@ -47,9 +56,12 @@
       "truth": {
         "repo": "database_cleaner",
         "path": "lib/database_cleaner/cleaner.rb",
-        "lines": [62, 67]
+        "lines": [
+          62,
+          67
+        ]
       },
-      "how_found": "Grepped clean_with: core.rb:14 delegates it to Cleaners, cleaners.rb:57-60 runs the Safeguard then fans out to every cleaner, and Cleaner#clean_with (62-67) builds a throwaway strategy object, points it at the current db and cleans once — it never assigns @strategy, so the configured strategy is left untouched. That is why the README's RSpec example can clean_with(:truncation) in before(:suite) while keeping :transaction per example.",
+      "how_found": "Grepped clean_with: core.rb:14 delegates it to Cleaners, cleaners.rb:57-60 runs the Safeguard then fans out to every cleaner, and Cleaner#clean_with (62-67) builds a throwaway strategy object, points it at the current db and cleans once \u2014 it never assigns @strategy, so the configured strategy is left untouched. That is why the README's RSpec example can clean_with(:truncation) in before(:suite) while keeping :transaction per example.",
       "rg_query": "rg -n 'clean_with'",
       "why_asked": "Both calls appear in the README's copy-paste RSpec config and it is not obvious that one of them is a one-shot that does not change global state."
     },
@@ -60,7 +72,10 @@
       "truth": {
         "repo": "database_cleaner",
         "path": "lib/database_cleaner/safeguard.rb",
-        "lines": [43, 70]
+        "lines": [
+          43,
+          70
+        ]
       },
       "how_found": "Read database_cleaner/lib/database_cleaner/cleaners.rb, where start/clean/cleaning/clean_with all begin with Safeguard.new.run; Safeguard::CHECKS runs RemoteDatabaseUrl first. It URI-parses ENV['DATABASE_URL'], returns false for sqlite/sqlite3 schemes, for a blank host, for localhost/127.0.0.1 (the LOCAL constant) and for any host ending in '.local'; anything else is treated as off-box and raises. It is skipped via the DATABASE_CLEANER_ALLOW_REMOTE_DATABASE_URL env var, DatabaseCleaner.allow_remote_database_url, or by setting a url_allowlist.",
       "rg_query": "rg -iE 'staging|connection string'",
@@ -73,9 +88,12 @@
       "truth": {
         "repo": "database_cleaner",
         "path": "lib/database_cleaner/null_strategy.rb",
-        "lines": [1, 20]
+        "lines": [
+          1,
+          20
+        ]
       },
-      "how_found": "Traced Cleaner#strategy in database_cleaner/lib/database_cleaner/cleaner.rb:55-57: it memoizes NullStrategy.new whenever nothing was assigned, and strategy= with nil leaves @strategy nil, so it falls back here. NullStrategy implements the whole interface as no-ops — start, db=, clean do nothing and cleaning simply yields the block through. The core README calls it the `null` strategy and says you can select it explicitly with `nil`.",
+      "how_found": "Traced Cleaner#strategy in database_cleaner/lib/database_cleaner/cleaner.rb:55-57: it memoizes NullStrategy.new whenever nothing was assigned, and strategy= with nil leaves @strategy nil, so it falls back here. NullStrategy implements the whole interface as no-ops \u2014 start, db=, clean do nothing and cleaning simply yields the block through. The core README calls it the `null` strategy and says you can select it explicitly with `nil`.",
       "rg_query": "rg -n 'disable'",
       "why_asked": "When someone is debugging a leaky test they want to turn the whole mechanism off for one run and see what breaks, without deleting the hooks."
     },
@@ -86,7 +104,10 @@
       "truth": {
         "repo": "database_cleaner-active_record",
         "path": "lib/database_cleaner/active_record/transaction.rb",
-        "lines": [4, 27]
+        "lines": [
+          4,
+          27
+        ]
       },
       "how_found": "database_cleaner-active_record/lib/database_cleaner/active_record.rb:10 sets the default to :transaction. Transaction#start leases/checks out a connection (lease_connection on ActiveRecord >= 7.2, connection below that), runs an empty `connection.transaction {}` as a warm-up hack, then opens a non-joinable transaction. #clean walks every connection in the pool, takes its lock, and rolls back any connection with open_transactions > 0, then releases the connection back to the pool. Nothing is ever physically removed.",
       "rg_query": "rg -iE 'undo|revert'",
@@ -95,13 +116,16 @@
     {
       "id": "q8",
       "class": "descriptive",
-      "text": "Vendors need their own wiping commands — is there a single spot that chooses the vendor-specific code and mixes it in at runtime?",
+      "text": "Vendors need their own wiping commands \u2014 is there a single spot that chooses the vendor-specific code and mixes it in at runtime?",
       "truth": {
         "repo": "database_cleaner-active_record",
         "path": "lib/database_cleaner/active_record/truncation.rb",
-        "lines": [70, 84]
+        "lines": [
+          70,
+          84
+        ]
       },
-      "how_found": "Truncation#clean (21-31) works against `connection`, which is a ConnectionWrapper (a SimpleDelegator). Its constructor is the only dispatch point: it always extends AbstractAdapter, then switches on connection.adapter_name — Mysql2/Trilogy get AbstractMysqlAdapter; SQLite gets AbstractMysqlAdapter plus SQLiteAdapter; PostgreSQL/PostGIS get AbstractMysqlAdapter plus PostgreSQLAdapter. The modules that follow (86-254) override truncate_tables, pre_count_tables, database_tables and the table cache. ConnectionWrapper is declared private_constant at line 256.",
+      "how_found": "Truncation#clean (21-31) works against `connection`, which is a ConnectionWrapper (a SimpleDelegator). Its constructor is the only dispatch point: it always extends AbstractAdapter, then switches on connection.adapter_name \u2014 Mysql2/Trilogy get AbstractMysqlAdapter; SQLite gets AbstractMysqlAdapter plus SQLiteAdapter; PostgreSQL/PostGIS get AbstractMysqlAdapter plus PostgreSQLAdapter. The modules that follow (86-254) override truncate_tables, pre_count_tables, database_tables and the table cache. ConnectionWrapper is declared private_constant at line 256.",
       "rg_query": "rg -n 'vendor'",
       "why_asked": "Before adding support for another engine (or debugging odd SQL), you need to know whether dispatch is centralised or sprinkled through conditionals."
     },
@@ -112,11 +136,14 @@
       "truth": {
         "repo": "database_cleaner-sequel",
         "path": "lib/database_cleaner/sequel/truncation.rb",
-        "lines": [56, 65]
+        "lines": [
+          56,
+          65
+        ]
       },
       "how_found": "Sequel Truncation#start (12-14) records `txid`, and #clean (16-17) returns straight away unless `dirty?`. `dirty?` compares the stored value with a fresh one; `txid` only returns a value on Postgres (SELECT txid_snapshot_xmax(txid_current_snapshot())) and is nil everywhere else, so on other engines `@last_txid.nil?` keeps it always dirty. Deletion inherits the same guard (deletion.rb:36).",
       "rg_query": "rg -n 'skip'",
-      "why_asked": "Suite speed is the reason people pick a strategy, so you want to know whether a no-op example still pays for a round trip — and the answer turns out to be engine-dependent."
+      "why_asked": "Suite speed is the reason people pick a strategy, so you want to know whether a no-op example still pays for a round trip \u2014 and the answer turns out to be engine-dependent."
     },
     {
       "id": "q10",
@@ -125,33 +152,42 @@
       "truth": {
         "repo": "database_cleaner-sequel",
         "path": "lib/database_cleaner/sequel/deletion.rb",
-        "lines": [6, 27]
+        "lines": [
+          6,
+          27
+        ]
       },
-      "how_found": "Sequel Deletion#clean (35-44) wraps everything in db.transaction and hands the work to disable_referential_integrity. On Postgres it issues SET CONSTRAINTS ALL DEFERRED and DISABLE TRIGGER ALL per table; on MySQL it reads @@FOREIGN_KEY_CHECKS into a local, sets it to 0, and the ensure block re-enables triggers / restores the saved value. Note the MySQL restore reads `old`, a local variable of the enclosing method — and the ensure branch also runs on engines where nothing was disabled.",
+      "how_found": "Sequel Deletion#clean (35-44) wraps everything in db.transaction and hands the work to disable_referential_integrity. On Postgres it issues SET CONSTRAINTS ALL DEFERRED and DISABLE TRIGGER ALL per table; on MySQL it reads @@FOREIGN_KEY_CHECKS into a local, sets it to 0, and the ensure block re-enables triggers / restores the saved value. Note the MySQL restore reads `old`, a local variable of the enclosing method \u2014 and the ensure branch also runs on engines where nothing was disabled.",
       "rg_query": "rg -iE 'parent|child|reject'",
       "why_asked": "Anyone whose schema has foreign keys wants to know whether cleanup can corrupt or leave enforcement switched off if an example blows up mid-run."
     },
     {
       "id": "q11",
       "class": "cross-repo",
-      "text": "Our Sequel test run refuses to start with \"ENV['RAILS_ENV'] is set to production\" — I grepped the sequel adapter and found nothing. Where is that check?",
+      "text": "Our Sequel test run refuses to start with \"ENV['RAILS_ENV'] is set to production\" \u2014 I grepped the sequel adapter and found nothing. Where is that check?",
       "truth": {
         "repo": "database_cleaner",
         "path": "lib/database_cleaner/safeguard.rb",
-        "lines": [72, 93]
+        "lines": [
+          72,
+          93
+        ]
       },
       "how_found": "database_cleaner-sequel/lib/database_cleaner/sequel.rb only requires database_cleaner/core and registers strategies; the guard lives in the core gem. Cleaners#start/#clean/#cleaning/#clean_with (database_cleaner/lib/database_cleaner/cleaners.rb:40-60) each call Safeguard.new.run, and Safeguard::Production scans KEYS = ENV, APP_ENV, RACK_ENV, RAILS_ENV for the value 'production'. Escape hatches: the DATABASE_CLEANER_ALLOW_PRODUCTION env var or DatabaseCleaner.allow_production (core.rb:18).",
       "rg_query": "rg -n \"is set to production\"",
-      "why_asked": "The failure surfaces while running the Sequel suite, so the obvious place to look is the Sequel gem — but adapters contain no safety logic at all, which is worth learning on day one."
+      "why_asked": "The failure surfaces while running the Sequel suite, so the obvious place to look is the Sequel gem \u2014 but adapters contain no safety logic at all, which is worth learning on day one."
     },
     {
       "id": "q12",
       "class": "cross-repo",
-      "text": "The adapter specs start with `it_should_behave_like \"a database_cleaner adapter\"` — where is that shared example defined and what does it actually assert?",
+      "text": "The adapter specs start with `it_should_behave_like \"a database_cleaner adapter\"` \u2014 where is that shared example defined and what does it actually assert?",
       "truth": {
         "repo": "database_cleaner",
         "path": "lib/database_cleaner/spec/shared_examples.rb",
-        "lines": [11, 19]
+        "lines": [
+          11,
+          19
+        ]
       },
       "how_found": "database_cleaner-sequel/spec/database_cleaner/sequel_spec.rb:5 and database_cleaner-active_record/spec/database_cleaner/active_record_spec.rb:5 use it after `require 'database_cleaner/spec'`, which is shipped by the core gem (database_cleaner/lib/database_cleaner/spec.rb). The adapter example enumerates DatabaseCleaner::Cleaner.available_strategies(described_class), instantiates each constant and reuses the 'a database_cleaner strategy' example (3-9), which only asserts the object responds to db, db=, start, clean and cleaning. ADAPTERS.md:103 spells out that it checks method existence only, not that cleaning works.",
       "rg_query": "rg -n 'a database_cleaner adapter'",

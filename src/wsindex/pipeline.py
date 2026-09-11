@@ -45,7 +45,7 @@ from wsindex.ingest import (
 from wsindex.ingest.commits import blame_links, blame_map, commit_chunks, read_commits
 from wsindex.ingest.link_extract import links_for
 from wsindex.links import Edge, LinkKind, LinkStore
-from wsindex.model import Chunk, Hit, SearchFilter, SourceFile
+from wsindex.model import Chunk, Hit, Kind, SearchFilter, SourceFile
 from wsindex.rank.reranker import Reranker
 from wsindex.run import (
     _WRITE_BATCH,
@@ -68,6 +68,38 @@ from wsindex.stats import SearchLog
 from wsindex.store import VectorStore
 
 _CANDIDATE_MULTIPLIER = 4
+
+COMMIT_SHARE = 0.2
+"""How much of a result list history may take before it is crowding.
+
+Commit messages and code sit in one vector space and are ranked by one
+cosine, and they are not comparable on it: a message is prose, a query is
+prose, so history scores well on almost anything. The field trial of
+2026-09-11 watched that play out — on one workspace 89% of the index was
+commit messages and 27 of 36 top-three slots went to them; asked about a
+named constant in a Rust repository, all ten hits were commits, scored
+within 0.005 of each other.
+
+A fifth, and it is derived rather than chosen. Sweeping the cap from 0 to
+10 across the sixty questions of `poe relevance`: **identifier questions
+do not move at all** (9 of 20 at every cap — history neither helps nor
+hurts them), while descriptive answers in the top ten go 4, 4, 4, 3, 1, 0
+as the cap rises 0, 1, 2, 3, 5, 10. Two in ten is the largest value that
+costs nothing, which is why it is not zero: filtering history out
+entirely would buy the same answers and quietly delete a feature, since
+a commit message is sometimes the honest answer to "why is this like
+this".
+
+The same sweep says the crowd is history specifically. Capping config
+chunks alongside changed nothing at any combination."""
+
+_QUOTA_MULTIPLIER = 3
+"""How many candidates per hit the quota needs to have something to promote.
+
+A cap without spares is a shorter list, not a better one: dropping four
+commits out of ten leaves six. Three times k is enough for the worst case
+measured — a top ten that was entirely history — and the store returning
+thirty rows instead of ten is not what a search spends its time on."""
 
 log = logging.getLogger(__name__)
 """Silent unless somebody attaches a handler; `wsindex serve` does.
@@ -588,7 +620,7 @@ class Pipeline:
         # was when it started and never fail doing it (ADR-10). Costs
         # ~4 ms; a CLI never notices and a server cannot do without it.
         self.store.refresh()
-        n = _CANDIDATE_MULTIPLIER if self.reranker else 1
+        n = _CANDIDATE_MULTIPLIER if self.reranker else _QUOTA_MULTIPLIER
         all_hits: list[Hit] = []
         for r in repos:
             try:
@@ -599,7 +631,7 @@ class Pipeline:
         if self.reranker:
             scores = self.reranker.rank(query, [hit.text for hit in all_hits])
             all_hits = [replace(h, score=s) for h, s in zip(all_hits, scores, strict=True)]
-        best = sorted(all_hits, key=lambda h: h.score, reverse=True)[:k]
+        best = _within_quota(sorted(all_hits, key=lambda h: h.score, reverse=True), k=k)
         if self.stats is not None:
             # After the answer is computed, and unable to affect it: a
             # note about a question must not be able to break answering
@@ -704,3 +736,29 @@ __all__ = [
     "Pipeline",
     "Reference",
 ]
+
+
+def _within_quota(ranked: list[Hit], *, k: int) -> list[Hit]:
+    """Cut a merged list to k, letting history take at most its share.
+
+    Not a filter: commits still answer, and a query whose best answers
+    really are commit messages still gets some. What this removes is the
+    case where prose outscores code on a question about code and takes
+    the whole screen — see `COMMIT_SHARE` for the sweep that fixed the
+    number.
+
+    A no-op when the caller already filtered history out, which is why it
+    is safe to run on every search.
+    """
+    allowed = max(1, int(k * COMMIT_SHARE))
+    kept: list[Hit] = []
+    commits = 0
+    for hit in ranked:
+        if hit.metadata.get("kind") == Kind.COMMIT.value:
+            if commits >= allowed:
+                continue
+            commits += 1
+        kept.append(hit)
+        if len(kept) == k:
+            break
+    return kept

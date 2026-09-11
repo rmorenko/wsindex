@@ -27,7 +27,7 @@ from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest import IndexState, NotAGitRepositoryError, Skip, chunk_file
 from wsindex.model import Chunk, Hit, Kind, SearchFilter, SourceFile
-from wsindex.pipeline import _CANDIDATE_MULTIPLIER, FullPass, Pipeline
+from wsindex.pipeline import _CANDIDATE_MULTIPLIER, _QUOTA_MULTIPLIER, FullPass, Pipeline
 from wsindex.rank.reranker import FakeReranker
 from wsindex.store import LanceDBStore
 
@@ -267,10 +267,14 @@ def test_pipeline_fetches_k_times_multiplier_with_reranker(
     _, kwargs = spied.search.call_args
     assert kwargs["k"] == 3 * _CANDIDATE_MULTIPLIER
 
+    # There are two reasons to ask for more than k now, and the reranker
+    # is only the louder one: the commit quota also needs spares, or
+    # capping history at two in ten would return eight hits instead of
+    # ten. A plain search over-fetches by the smaller factor.
     spied.reset_mock()
     Pipeline(store=spied, state_dir=state_dir).search(PY_TEXT, k=3)
     _, kwargs_plain = spied.search.call_args
-    assert kwargs_plain["k"] == 3
+    assert kwargs_plain["k"] == 3 * _QUOTA_MULTIPLIER
 
 
 # --- repo scope and filter passthrough ------------------------------------
@@ -872,3 +876,39 @@ def test_the_odd_unclaimed_file_is_not_worth_a_warning(
 
     assert report.unclaimed_files == 1
     assert not report.mostly_unclaimed
+
+
+def test_history_may_not_take_the_whole_screen(
+    tmp_path: Path, pipeline: Pipeline, commit: Committer
+) -> None:
+    # Commit messages and code are ranked by one cosine, and prose scores
+    # well against a prose query on almost anything. The field trial
+    # watched all ten hits for a named constant come back as commits,
+    # scored within 0.005 of each other. History still answers — it is
+    # capped, not filtered — so this pins both halves of that.
+    repo = tmp_path / "repo1"
+    for n in range(12):
+        (repo / "src" / f"mod{n}.py").write_text(f"def f{n}():\n    return {n}\n")
+        commit(repo)
+    pipeline.index()
+
+    hits = pipeline.search("snapshot", k=10)
+
+    assert len(hits) == 10
+    commits = [h for h in hits if h.metadata["kind"] == Kind.COMMIT.value]
+    assert 0 < len(commits) <= int(10 * wsindex.pipeline.COMMIT_SHARE)
+
+
+def test_the_quota_never_shortens_a_list_it_could_fill(
+    tmp_path: Path, pipeline: Pipeline, commit: Committer
+) -> None:
+    # A cap without spares is a shorter list, not a better one: dropping
+    # the commits out of a top ten and returning eight would trade one
+    # complaint for another.
+    repo = tmp_path / "repo1"
+    for n in range(12):
+        (repo / "src" / f"mod{n}.py").write_text(f"def f{n}():\n    return {n}\n")
+        commit(repo)
+    pipeline.index()
+
+    assert len(pipeline.search("snapshot", k=10)) == 10

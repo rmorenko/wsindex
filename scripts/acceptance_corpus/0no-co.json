@@ -8,7 +8,10 @@
       "truth": {
         "repo": "GraphQLSP",
         "path": "packages/graphqlsp/src/diagnostics.ts",
-        "lines": [169, 215]
+        "lines": [
+          169,
+          215
+        ]
       },
       "how_found": "Read packages/graphqlsp/src/index.ts to see getGraphQLDiagnostics wired into proxy.getSemanticDiagnostics, then read diagnostics.ts. getModeMismatchDiagnostic (169-215) first does a cheap regex probe of the file text for any of the `templates` names followed by a backtick or paren, then emits a Warning under MODE_MISMATCH_CODE (52007, declared at line 60) telling you to set \"templateIsCallExpression\": false in the tsconfig plugin entry.",
       "rg_query": "Found GraphQL documents in tagged templates",
@@ -21,7 +24,10 @@
       "truth": {
         "repo": "wonka",
         "path": "src/sinks.ts",
-        "lines": [182, 216]
+        "lines": [
+          182,
+          216
+        ]
       },
       "how_found": "Read src/sinks.ts. toArray subscribes, pulls after every push, and returns as soon as the synchronous recursion unwinds; anything emitted later is dropped and a Close talkback is sent before returning (`if (!ended) talkback(TalkbackKind.Close)`, line 214). The doc block at 182-198 states this explicitly.",
       "rg_query": "toArray",
@@ -30,15 +36,18 @@
     {
       "id": "q3",
       "class": "literal",
-      "text": "For server-side rendering we call toStatic() — what exactly comes back, and what does calling it do to the internal queues?",
+      "text": "For server-side rendering we call toStatic() \u2014 what exactly comes back, and what does calling it do to the internal queues?",
       "truth": {
         "repo": "hoofd",
         "path": "src/dispatcher/index.ts",
-        "lines": [225, 307]
+        "lines": [
+          225,
+          307
+        ]
       },
       "how_found": "src/index.ts line 13 re-exports `dispatcher.toStatic`. The implementation in src/dispatcher/index.ts returns { lang, title, links, scripts, metas }, applies the title template to the LAST entry of each queue (not the first, unlike the browser path), dedupes metas after reversing the queue, HTML-escapes meta content, stamps every link with data-hoofd=\"1\", and then empties every queue and resets the indices so the next request starts clean.",
       "rg_query": "toStatic",
-      "why_asked": "I'm adding SSR to a route and need to know whether toStatic is idempotent or destructive — getting that wrong leaks head tags between requests."
+      "why_asked": "I'm adding SSR to a route and need to know whether toStatic is idempotent or destructive \u2014 getting that wrong leaks head tags between requests."
     },
     {
       "id": "q4",
@@ -47,7 +56,10 @@
       "truth": {
         "repo": "gql.tada",
         "path": "packages/cli-utils/src/commands/turbo/cache.ts",
-        "lines": [4, 65]
+        "lines": [
+          4,
+          65
+        ]
       },
       "how_found": "cache.ts declares HASH_COMMENT = /@gql\\.tada\\/hash\\s+([^\\s*]+)/ (line 4). readCachedTurboDocuments parses the previous output with the TS parser, walks the `setupCache` interface, and for each member reads the last leading comment matching that regex (getHashComment, 57-65). Entries without a recoverable hash are skipped, so removing the comments forces a full re-typecheck. The comments are written back out in commands/turbo/runner.ts line 261.",
       "rg_query": "@gql.tada/hash",
@@ -60,7 +72,10 @@
       "truth": {
         "repo": "graphql-web-lite",
         "path": "scripts/babel/transformObjectFreeze.mjs",
-        "lines": [1, 19]
+        "lines": [
+          1,
+          19
+        ]
       },
       "how_found": "Walked scripts/rollup/config.mjs to the babel plugins it registers, then read scripts/babel/*.mjs. transformObjectFreeze.mjs is a Babel visitor that matches any CallExpression whose callee is the member expression Object.freeze and replaces the whole call with its first argument, so the wrapper disappears from the bundle entirely. Sibling transforms in the same folder do the same for dev assertions and for computed Symbol.toStringTag getters.",
       "rg_query": "immutable",
@@ -73,7 +88,10 @@
       "truth": {
         "repo": "graphql-web-lite",
         "path": "alias/utilities/findBreakingChanges.mjs",
-        "lines": [29, 35]
+        "lines": [
+          29,
+          35
+        ]
       },
       "how_found": "Listed the alias/ tree (it mirrors the upstream package's folder layout) and read alias/utilities/findBreakingChanges.mjs. Both exported functions take underscore-prefixed, unused parameters and unconditionally `return []`. Only the two enum-like constant objects above them are real, so anything importing them compiles and runs but always sees an empty result.",
       "rg_query": "compare",
@@ -86,7 +104,10 @@
       "truth": {
         "repo": "GraphQLSP",
         "path": "packages/graphqlsp/src/ast/templates.ts",
-        "lines": [1, 1]
+        "lines": [
+          1,
+          1
+        ]
       },
       "how_found": "Followed isGraphQLFunctionIdentifier in packages/graphqlsp/src/ast/checks.ts line 17 back to the set it consults, which is the single line of ast/templates.ts: `new Set(['gql', 'graphql'])`. The set is mutable and packages/graphqlsp/src/index.ts line 70 adds the `template` value from the tsconfig plugin entry to it at startup, which is the supported way to add a third name.",
       "rg_query": "tagName",
@@ -99,7 +120,10 @@
       "truth": {
         "repo": "reghex",
         "path": "src/parser.js",
-        "lines": [55, 62]
+        "lines": [
+          55,
+          62
+        ]
       },
       "how_found": "Read src/parser.js, the single-pass character scanner over the template's quasis. The `?`, `+` and `*` branch only fires when the assignment `lastMatch = currentSequence[currentSequence.length - 1]` yields a truthy previous entry; it then mutates that entry in place rather than creating a node of its own. With an empty current sequence the branch's guard fails and control falls through to the final `else`, which calls syntaxError(char) and throws `SyntaxError: Unexpected token \"?\"`.",
       "rg_query": "repetition",
@@ -112,22 +136,28 @@
       "truth": {
         "repo": "gql.tada",
         "path": "packages/cli-utils/src/commands/doctor/runner.ts",
-        "lines": [21, 30]
+        "lines": [
+          21,
+          30
+        ]
       },
       "how_found": "Read packages/cli-utils/src/commands/doctor/runner.ts. A local `delay = (ms = 700)` helper is awaited between every yielded status line; it short-circuits to Promise.resolve() when process.env.CI is set, and otherwise resolves via setTimeout. The comment above it says the tasks complete too quickly and are slowed down on purpose so the output is readable.",
       "rg_query": "pause",
-      "why_asked": "It looked like our own project was making the tool slow, and I was about to profile it — knowing it's cosmetic pacing saves a wasted afternoon and tells me not to copy the pattern into new commands."
+      "why_asked": "It looked like our own project was making the tool slow, and I was about to profile it \u2014 knowing it's cosmetic pacing saves a wasted afternoon and tells me not to copy the pattern into new commands."
     },
     {
       "id": "q10",
       "class": "descriptive",
-      "text": "Two components on the same screen declare competing wording for the tab label — why does the deeper declaration win, and what happens if it disappears?",
+      "text": "Two components on the same screen declare competing wording for the tab label \u2014 why does the deeper declaration win, and what happens if it disappears?",
       "truth": {
         "repo": "hoofd",
         "path": "src/dispatcher/index.ts",
-        "lines": [52, 154]
+        "lines": [
+          52,
+          154
+        ]
       },
-      "how_found": "Read src/hooks/useTitle.ts, which just forwards to the dispatcher, then src/dispatcher/index.ts. Additions are spliced in at an index that increments within a batch rather than being appended, so the deeper hook's entry lands in front; the whole batch is then flushed once per frame (setTimeout of 1000/60) and only the head of the queue is applied. Removal splices the entry out and, when it was at position 0, immediately re-applies the next entry — so the shallower declaration comes back as a fallback instead of leaving the previous wording stuck.",
+      "how_found": "Read src/hooks/useTitle.ts, which just forwards to the dispatcher, then src/dispatcher/index.ts. Additions are spliced in at an index that increments within a batch rather than being appended, so the deeper hook's entry lands in front; the whole batch is then flushed once per frame (setTimeout of 1000/60) and only the head of the queue is applied. Removal splices the entry out and, when it was at position 0, immediately re-applies the next entry \u2014 so the shallower declaration comes back as a fallback instead of leaving the previous wording stuck.",
       "rg_query": "tab label",
       "why_asked": "Our layout sets one value and the route sets another, and I need to know which one is authoritative and whether navigating away restores the outer one or leaves a stale value."
     },
@@ -138,22 +168,28 @@
       "truth": {
         "repo": "gql.tada",
         "path": "packages/internal/src/config.ts",
-        "lines": [33, 47]
+        "lines": [
+          33,
+          47
+        ]
       },
-      "how_found": "The natural first stop is GraphQLSP, since the placeholder is written in its tsconfig entry — but GraphQLSP/packages/graphqlsp/src/graphql/getSchema.ts only calls parseConfig imported from @gql.tada/internal. That package lives in the gql.tada repo: packages/internal/src/config.ts, where parseSchemaConfig's resolveConfigDir runs `input.replace(/\\${([^}]+)}/, ...)` against the three tada*Location options, substituting rootPath for `configDir` and throwing a TadaError (\"did you mean 'configDir'?\") for any other name. Note the regex is un-flagged, so only the first occurrence in a path is replaced.",
+      "how_found": "The natural first stop is GraphQLSP, since the placeholder is written in its tsconfig entry \u2014 but GraphQLSP/packages/graphqlsp/src/graphql/getSchema.ts only calls parseConfig imported from @gql.tada/internal. That package lives in the gql.tada repo: packages/internal/src/config.ts, where parseSchemaConfig's resolveConfigDir runs `input.replace(/\\${([^}]+)}/, ...)` against the three tada*Location options, substituting rootPath for `configDir` and throwing a TadaError (\"did you mean 'configDir'?\") for any other name. Note the regex is un-flagged, so only the first occurrence in a path is replaced.",
       "rg_query": "configDir",
       "why_asked": "The expansion is written in GraphQLSP's config but implemented in another repo; I need to know which options support it, and whether a misspelling fails loudly or silently produces a nonsense path."
     },
     {
       "id": "q12",
       "class": "cross-repo",
-      "text": "The CLI exposes one keypress stream that several places subscribe to — does each subscriber add another raw-mode listener on stdin, or is there a single underlying subscription?",
+      "text": "The CLI exposes one keypress stream that several places subscribe to \u2014 does each subscriber add another raw-mode listener on stdin, or is there a single underlying subscription?",
       "truth": {
         "repo": "wonka",
         "path": "src/operators.ts",
-        "lines": [743, 785]
+        "lines": [
+          743,
+          785
+        ]
       },
-      "how_found": "gql.tada/packages/cli-utils/src/term/tty.ts builds inputSource as pipe(fromReadStream(process.stdin, ...), onStart, onEnd, share) and derives cancelSource from it with another share — so the guarantee is entirely `share`'s, which lives in the wonka repo. wonka/src/operators.ts share keeps a sinks array and only calls the input source when `sinks.length === 1`; every later sink is fanned out from that one subscription, and the upstream Close is only sent once the last sink has detached. So setRawMode/emitKeypressEvents run once, not per subscriber.",
+      "how_found": "gql.tada/packages/cli-utils/src/term/tty.ts builds inputSource as pipe(fromReadStream(process.stdin, ...), onStart, onEnd, share) and derives cancelSource from it with another share \u2014 so the guarantee is entirely `share`'s, which lives in the wonka repo. wonka/src/operators.ts share keeps a sinks array and only calls the input source when `sinks.length === 1`; every later sink is fanned out from that one subscription, and the upstream Close is only sent once the last sink has detached. So setRawMode/emitKeypressEvents run once, not per subscriber.",
       "rg_query": "keypress",
       "why_asked": "Two commands read the same input stream and I need to know whether adding a third consumer risks double-handling Ctrl-C or leaving the terminal in raw mode."
     }

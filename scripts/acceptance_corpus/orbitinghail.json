@@ -8,7 +8,10 @@
       "truth": {
         "repo": "graft",
         "path": "crates/graft-sqlite/src/pragma.rs",
-        "lines": [56, 117]
+        "lines": [
+          56,
+          117
+        ]
       },
       "how_found": "Grepped for graft_status across the workspace; it lands on the doc comments of the GraftPragma enum in crates/graft-sqlite/src/pragma.rs, which enumerates every supported pragma (volumes, tags, switch, clone, fork, checkout, info, status, snapshot, fetch, pull, push, audit, hydrate, version, import, export, dump_header, dump_commit). The string -> variant parsing is right below in `TryFrom<&Pragma>` (lines 119-175).",
       "rg_query": "graft_status",
@@ -21,7 +24,10 @@
       "truth": {
         "repo": "sqlite-plugin",
         "path": "src/vfs.rs",
-        "lines": [337, 343]
+        "lines": [
+          337,
+          343
+        ]
       },
       "how_found": "rg MIN_SQLITE_VERSION_NUMBER -> src/vfs.rs:19 defines it as 3037002 (SQLite 3.37.2). The enforcement is in register_inner: it calls libversion_number() and outright panics with \"sqlite3 must be at least version {}, found version {}\" if the host is older.",
       "rg_query": "MIN_SQLITE_VERSION_NUMBER",
@@ -34,7 +40,10 @@
       "truth": {
         "repo": "splinter-rs",
         "path": "src/codec/footer.rs",
-        "lines": [8, 43]
+        "lines": [
+          8,
+          43
+        ]
       },
       "how_found": "rg SPLINTER_V2_MAGIC -> src/codec/footer.rs:9, a 4-byte trailer [0x59,0x11,0xA7,0xE2]. The Footer struct is a little-endian u64 CRC64-NVMe checksum plus that magic; Footer::validate returns DecodeErr::Magic then DecodeErr::Checksum. Cross-checked the call sites in src/codec.rs:252 and src/splinter_ref.rs:247.",
       "rg_query": "SPLINTER_V2_MAGIC",
@@ -47,7 +56,10 @@
       "truth": {
         "repo": "sqlsync",
         "path": "lib/sqlsync/src/timeline.rs",
-        "lines": [14, 50]
+        "lines": [
+          14,
+          50
+        ]
       },
       "how_found": "rg __sqlsync_timelines -> lib/sqlsync/src/timeline.rs. TIMELINES_TABLE_SQL creates it (id BLOB PRIMARY KEY, lsn INTEGER, STRICT); run_timeline_migration executes it, called from both LocalDocument::open and CoordinatorDocument::open. It is the per-timeline high-water mark of applied mutations, read/written by rebase_timeline and apply_timeline_range so mutations are never applied twice.",
       "rg_query": "__sqlsync_timelines",
@@ -60,7 +72,10 @@
       "truth": {
         "repo": "graft",
         "path": "crates/graft/src/rt/task/autosync.rs",
-        "lines": [62, 76]
+        "lines": [
+          62,
+          76
+        ]
       },
       "how_found": "Followed Runtime::new -> supervise(AutosyncTask) -> AutosyncTask::run. On each tick it walks every volume and compares local_changes/remote_changes; when BOTH sides have changes the branch body is empty with the comment 'volume has diverged and requires user/app intervention'. So nothing is merged and nothing is chosen: the volume is simply skipped forever until someone acts. Confirmed by plan_commit in rt/action/remote_commit.rs, which returns LogicalErr::VolumeDiverged in the same situation.",
       "rg_query": "conflict",
@@ -73,7 +88,10 @@
       "truth": {
         "repo": "sqlsync",
         "path": "lib/sqlsync/src/reactive_query.rs",
-        "lines": [99, 121]
+        "lines": [
+          99,
+          121
+        ]
       },
       "how_found": "Traced the reactive path from sqlsync-wasm/src/reactive.rs into lib/sqlsync/src/reactive_query.rs. refresh_state prepares 'EXPLAIN <sql>', walks the VDBE program, and collects column p2 of every OpenRead opcode, i.e. the root page number of each b-tree the statement opens; those get sorted/deduped into State::Monitoring. handle_storage_change then intersects that sorted list against StorageChange::Tables { root_pages_sorted } (via has_sorted_intersection in src/iter.rs), and the producer side of those root pages is Storage::resolve_root_page in src/storage.rs, which walks SQLite ptrmap pages.",
       "rg_query": "subscription",
@@ -86,7 +104,10 @@
       "truth": {
         "repo": "graft",
         "path": "crates/graft/src/core/gid/time.rs",
-        "lines": [32, 54]
+        "lines": [
+          32,
+          54
+        ]
       },
       "how_found": "Read crates/graft/src/core/gid.rs (16-byte GID = 7-byte time part + 9-byte random part, serialized Base58 as TIME-RANDOM) and then gid/time.rs. GidTimestamp is a 1-byte type prefix plus ts: [u8; 6]: From<SystemTime> takes millis since UNIX_EPOCH as u64 big-endian and keeps only bytes [2..], so 48 bits of milliseconds; as_time reverses it. That is millisecond resolution with room for ~2^48 ms (roughly year 10889), and it is why the string form sorts in ascending chronological order.",
       "rg_query": "identifier",
@@ -99,7 +120,10 @@
       "truth": {
         "repo": "graft",
         "path": "crates/graft/src/volume_writer.rs",
-        "lines": [16, 24]
+        "lines": [
+          16,
+          24
+        ]
       },
       "how_found": "Followed the VFS truncate path: graft-sqlite/src/file/vol_file.rs::truncate converts the byte size to a PageCount and calls writer.soft_truncate. The VolumeWrite trait doc in crates/graft/src/volume_writer.rs states it plainly: the operation writes no pages, it only updates the page count, so pages hidden by a smaller count become visible again if the volume is later extended. The impl at lines 75-81 only drops still-uncommitted pages from the in-memory map.",
       "rg_query": "shrink",
@@ -112,7 +136,10 @@
       "truth": {
         "repo": "sqlsync",
         "path": "lib/sqlsync-worker/sqlsync-wasm/src/net.rs",
-        "lines": [24, 26]
+        "lines": [
+          24,
+          26
+        ]
       },
       "how_found": "CoordinatorClient in sqlsync-wasm/src/net.rs holds a ConnectionState; the Disconnected arm awaits backoff.wait() before emitting a Connect task, and every error path calls backoff.step(). The bounds are the two constants at the top (10 ms floor, 5000 ms ceiling) and the growth rule is Backoff::step in sqlsync-wasm/src/utils.rs lines 160-165: current_ms *= 2, clamped to max_ms. Note the delay is reset to the floor on a successful Connected -> error transition.",
       "rg_query": "retry",
@@ -125,7 +152,10 @@
       "truth": {
         "repo": "sqlsync",
         "path": "lib/sqlsync-reducer/src/guest_reactor.rs",
-        "lines": [78, 126]
+        "lines": [
+          78,
+          126
+        ]
       },
       "how_found": "Read lib/sqlsync-reducer/src/guest_reactor.rs. There is no real executor inside the sandbox: raw_query/raw_execute push a Request into a global Reactor keyed by an incrementing RequestId and hand back a ResponseFuture. Reactor::step polls the single boxed task with a noop waker; ResponseFuture::poll returns Pending unless a response with its id has already been delivered, then drains the outgoing Requests map. The host side drives it in a loop: lib/sqlsync/src/reducer.rs WasmReducer::apply calls ffi.reduce, services each Request against the rusqlite Transaction, and calls ffi.reactor_step with the responses until no requests remain.",
       "rg_query": "suspend",
@@ -138,7 +168,10 @@
       "truth": {
         "repo": "sqlite-plugin",
         "path": "src/vfs.rs",
-        "lines": [676, 709]
+        "lines": [
+          676,
+          709
+        ]
       },
       "how_found": "You naturally start in graft: crates/graft-sqlite/src/pragma.rs parses the names and crates/graft-sqlite/src/vfs.rs implements `fn pragma` on the Vfs trait, but nothing in graft calls it. The caller lives in the sqlite-plugin repo: x_file_control intercepts op == SQLITE_FCNTL_PRAGMA, reads the name from args[1] and the optional argument from args[2], calls vfs.pragma(...), and maps PragmaErr::NotFound to SQLITE_NOTFOUND so SQLite falls through to its built-in pragmas; a returned message is copied back into args[0] via sqlite3_mprintf.",
       "rg_query": "pragma",
@@ -151,7 +184,10 @@
       "truth": {
         "repo": "splinter-rs",
         "path": "src/partition.rs",
-        "lines": [116, 175]
+        "lines": [
+          116,
+          175
+        ]
       },
       "how_found": "In graft, crates/graft/src/core/commit.rs stores `pageset: PageSet` on SegmentIdx, and crates/graft/src/core/pageset.rs shows PageSet is a thin newtype over splinter_rs::CowSplinter<Bytes>. The compaction itself is in the splinter-rs repo: Partition::optimize_kind estimates the encoded size of each candidate representation (Tree, Vec, Bitmap, Run, plus Empty/Full shortcuts at the top) and switch_kind converts to whichever is smallest; Optimizable::optimize (lines 215-233) optimizes children first so the estimate is accurate. RemoteCommit calls pageset.optimize() right before building the segment (crates/graft/src/rt/action/remote_commit.rs:267).",
       "rg_query": "pageset",

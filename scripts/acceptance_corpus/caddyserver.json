@@ -4,11 +4,14 @@
     {
       "id": "q1",
       "class": "literal",
-      "text": "We got a panic in production that says `deleted more than stored` — what does that mean and what would cause it?",
+      "text": "We got a panic in production that says `deleted more than stored` \u2014 what does that mean and what would cause it?",
       "truth": {
         "repo": "caddy",
         "path": "usagepool.go",
-        "lines": [166, 197]
+        "lines": [
+          166,
+          197
+        ]
       },
       "how_found": "Grepped the panic string; it fires in UsagePool.Delete when the reference count goes below zero. Read the method doc (lines 166-170) and the UsagePool type doc at the top of the same file, which spells out the invariant: Delete must be called exactly as many times as LoadOrStore/LoadOrNew.",
       "rg_query": "rg \"deleted more than stored\"",
@@ -17,11 +20,14 @@
     {
       "id": "q2",
       "class": "literal",
-      "text": "Caddy refuses to start with `probe resistance requires authentication` — what does the forward proxy want me to configure?",
+      "text": "Caddy refuses to start with `probe resistance requires authentication` \u2014 what does the forward proxy want me to configure?",
       "truth": {
         "repo": "forwardproxy",
         "path": "forwardproxy.go",
-        "lines": [171, 178]
+        "lines": [
+          171,
+          178
+        ]
       },
       "how_found": "Grepped the error string; it is returned from Handler.Provision when ProbeResistance is set but AuthCredentials is nil. The adjacent lines also show that a configured secret domain is logged at INFO on startup, and caddyfile.go's `basic_auth` case is what populates AuthCredentials.",
       "rg_query": "rg \"probe resistance requires authentication\"",
@@ -30,11 +36,14 @@
     {
       "id": "q3",
       "class": "literal",
-      "text": "Our TLS logs are full of `subject name does not qualify for certificate` — what check produces that, and which names does it reject?",
+      "text": "Our TLS logs are full of `subject name does not qualify for certificate` \u2014 what check produces that, and which names does it reject?",
       "truth": {
         "repo": "certmagic",
         "path": "handshake.go",
-        "lines": [479, 503]
+        "lines": [
+          479,
+          503
+        ]
       },
       "how_found": "Grepped the message to checkIfCertShouldBeObtained in handshake.go, then followed SubjectQualifiesForCert into certificates.go:593-613 (empty names, leading/trailing dots, non-leftmost wildcards, and a set of accidental special characters are all rejected). The same function also shows the other two rejection paths: no OnDemand config at all, and the DecisionFunc / hostAllowlist checks.",
       "rg_query": "rg \"subject name does not qualify\"",
@@ -43,11 +52,14 @@
     {
       "id": "q4",
       "class": "literal",
-      "text": "Our CI publishes xcaddy build output and I see `[REDACTED]` in it — what puts that there, and how do we choose what gets masked?",
+      "text": "Our CI publishes xcaddy build output and I see `[REDACTED]` in it \u2014 what puts that there, and how do we choose what gets masked?",
       "truth": {
         "repo": "xcaddy",
         "path": "redact.go",
-        "lines": [23, 58]
+        "lines": [
+          23,
+          58
+        ]
       },
       "how_found": "Grepped the literal; redactedPlaceholder is defined in redact.go and substituted by redactRule.apply, either for exact secrets or for the builtinCredentialRules (URL userinfo, GitHub/GitLab/Slack tokens, AWS key IDs) plus PEM private-key blocks. The knobs are Builder.Secrets and Builder.RedactCredentials, documented at builder.go:105-121 and wired in Build via configureRedaction at builder.go:351; both are no-ops unless OnStep is set.",
       "rg_query": "rg -F \"[REDACTED]\"",
@@ -56,11 +68,14 @@
     {
       "id": "q5",
       "class": "cross-repo",
-      "text": "The builder image sets `XCADDY_SETCAP=1` — what does that actually do to the binary it produces, and does it need elevated privileges?",
+      "text": "The builder image sets `XCADDY_SETCAP=1` \u2014 what does that actually do to the binary it produces, and does it need elevated privileges?",
       "truth": {
         "repo": "xcaddy",
         "path": "cmd/main.go",
-        "lines": [78, 103]
+        "lines": [
+          78,
+          103
+        ]
       },
       "how_found": "The variable is only declared in caddy-docker (Dockerfile.builder.tmpl:15 and the rendered 2.11/builder/Dockerfile), with a one-line comment. The behaviour lives in xcaddy: setcapIfRequested runs `setcap cap_net_bind_service=+ep <output>` on the freshly built binary, wrapping it in `sudo` unless sudo is missing or XCADDY_SUDO=0.",
       "rg_query": "rg XCADDY_SETCAP",
@@ -69,11 +84,14 @@
     {
       "id": "q6",
       "class": "cross-repo",
-      "text": "Our certificate Secrets have mangled names — a `*` turns into `wildcard_` and a `:` into `-`. Is our Kubernetes storage adapter doing that, or something upstream?",
+      "text": "Our certificate Secrets have mangled names \u2014 a `*` turns into `wildcard_` and a `:` into `-`. Is our Kubernetes storage adapter doing that, or something upstream?",
       "truth": {
         "repo": "certmagic",
         "path": "storage.go",
-        "lines": [269, 288]
+        "lines": [
+          269,
+          288
+        ]
       },
       "how_found": "Started in the obvious place, ingress/pkg/storage/storage.go, whose cleanKey only collapses characters Kubernetes names disallow into '.' and prepends 'caddy.ingress--'. It never touches '*'. The asterisk-to-wildcard_ and ':'-to-'-' substitutions happen one layer up, in certmagic's KeyBuilder.Safe, which builds the storage key before any Storage implementation sees it (see CertsSitePrefix/SiteCert at storage.go:229-246).",
       "rg_query": "rg \"wildcard_\"",
@@ -82,11 +100,14 @@
     {
       "id": "q7",
       "class": "descriptive",
-      "text": "Our controller only accepts requests over TLS by default — where does that restriction come from, and can it be turned off for a single service?",
+      "text": "Our controller only accepts requests over TLS by default \u2014 where does that restriction come from, and can it be turned off for a single service?",
       "truth": {
         "repo": "ingress",
         "path": "internal/caddy/ingress/matcher.go",
-        "lines": [26, 28]
+        "lines": [
+          26,
+          28
+        ]
       },
       "how_found": "Traced the generated config: global/ingress.go builds one route per Ingress path and runs every IngressMiddleware over it; MatcherPlugin is the one that populates the matcher set, and it unconditionally adds a `protocol: https` condition unless the `caddy.ingress.kubernetes.io/disable-ssl-redirect` annotation (constant at internal/caddy/ingress/annotations.go:9) is exactly \"true\".",
       "rg_query": "rg -i \"\\bTLS\\b\"",
@@ -99,20 +120,26 @@
       "truth": {
         "repo": "caddy",
         "path": "internal/ranges.go",
-        "lines": [3, 14]
+        "lines": [
+          3,
+          14
+        ]
       },
-      "how_found": "Found the token handling in modules/caddyhttp/ip_range.go:95, modules/caddyhttp/ip_matchers.go:82/195, modules/caddyhttp/reverseproxy/caddyfile.go:708 and modules/caddytls/matchers.go:417/525 — all of them expand the same shortcut into internal.PrivateRangesCIDR(). The list itself is only nine lines: 192.168/16, 172.16/12, 10/8, 127.0.0.1/8, fd00::/8 and ::1. IPv6 link-local (fe80::/10) is NOT in it — unlike certmagic's isInternalIP (certificates.go:658-669) and forwardproxy's built-in deny list (forwardproxy.go:155-168), which both include fe80::/10. Note also that the IPv4 loopback entry is written 127.0.0.1/8 rather than 127.0.0.0/8.",
+      "how_found": "Found the token handling in modules/caddyhttp/ip_range.go:95, modules/caddyhttp/ip_matchers.go:82/195, modules/caddyhttp/reverseproxy/caddyfile.go:708 and modules/caddytls/matchers.go:417/525 \u2014 all of them expand the same shortcut into internal.PrivateRangesCIDR(). The list itself is only nine lines: 192.168/16, 172.16/12, 10/8, 127.0.0.1/8, fd00::/8 and ::1. IPv6 link-local (fe80::/10) is NOT in it \u2014 unlike certmagic's isInternalIP (certificates.go:658-669) and forwardproxy's built-in deny list (forwardproxy.go:155-168), which both include fe80::/10. Note also that the IPv4 loopback entry is written 127.0.0.1/8 rather than 127.0.0.0/8.",
       "rg_query": "rg -i \"loopback|link-local\"",
       "why_asked": "Getting the trusted-proxy set wrong is a client-IP spoofing bug; before copying the shortcut into production you want to see the exact list and its gaps."
     },
     {
       "id": "q9",
       "class": "descriptive",
-      "text": "Some of our rules use a terse `{...}` notation and others a much longer dotted one for the same thing — what expands the terse form, and is there a complete table of the abbreviations?",
+      "text": "Some of our rules use a terse `{...}` notation and others a much longer dotted one for the same thing \u2014 what expands the terse form, and is there a complete table of the abbreviations?",
       "truth": {
         "repo": "caddy",
         "path": "caddyconfig/httpcaddyfile/shorthands.go",
-        "lines": [20, 105]
+        "lines": [
+          20,
+          105
+        ]
       },
       "how_found": "Read the httpcaddyfile package: NewShorthandReplacer builds a strings.Replacer from placeholderShorthands() (a flat old/new pair list of ~36 entries) plus a dozen regexp rules for the parameterised ones ({header.X}, {query.X}, {re.X}, {rp.X}, ...). ApplyToSegment rewrites every token's text, so by the time a directive is unmarshalled only the long dotted form exists.",
       "rg_query": "rg -i \"abbreviat|terse\"",
@@ -121,11 +148,14 @@
     {
       "id": "q10",
       "class": "descriptive",
-      "text": "Do I hand-edit the image recipes under each version folder, or are they produced from something else — and what produces them?",
+      "text": "Do I hand-edit the image recipes under each version folder, or are they produced from something else \u2014 and what produces them?",
       "truth": {
         "repo": "caddy-docker",
         "path": "Makefile",
-        "lines": [1, 16]
+        "lines": [
+          1,
+          16
+        ]
       },
       "how_found": "The default goal is gen-dockerfiles, which runs gomplate over render-dockerfiles.tmpl with the five *.tmpl bodies and stackbrew-config.yaml as data, plus a getChecksums.sh plugin that pulls per-architecture SHA-512 sums from the tagged GitHub release. So everything under 2.11/*/ is output, and the per-variant Dockerfile.base files plus the top-level templates are the inputs. README.md:14-22 describes the same flow as the release procedure; library/caddy is produced by the second target.",
       "rg_query": "rg -i \"regenerat|hand-edit\"",
@@ -134,11 +164,14 @@
     {
       "id": "q11",
       "class": "descriptive",
-      "text": "Our relay tells the destination who the original caller was — can we suppress it?",
+      "text": "Our relay tells the destination who the original caller was \u2014 can we suppress it?",
       "truth": {
         "repo": "forwardproxy",
         "path": "forwardproxy.go",
-        "lines": [284, 293]
+        "lines": [
+          284,
+          293
+        ]
       },
       "how_found": "Read Handler.ServeHTTP: unless the HideIP field (declared at forwardproxy.go:62) is set, it copies any inbound Forwarded / X-Forwarded-For headers and appends its own `Forwarded: for=\"<RemoteAddr>\"` entry, stashing the result in the context for the upstream dial. The same flag is consulted again at line 354 on the CONNECT path. A sibling field, HideVia, controls the Via header separately.",
       "rg_query": "rg -i \"suppress|anonymous\"",
@@ -147,11 +180,14 @@
     {
       "id": "q12",
       "class": "descriptive",
-      "text": "If a pair of entries can each answer an incoming URL, what decides which one wins — and is that logic active out of the box?",
+      "text": "If a pair of entries can each answer an incoming URL, what decides which one wins \u2014 and is that logic active out of the box?",
       "truth": {
         "repo": "ingress",
         "path": "internal/caddy/global/ingress_sort.go",
-        "lines": [37, 72]
+        "lines": [
+          37,
+          72
+        ]
       },
       "how_found": "IngressSortPlugin runs with Priority -2, i.e. after all the per-Ingress routes have been generated, and reorders them with a stable sort: exact paths before prefix paths, longer before shorter within the same kind, empty paths last. Crucially the whole thing is gated on store.ConfigMap.ExperimentalSmartSort (declared at pkg/store/configmap_parser.go:20), so by default no reordering happens at all and the routes keep the order the Kubernetes objects were iterated in.",
       "rg_query": "rg -i \"decides|wins\"",

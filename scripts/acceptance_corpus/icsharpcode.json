@@ -8,7 +8,10 @@
       "truth": {
         "repo": "SharpZipLib",
         "path": "src/ICSharpCode.SharpZipLib/Core/InflaterPool.cs",
-        "lines": [21, 62]
+        "lines": [
+          21,
+          62
+        ]
       },
       "how_found": "src/ICSharpCode.SharpZipLib/SharpZipLibOptions.cs declares the property with a default of 0; InflaterPool.Rent/Return are the only consumers. Both start with 'if (SharpZipLibOptions.InflaterPoolSize <= 0)', so at the default the pool is bypassed entirely: Rent just does 'new Inflater(noHeader)' and Return drops the instance. When positive, there are two queues (header / noHeader), instances are Reset() on both rent and return, and Return only re-queues while pool.Count is below the configured size. Introduced by commit ff2d7c3 'feat(zip): add optional inflater pooling (#843)'.",
       "rg_query": "InflaterPoolSize",
@@ -17,11 +20,14 @@
     {
       "id": "q2",
       "class": "literal",
-      "text": "I get InvalidOperationException 'TextDocument can be accessed only from the thread that owns it.' when I load a file on a background thread — what is the supported way to hand the document over to the UI thread?",
+      "text": "I get InvalidOperationException 'TextDocument can be accessed only from the thread that owns it.' when I load a file on a background thread \u2014 what is the supported way to hand the document over to the UI thread?",
       "truth": {
         "repo": "AvalonEdit",
         "path": "ICSharpCode.AvalonEdit/Document/TextDocument.cs",
-        "lines": [46, 83]
+        "lines": [
+          46,
+          83
+        ]
       },
       "how_found": "Grepped the exception message: it is thrown by TextDocument.VerifyAccess() (line 55-59) when Thread.CurrentThread != owner, where 'owner' is initialised to the creating thread (line 44). The intended escape hatch is directly below: SetOwnerThread(Thread newOwner) (lines 61-83), whose doc comment explicitly describes loading a file on a background thread and then transferring ownership to the UI thread. It locks on lockObject and calls VerifyAccess() first unless the current owner is null, so ownership can only be taken from a document that has been released (owner set to null).",
       "rg_query": "TextDocument can be accessed only from the thread",
@@ -34,7 +40,10 @@
       "truth": {
         "repo": "CodeConverter",
         "path": "CodeConverter/Util/SyntaxNodeExtensions.cs",
-        "lines": [497, 537]
+        "lines": [
+          497,
+          537
+        ]
       },
       "how_found": "Grepped the literal 'see comment for details' to WithCsTrailingErrorComment<T> (lines 521-537). It builds an ErrorDirectiveTrivia whose text is ' Cannot convert {sourceNode type name} - see comment for details', then appends a /* ... */ comment containing DescribeConversionError(node, exception) (lines 497-512). That helper prints 'Cannot convert {nodeType}, {exception.ToString()}' with TaskAwaiter stack frames filtered out, plus an 'Input:' section with node.ToFullString(); when the exception is an ExceptionWithNodeInformation it unwraps the inner exception and adds a 'Context:' section. Both trivia pieces are tagged with ConversionErrorAnnotationKind so the rest of the pipeline can find them. WithVbTrailingErrorComment is the mirror image for the C#-to-VB direction.",
       "rg_query": "see comment for details",
@@ -43,11 +52,14 @@
     {
       "id": "q4",
       "class": "literal",
-      "text": "ILSpy sometimes replaces the decompiled code with 'You have selected too much code for it to be displayed automatically' — what is the actual limit, and can it be raised?",
+      "text": "ILSpy sometimes replaces the decompiled code with 'You have selected too much code for it to be displayed automatically' \u2014 what is the actual limit, and can it be raised?",
       "truth": {
         "repo": "ILSpy",
         "path": "ILSpy/TextView/DecompilerTabPageModel.cs",
-        "lines": [407, 470]
+        "lines": [
+          407,
+          470
+        ]
       },
       "how_found": "Grepped 'too much code' to BuildOutputLengthExceededMessage (lines 453-470). The limits are the two constants just above: DefaultOutputLengthLimit = 5,000,000 characters and ExtendedOutputLengthLimit = 75,000,000 (lines 412-414). The limit is pushed into AvaloniaEditTextOutput.LengthLimit (AvaloniaEditTextOutput.cs:54, checked at :205) which throws OutputLengthExceededException; DecompilerTabPageModel catches it (~line 613) and swaps in the message. Yes it can be raised, but only once and only from the UI: when the run was at the default limit the message gets a 'Display code anyway' button that calls RestartDecompileWithOutputLimit(ExtendedOutputLengthLimit); at the extended limit only the 'Save code' button is offered. pendingOutputLengthLimit is reset back to the default on every start, so it is per-attempt, not a setting.",
       "rg_query": "too much code",
@@ -60,9 +72,12 @@
       "truth": {
         "repo": "SharpZipLib",
         "path": "src/ICSharpCode.SharpZipLib/Zip/WindowsNameTransform.cs",
-        "lines": [120, 155]
+        "lines": [
+          120,
+          155
+        ]
       },
-      "how_found": "Followed FastZip.ExtractZip: it sets extractNameTransform_ = new WindowsNameTransform(targetDirectory, allowParentTraversal) (FastZip.cs:576) and every entry name goes through TransformFile/TransformDirectory (FastZip.cs:857/861). TransformFile does the defence in two stages: MakeValidName strips the root, leading and trailing separators, collapses doubled separators and substitutes an invalid-character set; then, when a base directory is set, it combines and re-normalises with Path.GetFullPath and throws InvalidNameException('Parent traversal in paths is not allowed') unless the result still starts with the base directory (compared case-insensitively, with a trailing separator appended so a sibling like 'out2' next to 'out' cannot pass). Note the guard is opt-out: the allowParentTraversal parameter defaults to false, and despite the class name this transform is used on every platform. It only applies when BaseDirectory is set — code that drives ZipFile/ZipInputStream by hand and joins entry.Name itself gets no protection.",
+      "how_found": "Followed FastZip.ExtractZip: it sets extractNameTransform_ = new WindowsNameTransform(targetDirectory, allowParentTraversal) (FastZip.cs:576) and every entry name goes through TransformFile/TransformDirectory (FastZip.cs:857/861). TransformFile does the defence in two stages: MakeValidName strips the root, leading and trailing separators, collapses doubled separators and substitutes an invalid-character set; then, when a base directory is set, it combines and re-normalises with Path.GetFullPath and throws InvalidNameException('Parent traversal in paths is not allowed') unless the result still starts with the base directory (compared case-insensitively, with a trailing separator appended so a sibling like 'out2' next to 'out' cannot pass). Note the guard is opt-out: the allowParentTraversal parameter defaults to false, and despite the class name this transform is used on every platform. It only applies when BaseDirectory is set \u2014 code that drives ZipFile/ZipInputStream by hand and joins entry.Name itself gets no protection.",
       "rg_query": "escape",
       "why_asked": "Any archive library that writes to disk on behalf of untrusted input needs a zip-slip answer before it goes anywhere near a server, and I need to know whether the protection is on by default."
     },
@@ -73,7 +88,10 @@
       "truth": {
         "repo": "AvalonEdit",
         "path": "ICSharpCode.AvalonEdit/Utils/FileReader.cs",
-        "lines": [125, 238]
+        "lines": [
+          125,
+          238
+        ]
       },
       "how_found": "OpenStream peeks the first two bytes; for 0x0000, 0xfffe, 0xfeff and 0xefbb it just hands the stream to StreamReader, whose own detection is adequate. Everything else goes to AutoDetect, which is a hand-rolled state machine over at most 500 KB (int max = (int)Math.Min(fs.Length, 500000)) that walks the bytes checking whether they form well-formed UTF-8 continuation sequences. Three outcomes: pure 7-bit -> the caller's default if that is ASCII-compatible (with the BOM-emitting UTF8 encoding swapped for UTF8NoBOM) else Encoding.ASCII; valid multi-byte sequences -> UTF-8 without BOM; anything invalid -> the caller's default, except that a Unicode default is deliberately replaced with Encoding.Default, so a non-Unicode payload is never read as Unicode. The stated reason for not just using StreamReader is that its own detection cannot tell ISO-8859-1 from BOM-less UTF-8.",
       "rg_query": "charset",
@@ -86,9 +104,12 @@
       "truth": {
         "repo": "CodeConverter",
         "path": "CodeConverter/Common/LineTriviaMapper.cs",
-        "lines": [33, 61]
+        "lines": [
+          33,
+          61
+        ]
       },
-      "how_found": "The visitors annotate produced nodes with SourceStartLine/SourceEndLine annotations (AnnotationConstants.cs), and MapSourceTriviaToTarget then works line-by-line rather than node-by-node: for each source line it finds the first target line holding anything converted from it and prepends that line's leading trivia, and the last such target line for the trailing trivia. It iterates the source lines in reverse (GetTargetWithSourceTrivia) so a piece of trivia can never be placed after the construct it came from — the stated motivation is #if directives and opening braces — and then reverses the per-token lists it accumulated, before a BalanceTrivia pass. Tokens already handled by a visitor are skipped via the LeadingTriviaAlreadyMapped / TrailingTriviaAlreadyMapped annotations. Documented limitation, stated in the summary: anything inside a line (a /* */ in the middle of a statement) is not handled.",
+      "how_found": "The visitors annotate produced nodes with SourceStartLine/SourceEndLine annotations (AnnotationConstants.cs), and MapSourceTriviaToTarget then works line-by-line rather than node-by-node: for each source line it finds the first target line holding anything converted from it and prepends that line's leading trivia, and the last such target line for the trailing trivia. It iterates the source lines in reverse (GetTargetWithSourceTrivia) so a piece of trivia can never be placed after the construct it came from \u2014 the stated motivation is #if directives and opening braces \u2014 and then reverses the per-token lists it accumulated, before a BalanceTrivia pass. Tokens already handled by a visitor are skipped via the LeadingTriviaAlreadyMapped / TrailingTriviaAlreadyMapped annotations. Documented limitation, stated in the summary: anything inside a line (a /* */ in the middle of a statement) is not handled.",
       "rg_query": "remarks",
       "why_asked": "Losing or misplacing a comment during an automated port is the thing users will never forgive, so I want to know the mechanism and its known gaps before I touch a visitor."
     },
@@ -99,9 +120,12 @@
       "truth": {
         "repo": "WpfDesigner",
         "path": "WpfDesign.Designer/Project/themes/VersionedAssemblyResourceDictionary.cs",
-        "lines": [27, 52]
+        "lines": [
+          27,
+          52
+        ]
       },
-      "how_found": "Every .xaml.cs in WpfDesign.Designer (BoolEditor, NumberEditor, PropertyContextMenu, CollectionEditor, RichTextBoxToolbar, ...) calls SpecialInitializeComponent() from its constructor instead of InitializeComponent(); the comment on it says 'Fixes InitializeComponent with multiple Versions of same Assembly loaded'. The body sets _contentLoaded itself and calls Application.LoadComponent with a URI built by VersionedAssemblyResourceDictionary.GetXamlNameForType. That type's static constructor composes the prefix '/{assembly name};v{assembly version};component/' — the versioned pack-URI form — so the XAML is resolved from the exact assembly version rather than the first one WPF happens to have loaded. The same class doubles as a ResourceDictionary subclass: it takes a RelativePath and rewrites it into a versioned Source in ISupportInitialize.EndInit. This matters because the designer is meant to host user assemblies that may drag in another build of the same library.",
+      "how_found": "Every .xaml.cs in WpfDesign.Designer (BoolEditor, NumberEditor, PropertyContextMenu, CollectionEditor, RichTextBoxToolbar, ...) calls SpecialInitializeComponent() from its constructor instead of InitializeComponent(); the comment on it says 'Fixes InitializeComponent with multiple Versions of same Assembly loaded'. The body sets _contentLoaded itself and calls Application.LoadComponent with a URI built by VersionedAssemblyResourceDictionary.GetXamlNameForType. That type's static constructor composes the prefix '/{assembly name};v{assembly version};component/' \u2014 the versioned pack-URI form \u2014 so the XAML is resolved from the exact assembly version rather than the first one WPF happens to have loaded. The same class doubles as a ResourceDictionary subclass: it takes a RelativePath and rewrites it into a versioned Source in ISupportInitialize.EndInit. This matters because the designer is meant to host user assemblies that may drag in another build of the same library.",
       "rg_query": "setup",
       "why_asked": "It is the first odd thing you notice reading any view in this repo, and you cannot safely add a new view without knowing whether to copy the pattern."
     },
@@ -112,7 +136,10 @@
       "truth": {
         "repo": "ilspy-vscode",
         "path": "vscode-extension/src/dotnet-acquire/resolveDotnetRuntime.ts",
-        "lines": [23, 90]
+        "lines": [
+          23,
+          90
+        ]
       },
       "how_found": "resolveDotnetRuntime first asks getCachedDotnetRuntimePath(context, '10.0') and checks the stored path still exists on disk. If it does, that path is used immediately and no acquisition is awaited; instead the caller gets back a refreshRuntimeInBackground callback that re-runs the acquisition afterwards and re-caches the result, with failures only logged as a warning. If nothing is cached, or the cached path has vanished, it awaits acquireDotnetRuntime, which delegates to the ms-dotnettools 'dotnet.acquire' command and then 'dotnet.ensureDotnetDependencies' (Linux native deps), and caches whatever path comes back. So: startup is not blocked on a download after the first successful run, and the version is pinned by the single DOTNET_RUNTIME_VERSION constant. Any failure is swallowed into a warning toast and dotnetPath stays undefined.",
       "rg_query": "download",
@@ -125,7 +152,10 @@
       "truth": {
         "repo": "ILSpy",
         "path": "ILSpy/Updates/UpdateService.cs",
-        "lines": [124, 145]
+        "lines": [
+          124,
+          145
+        ]
       },
       "how_found": "CheckForUpdatesIfEnabledAsync is the automatic path: it returns immediately unless settings.AutomaticUpdateCheckEnabled, then only proceeds if LastSuccessfulUpdateCheck is null, older than UtcNow.AddDays(-7), or in the future (clock-skew guard). So the cadence is at most once a week. UpdateSettings.cs defaults automaticUpdateCheckEnabled to true ('Default-on so the user gets notified ... without an explicit opt-in step'), persisted as XML, so yes it is on unless turned off. The fetch itself pulls https://icsharpcode.github.io/ILSpy/updates.xml over an HttpClient with UseProxy/UseDefaultCredentials, follows at most 5 redirects manually, picks the 'stable' band, and refuses any releaseTag/downloadUrl that does not normalise to a github.com/icsharpcode/ILSpy/releases/tag/ prefix. Network failures are swallowed and reported as 'no update found'. Help -> Check For Updates uses CheckForUpdatesAsync, which bypasses the 7-day throttle but not the URL guard.",
       "rg_query": "interval",
@@ -138,22 +168,28 @@
       "truth": {
         "repo": "ILSpy",
         "path": "ICSharpCode.ILSpyX/Search/AbstractSearchStrategy.cs",
-        "lines": [91, 136]
+        "lines": [
+          91,
+          136
+        ]
       },
-      "how_found": "The natural first stop is ilspy-vscode/backend/ILSpyX.Backend/Search/SearchBackend.cs, but it only splits the input on spaces and strips prefix:/quote/regex forms in CreateSearchRequest, then hands the keyword array to ICSharpCode.ILSpyX's MemberSearchStrategy — the matching itself is not in that repo. It lives in AbstractSearchStrategy.IsMatch in the ILSpy repo (pulled in as the ICSharpCode.ILSpyX package reference). Per keyword, the first character is an operator: '+' means must contain (falls through to the default case), '-' means must NOT contain, '=' means exact match up to the generic-arity backtick, '~' means a non-contiguous/fuzzy match implemented by IsNoncontiguousMatch just below, and anything else is a plain case-insensitive substring test. All keywords must pass (AND semantics), and a /regex/ form short-circuits the whole thing because request.RegEx is checked first.",
+      "how_found": "The natural first stop is ilspy-vscode/backend/ILSpyX.Backend/Search/SearchBackend.cs, but it only splits the input on spaces and strips prefix:/quote/regex forms in CreateSearchRequest, then hands the keyword array to ICSharpCode.ILSpyX's MemberSearchStrategy \u2014 the matching itself is not in that repo. It lives in AbstractSearchStrategy.IsMatch in the ILSpy repo (pulled in as the ICSharpCode.ILSpyX package reference). Per keyword, the first character is an operator: '+' means must contain (falls through to the default case), '-' means must NOT contain, '=' means exact match up to the generic-arity backtick, '~' means a non-contiguous/fuzzy match implemented by IsNoncontiguousMatch just below, and anything else is a plain case-insensitive substring test. All keywords must pass (AND semantics), and a /regex/ form short-circuits the whole thing because request.RegEx is checked first.",
       "rg_query": "exact match",
       "why_asked": "The extension's search box has no help text, and knowing the query language is the difference between it being usable and useless on a large assembly."
     },
     {
       "id": "q12",
       "class": "cross-repo",
-      "text": "XamlDesigner's text pane just sets SyntaxHighlighting=\"XML\" — where is that name actually defined, and which file extensions does it claim?",
+      "text": "XamlDesigner's text pane just sets SyntaxHighlighting=\"XML\" \u2014 where is that name actually defined, and which file extensions does it claim?",
       "truth": {
         "repo": "AvalonEdit",
         "path": "ICSharpCode.AvalonEdit/Highlighting/Resources/Resources.cs",
-        "lines": [35, 64]
+        "lines": [
+          35,
+          64
+        ]
       },
-      "how_found": "WpfDesigner/XamlDesigner/DocumentView.xaml line 15 sets SyntaxHighlighting=\"XML\" on an AvalonEdit TextEditor, and Demo.XamlDesigner.csproj references the AvalonEdit package — so nothing in WpfDesigner defines the name. In the AvalonEdit repo, TextEditor's SyntaxHighlighting property is resolved through HighlightingManager.Instance, which is the DefaultHighlightingManager whose constructor calls Resources.RegisterBuiltInHighlightings. That method is the actual table: 'XML' maps to the embedded XML-Mode.xshd and claims a long extension list that notably includes .xaml (also .xml, .xsl, .xsd, .config, .csproj, .targets, .nuspec, ...), alongside C#, Json, MarkDown, PowerShell and the rest. Worth knowing for debugging: DefaultHighlightingManager.RegisterHighlighting loads and validates the .xshd eagerly in DEBUG builds but lazily in RELEASE, so a broken definition surfaces at different times depending on configuration.",
+      "how_found": "WpfDesigner/XamlDesigner/DocumentView.xaml line 15 sets SyntaxHighlighting=\"XML\" on an AvalonEdit TextEditor, and Demo.XamlDesigner.csproj references the AvalonEdit package \u2014 so nothing in WpfDesigner defines the name. In the AvalonEdit repo, TextEditor's SyntaxHighlighting property is resolved through HighlightingManager.Instance, which is the DefaultHighlightingManager whose constructor calls Resources.RegisterBuiltInHighlightings. That method is the actual table: 'XML' maps to the embedded XML-Mode.xshd and claims a long extension list that notably includes .xaml (also .xml, .xsl, .xsd, .config, .csproj, .targets, .nuspec, ...), alongside C#, Json, MarkDown, PowerShell and the rest. Worth knowing for debugging: DefaultHighlightingManager.RegisterHighlighting loads and validates the .xshd eagerly in DEBUG builds but lazily in RELEASE, so a broken definition surfaces at different times depending on configuration.",
       "rg_query": "SyntaxHighlighting",
       "why_asked": "To add or override a language in the designer's code pane I need to know whether the highlighting set is owned by this app or inherited from the editor component, and where the name-to-definition table lives."
     }

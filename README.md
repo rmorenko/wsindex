@@ -218,13 +218,21 @@ re-run reads only those files — and deletes the chunks they no longer
 produce, which is what keeps an edited file from answering with its old
 contents forever.
 
-Measured on the acceptance corpus (149 files, 3458 chunks, real model):
+Measured on the acceptance corpus (149 files, 3458 chunks, real model),
+and beside it the range across seventeen real workspaces in the
+[field trial](docs/field-trial.md), from 3 files to 11 786:
 
-| Scenario           | Files read | Seconds  |
-| ------------------ | ---------- | -------- |
-| cold (first index) | 149        | 4.5      |
-| no changes         | 0          | **0.15** |
-| one changed file   | 1          | **0.24** |
+| Scenario           | Files read | Here     | In the wild   |
+| ------------------ | ---------- | -------- | ------------- |
+| cold (first index) | 149        | 4.5      | 2.4 s – 258 s |
+| no changes         | 0          | **0.15** | 0.35 – 0.89 s |
+| one changed file   | 1          | **0.24** | 2.5 – 4.2 s   |
+
+The middle row is the one that matters and it holds: re-running an
+unchanged workspace does not get slower as the corpus grows — 0.68 s on
+125 353 chunks. The bottom row does not hold, and the reason is that
+embedding one chunk still costs loading the model, which the unchanged
+case skips entirely. `wsindex shell` pays it once.
 
 Two conditions put a repo on that fast path: it must be a git repository
 (a plain directory is a configuration error, not a silent fallback), and
@@ -357,6 +365,19 @@ $ uv run wsindex search "why is dedup done before embedding" --kind commit
 Commits are their own `--kind`, not documents: folding them into `doc`
 would make that filter mean two things and leave no way to search the
 code without the history.
+
+**History is capped at a fifth of any result list**, and that cap is the
+difference between a search that works and one that does not. Messages
+and code sit in one vector space and are ranked by one cosine, and they
+are not comparable on it — a query is prose and a message is prose, so
+history scores well on almost anything. Measured on twenty real
+workspaces: one index was 89% commit messages, 27 of 36 top-three slots
+went to them, and a question about a named constant came back as ten
+commits scored within 0.005 of each other. Sweeping the cap from 0 to 10
+across sixty blind questions, identifier questions do not move at all and
+descriptive answers in the top ten go 4, 4, 4, 3, 1, 0 as the cap rises.
+Two in ten is the largest value that costs nothing — and it is not zero,
+because a commit message really is sometimes the answer.
 
 Cheap, and proportional to the work. Reading a whole history takes
 milliseconds. Blame is per file, so it runs `git blame` once per

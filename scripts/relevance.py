@@ -179,10 +179,13 @@ def rank_of(hits: list, truth: str) -> int | None:
     return None
 
 
-def grade(org: str, repos: list[dict]) -> Workspace:
-    root = materialise(org, repos)
-    questions = json.loads((CORPUS / f"{org}.json").read_text(encoding="utf-8"))["questions"]
+def build(org: str, repos: list[dict], root: Path) -> Pipeline:
+    """A pipeline over one freshly indexed workspace.
 
+    Split from `grade` so a probe can reuse the wiring without copying
+    it: a probe that builds its own slightly different pipeline is a
+    probe measuring something slightly different.
+    """
     # `Config.default` replaces the process-wide instance, which is what a
     # script wants: it must never pick up a real workspace config.
     config = Config.default(f"relevance-{org}")
@@ -198,7 +201,14 @@ def grade(org: str, repos: list[dict]) -> Workspace:
     store = LanceDBStore(
         uri=str(state / "data.lance"), embedder=SentenceTransformerEmbedder(config.model)
     )
-    pipeline = Pipeline(store=store, config=config, state_dir=state)
+    return Pipeline(store=store, config=config, state_dir=state)
+
+
+def grade(org: str, repos: list[dict]) -> Workspace:
+    """Index one workspace and put its frozen questions to both tools."""
+    root = materialise(org, repos)
+    questions = json.loads((CORPUS / f"{org}.json").read_text(encoding="utf-8"))["questions"]
+    pipeline = build(org, repos, root)
     started = time.perf_counter()
     report = pipeline.index()
     space = Workspace(
