@@ -134,6 +134,27 @@ def _embeddings() -> dict[str, Any]:
                     "their own and underperform without it."
                 ),
             },
+            "url": {
+                "type": "string",
+                "description": (
+                    "Endpoint for provider='remote', in the OpenAI embeddings shape. "
+                    "Turning this on sends every chunk to that server."
+                ),
+            },
+            "token_env": {
+                "type": "string",
+                "description": (
+                    "NAME of the environment variable holding the key — never the key. "
+                    "A token in a config file is a token in somebody's git history."
+                ),
+            },
+            "input_types": {
+                "type": "boolean",
+                "description": (
+                    "Send input_type=document/query, which is how Voyage spells the "
+                    "query/passage asymmetry. OpenAI rejects the field."
+                ),
+            },
             "max_seq": {
                 "type": "integer",
                 "minimum": 1,
@@ -179,6 +200,20 @@ def _rank() -> dict[str, Any]:
                 "description": "Re-rank with a cross-encoder; loads a second model.",
             },
             "model": {"type": "string", "default": DEFAULT_RANK_MODEL},
+            "provider": {
+                "type": "string",
+                "enum": _enum(Provider),
+                "description": (
+                    "Where reranking runs. 'remote' sends the query and every "
+                    "candidate chunk to a server — far less than a remote embedder, "
+                    "and not nothing."
+                ),
+            },
+            "url": {"type": "string", "description": "Endpoint for provider='remote'."},
+            "token_env": {
+                "type": "string",
+                "description": "NAME of the environment variable holding the key.",
+            },
         }
     )
 

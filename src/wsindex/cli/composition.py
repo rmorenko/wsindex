@@ -20,10 +20,12 @@ import typer
 
 from wsindex.config import Backend, Config, LinksBackend, Provider
 from wsindex.embed import Embedder, FakeEmbedder, SentenceTransformerEmbedder
+from wsindex.embed.remote import RemoteEmbedder
 from wsindex.links import LinkStore
 from wsindex.paths import ConfigLocation, make_index_dir, resolve_cache_dir, searched_paths
 from wsindex.pipeline import Pipeline
-from wsindex.rank.reranker import CrossEncoderReranker
+from wsindex.rank.remote import RemoteReranker
+from wsindex.rank.reranker import CrossEncoderReranker, Reranker
 from wsindex.stats import SearchLog
 from wsindex.store import LanceDBStore, VectorStore
 
@@ -76,6 +78,25 @@ def require_config_file(config: Config) -> ConfigLocation:
     return location
 
 
+def _reranker(config: Config) -> Reranker | None:
+    """The funnel's second stage, or None when it is switched off.
+
+    Two providers rather than one, because the measured trade between
+    them is real: a local cross-encoder loads a second model and keeps
+    everything on the machine, while a hosted one is markedly better at
+    the moment (2 of 23 plain-English answers in the top three against 7)
+    and sends the query and every candidate chunk to a server. Neither is
+    the default; `enabled = false` is.
+    """
+    if not config.rank_enabled:
+        return None
+    if config.rank_provider is Provider.REMOTE:
+        return RemoteReranker(
+            model=config.rank_model, url=config.rank_url, token_env=config.rank_token_env
+        )
+    return CrossEncoderReranker(model_name=config.rank_model)
+
+
 def build_pipeline() -> Pipeline:
     """Composition root: decides *which* objects exist, not what they hold.
 
@@ -94,7 +115,7 @@ def build_pipeline() -> Pipeline:
     # care (`LinkStore`, `IndexState.save`) both arrive second.
     make_index_dir(config.index_dir)
     store = build_store(config)
-    reranker = CrossEncoderReranker(model_name=config.rank_model) if config.rank_enabled else None
+    reranker = _reranker(config)
     # `state_dir` is index_dir and always will be: the commit each repo
     # was last indexed at is genuinely a note about *this* host, since
     # two machines sit on different branches. Links are not — every
@@ -198,6 +219,19 @@ def build_store(config: Config) -> VectorStore:
                         query_prefix=config.query_prefix,
                         trust_remote_code=config.trust_remote_code,
                         max_seq=config.max_seq,
+                    )
+                case Provider.REMOTE:
+                    # The one embedder that leaves the machine. Nothing
+                    # here decides to use it — a config file said so in
+                    # as many words, which is the whole design of the
+                    # switch (see `wsindex.embed.remote`).
+                    embedder = RemoteEmbedder(
+                        model=config.model,
+                        url=config.embed_url,
+                        token_env=config.embed_token_env,
+                        dim=config.dim,
+                        query_prefix=config.query_prefix,
+                        input_types=config.embed_input_types,
                     )
                 case Provider.FAKE:
                     embedder = FakeEmbedder(dim=config.dim)

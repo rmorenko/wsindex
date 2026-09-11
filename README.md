@@ -214,10 +214,40 @@ never leaves the machine: only the query and forty candidate chunks do.
 The cost is per search rather than per chunk, and the crossover on a
 16 000-chunk workspace is about 135 searches.
 
-Neither remote configuration is shipped or default. They are recorded
-because a promise that turns out to be achievable is a different fact
-from a promise that does not, and the difference decides what this
-project should do next.
+Neither is the default, and neither ever will be — but both are now
+reachable from a config file, because a promise that turns out to be
+achievable is a different fact from one that does not.
+
+```toml
+# The index leaves the machine. Everything below is off unless typed.
+[embeddings]
+model = "voyage-code-4"
+dim = 1024
+provider = "remote"
+url = "https://api.voyageai.com/v1/embeddings"
+token_env = "VOYAGE_API_KEY"   # the NAME of a variable, never a key
+input_types = true             # Voyage's spelling of query-vs-passage
+
+# Or: leave the index where it is and send only what a search found.
+[rank]
+enabled = true
+provider = "remote"
+model = "rerank-2.5"
+url = "https://api.voyageai.com/v1/rerank"
+token_env = "VOYAGE_API_KEY"
+```
+
+`token_env` names an environment variable and never holds a token — a key
+in a config file is a key in somebody's git history, and it is the same
+rule connectors keep for `token_env` and the link store for `dsn_env`. An
+unset variable is reported by name (`$VOYAGE_API_KEY is not set, and [embeddings] token_env names it`) rather than as somebody else's 401.
+
+**The second block is the one to read twice.** With `[rank]` alone the
+index stays on your machine and only the query and forty candidate chunks
+per search go anywhere — three orders of magnitude less code than a
+remote embedder sends, and it still reaches 13 of 16 identifier answers.
+Three orders of magnitude less is not none, which is why this is a
+paragraph and not a footnote.
 
 Three things in that table are worth more than the winner.
 

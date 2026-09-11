@@ -43,10 +43,16 @@ class LinksBackend(StrEnum):
 
 
 class Provider(StrEnum):
-    """Embedder selector: deterministic fake for tests, real model for work."""
+    """Where vectors come from: a fake for tests, a local model, or a
+    hosted one.
+
+    `REMOTE` is the only member that sends your code anywhere, which is
+    why it has to be typed out in a config file before it can happen.
+    See `wsindex.embed.remote` for what it buys and what it costs."""
 
     FAKE = "fake"
     SENTENCE_TRANSFORMERS = "sentence-transformers"
+    REMOTE = "remote"
 
 
 class RepoSource(StrEnum):

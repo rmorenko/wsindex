@@ -288,6 +288,30 @@ class Config:
         return int(value) if value is not None else None
 
     @property
+    def embed_url(self) -> str:
+        """Endpoint for `provider = "remote"`, in the OpenAI request shape."""
+        return str(self._setting("embeddings", "url") or "")
+
+    @property
+    def embed_token_env(self) -> str:
+        """Name of the variable holding the embedding key — never the key.
+
+        A token in a config file is a token in somebody's git history.
+        The same rule connectors keep with `token_env` and the link store
+        with `dsn_env`.
+        """
+        return str(self._setting("embeddings", "token_env") or "")
+
+    @property
+    def embed_input_types(self) -> bool:
+        """Whether the endpoint wants `input_type` on each request.
+
+        Voyage spells the query/passage asymmetry that way; OpenAI has no
+        such field and rejects it. A switch rather than an assumption.
+        """
+        return bool(self._setting("embeddings", "input_types") or False)
+
+    @property
     def trust_remote_code(self) -> bool:
         """Whether this model may run its own code from the hub.
 
@@ -331,6 +355,21 @@ class Config:
     def rank_model(self) -> str:
         """Cross-encoder model the reranking stage loads."""
         return str(self._setting("rank", "model", DEFAULT_RANK_MODEL))
+
+    @property
+    def rank_provider(self) -> Provider:
+        """Where the reranking stage runs: locally, or on somebody's server."""
+        return Provider(self._setting("rank", "provider", Provider.SENTENCE_TRANSFORMERS))
+
+    @property
+    def rank_url(self) -> str:
+        """Endpoint for a remote reranker, in the `{query, documents}` shape."""
+        return str(self._setting("rank", "url") or "")
+
+    @property
+    def rank_token_env(self) -> str:
+        """Name of the variable holding the reranking key — never the key."""
+        return str(self._setting("rank", "token_env") or "")
 
     @property
     def references(self) -> dict[str, str]:
