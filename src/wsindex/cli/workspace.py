@@ -277,3 +277,77 @@ def stats(
         typer.echo("asked most:")
         for query, count in summary.common:
             typer.echo(f"  {count:>4}x  {query!r}")
+
+
+def domains(
+    repo: Annotated[
+        str | None, typer.Option("--repo", help="Which repo to read; the only one by default")
+    ] = None,
+    prefix: Annotated[
+        str, typer.Option("--prefix", help="Only paths under this, so tests do not drown it")
+    ] = "src/",
+) -> None:
+    """What this repository is made of, and where it crosses its own lines.
+
+    A different question from search, for a different reader: not "where
+    is X" but "what are the parts, and what is tangled". Two signals, and
+    the value is where they disagree.
+
+    **Meaning**, from the vectors already in the index: a file's subject
+    is the average of its chunks. **Change**, from the history already
+    indexed: files that keep moving in the same commit are coupled
+    whether or not anything imports anything.
+
+    Read `agreement` first. It says how much of the layout the meaning
+    recovers, against the baseline of saying nothing. Well above it and
+    the exceptions below are worth your time; near it and they are not,
+    because nothing was found.
+
+    A *stranger* is a file whose nearest neighbours are all outside its
+    own package — its subject lives somewhere other than its directory.
+    Sometimes deliberate, sometimes a module filed by when it runs rather
+    than by what it is about.
+
+    A *coupled pair* crosses a package boundary and keeps changing
+    together. High similarity means the coupling is honest. **Low
+    similarity is the one to read**: something binds two files that are
+    not about the same thing.
+    """
+    from wsindex.domains import analyse
+
+    config = config_or_default()
+    require_config_file(config)
+    pipeline = build_pipeline()
+    chosen = repo or (config.repos[0].id if len(config.repos) == 1 else None)
+    if chosen is None:
+        typer.echo("error: this workspace holds several repos — name one with --repo", err=True)
+        raise typer.Exit(code=1)
+    try:
+        found = analyse(pipeline, repo=chosen, prefix=prefix)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if found.files < 6:
+        typer.echo(
+            f"{found.files} source file(s) under {prefix!r} — too few to have domains. "
+            "Index first, or point --prefix somewhere else."
+        )
+        return
+    typer.echo(f"{found.files} files in {len(found.packages)} packages")
+    typer.echo("  " + "  ".join(f"{name} {count}" for name, count in found.packages.items()))
+    typer.echo(
+        f"agreement {found.agreement:.0%} (meaning recovers the layout; "
+        f"{found.baseline:.0%} would be chance)"
+    )
+    if found.strangers:
+        typer.echo("\nfiled away from their subject:")
+        for stranger in found.strangers:
+            typer.echo(f"  {stranger.path}  [{stranger.package}]  {stranger.similarity:.3f}")
+            typer.echo(f"      near {', '.join(stranger.neighbours[:3])}")
+    if found.coupled:
+        typer.echo(f"\ncoupled across packages ({len(found.coupled)}), most-changed first:")
+        for pair in found.coupled[:10]:
+            typer.echo(
+                f"  {pair.commits:3} commits  similarity {pair.similarity:+.3f}   "
+                f"{pair.left} + {pair.right}"
+            )

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from wsindex.embed import estimate_tokens
-from wsindex.model import Chunk, Hit, SearchFilter
+from wsindex.model import Chunk, Hit, Kind, SearchFilter
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -195,6 +195,35 @@ class VectorStore(ABC):
         Raises:
             TypeError: when ids is bare string
             ValueError: when unknown dataset
+        """
+
+    @abstractmethod
+    def vectors(self, dataset_name: str, *, kind: Kind | None = None) -> dict[str, list[float]]:
+        """Every chunk's vector in this dataset, keyed by chunk id, with its path.
+
+        Added for the analysis side rather than the search side: reading
+        the shape of a codebase means comparing chunks to each other, and
+        the vectors are the only place that comparison can come from.
+        Search never needs this — it asks for the nearest few — so this is
+        the one operation here that is allowed to be expensive.
+
+        Args:
+            dataset_name: Dataset to read.
+            kind: Only chunks of this kind, or None for all of them.
+
+        Returns:
+            Chunk id -> vector. Empty for a dataset that holds nothing;
+            an unknown dataset is not an error here, for the same reason
+            `search` treats one as no hits.
+        """
+
+    @abstractmethod
+    def paths_of(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, str]:
+        """Chunk id -> the path it came from, for the ids given.
+
+        Split from `vectors` rather than returned beside it: a caller
+        grouping vectors by file wants both, and a caller checking one
+        chunk wants neither. Two small answers beat one wide one.
         """
 
     @abstractmethod

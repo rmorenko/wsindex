@@ -28,7 +28,7 @@ from lancedb.query import LanceVectorQueryBuilder
 from lancedb.table import Table
 
 from wsindex.embed.embedder import Embedder
-from wsindex.model import Chunk, Hit, SearchFilter
+from wsindex.model import Chunk, Hit, Kind, SearchFilter
 from wsindex.store.base import CompactReport, VectorStore
 
 
@@ -219,6 +219,25 @@ class LanceDBStore(VectorStore):
     def count_tokens(self, text: str) -> int:
         """Exactly what this store's model will read, since it has one."""
         return self.embedder.count_tokens(text)
+
+    def vectors(self, dataset_name: str, *, kind: Kind | None = None) -> dict[str, list[float]]:
+        """Every vector in the dataset, read in one pass over the table."""
+        rows = self.tbl.to_arrow().select(["id", "dataset", "kind", "vector"]).to_pylist()
+        return {
+            str(row["id"]): list(row["vector"])
+            for row in rows
+            if row["dataset"] == dataset_name and (kind is None or row["kind"] == kind.value)
+        }
+
+    def paths_of(self, dataset_name: str, *, ids: Sequence[str]) -> dict[str, str]:
+        """Where each of these chunks came from."""
+        wanted = set(ids)
+        rows = self.tbl.to_arrow().select(["id", "dataset", "path"]).to_pylist()
+        return {
+            str(row["id"]): str(row["path"])
+            for row in rows
+            if row["dataset"] == dataset_name and str(row["id"]) in wanted
+        }
 
     def search(
         self,

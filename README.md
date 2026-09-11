@@ -923,6 +923,54 @@ rather than an oversight. The acceptance criteria score the same 9/10
 either way, which is worth knowing about both the fix and the measure:
 ten hand-written queries do not see most of what these numbers describe.
 
+## What a repository is made of
+
+A different question from search, for a different reader: not "where is
+X" but "what are the parts, and what is tangled".
+
+```
+$ uv run wsindex domains
+67 files in 9 packages
+  ingest 28  (root) 12  cli 7  config 5  server 5  connectors 4  store 3  embed 2  rank 1
+agreement 57% (meaning recovers the layout; 11% would be chance)
+
+filed away from their subject:
+  src/wsindex/paths.py  [(root)]  0.696
+      near src/wsindex/cli/composition.py, src/wsindex/config/__init__.py
+
+coupled across packages (35), most-changed first:
+   11 commits  similarity +0.748   src/wsindex/pipeline.py + src/wsindex/store/base.py
+   10 commits  similarity +0.643   src/wsindex/pipeline.py + src/wsindex/server/api.py
+```
+
+Two signals, and the value is where they disagree. **Meaning** comes from
+the vectors already in the index — a file's subject is the average of its
+chunks. **Change** comes from the history already indexed: files that keep
+moving in the same commit are coupled whether or not anything imports
+anything.
+
+Read `agreement` first: it says how much of the layout the meaning
+recovers, against the baseline of saying nothing. Well above it and the
+exceptions are worth reading; near it and nothing was found. On this
+project the two signals agree — files that change together score 0.623 to
+each other against 0.422 for all pairs — which is what makes the three
+*strangers* interesting. Two of them are fair: `paths.py` is about
+resolving config locations and sits at the root; `ingest/link_extract.py`
+is filed by when it runs rather than by what it is about.
+
+A **coupled pair** with high similarity is honest coupling — the two
+files change together because they are about the same thing. **Low
+similarity is the one to read**: something binds two files that are not
+about the same subject.
+
+The third signal the design called for — structural, from `READS_KEY`
+links — is not used, and the reason is measured: the link extractor's
+entire vocabulary is port numbers, which came to ten names across five
+thousand files. It would contribute nothing until that grows. There is
+also **no graph viewer**, deliberately: the useful output is three short
+answers, and an interactive graph is what these tools become instead of
+answering them.
+
 ## Front-end components
 
 A `.vue` or `.svelte` file is not one language, it is three: a template,
