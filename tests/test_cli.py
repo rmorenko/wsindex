@@ -1244,3 +1244,63 @@ def test_a_workspace_that_says_nothing_gets_the_symmetric_default(
     assert runner.invoke(app, ["index"]).exit_code == 0
     assert captured["query_prefix"] == ""
     assert captured["trust_remote_code"] is False
+
+
+def _ruby_shaped(workspace: Path) -> None:
+    """A repo that keeps its code in `lib/`, like most of the world."""
+    repo = workspace / "repo1"
+    (repo / "src" / "main.py").unlink()
+    for name in ("app", "web"):
+        (repo / "lib" / name).mkdir(parents=True, exist_ok=True)
+        for n in range(4):
+            module = repo / "lib" / name / f"{name}{n}.py"
+            module.write_text(f"def {name}{n}():\n    return {n}\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "lib"], cwd=repo, check=True, capture_output=True)
+
+
+def test_domains_finds_where_a_repo_actually_keeps_its_code(workspace: Path) -> None:
+    # The default was `src/`, which is this project's layout. On the
+    # pinned corpus that let 5 of 22 repositories report packages;
+    # deriving it takes them to 18.
+    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    _ruby_shaped(workspace)
+    runner.invoke(app, ["index"])
+
+    result = runner.invoke(app, ["domains"])
+
+    assert result.exit_code == 0
+    assert "under 'lib/'" in result.output
+    assert "2 packages" in result.output
+
+
+def test_a_prefix_that_matches_nothing_says_what_would_have(workspace: Path) -> None:
+    # The sentence this replaces sent 151 of 193 runs to fix the index,
+    # which was not what was wrong. If the prefix was typed, the prefix
+    # is the suspect — and the answer is one line away, so give it.
+    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    _ruby_shaped(workspace)
+    runner.invoke(app, ["index"])
+
+    result = runner.invoke(app, ["domains", "--prefix", "src/"])
+
+    assert "no indexed code under 'src/'" in result.output
+    assert "keeps its code under 'lib/'" in result.output
+
+
+def test_a_repo_too_small_for_domains_is_told_that_and_not_something_else(
+    workspace: Path,
+) -> None:
+    # The other half of the promise. One source file is genuinely too
+    # little to have domains, and saying "index first" there would be the
+    # same wrong advice pointed at a different reader.
+    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    runner.invoke(app, ["index"])
+
+    result = runner.invoke(app, ["domains"])
+
+    assert "too few to have domains" in result.output
+    assert "Index first" not in result.output

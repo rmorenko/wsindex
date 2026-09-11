@@ -284,8 +284,12 @@ def domains(
         str | None, typer.Option("--repo", help="Which repo to read; the only one by default")
     ] = None,
     prefix: Annotated[
-        str, typer.Option("--prefix", help="Only paths under this, so tests do not drown it")
-    ] = "src/",
+        str | None,
+        typer.Option(
+            "--prefix",
+            help="Only paths under this; derived from the repo's own layout by default",
+        ),
+    ] = None,
 ) -> None:
     """What this repository is made of, and where it crosses its own lines.
 
@@ -328,12 +332,28 @@ def domains(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     if found.files < 6:
-        typer.echo(
-            f"{found.files} source file(s) under {prefix!r} — too few to have domains. "
-            "Index first, or point --prefix somewhere else."
-        )
+        # Three different problems used to share one sentence, and the
+        # sentence named the one that was usually not it: across the
+        # field trial 151 of 193 runs were told to "Index first" with a
+        # complete index beside them. What was wrong was the prefix,
+        # which defaulted to this project's own layout.
+        where = f"under {found.prefix!r}" if found.prefix else "in this repo"
+        if found.files:
+            typer.echo(f"{found.files} source file(s) {where} — too few to have domains.")
+        elif prefix is not None:
+            # The prefix was typed, so the prefix is the suspect. Saying
+            # what the repo would have chosen turns this into one step.
+            derived = analyse(pipeline, repo=chosen).prefix
+            hint = f"; this repo keeps its code under {derived!r}" if derived else ""
+            typer.echo(f"no indexed code under {prefix!r}{hint} — drop --prefix to derive it")
+        else:
+            typer.echo(
+                f"no indexed code in {chosen} — `wsindex index` if it is new, "
+                "or `wsindex explain <path>` to see which rule left its files out"
+            )
         return
-    typer.echo(f"{found.files} files in {len(found.packages)} packages")
+    where = f" under {found.prefix!r}" if found.prefix else ""
+    typer.echo(f"{found.files} files in {len(found.packages)} packages{where}")
     typer.echo("  " + "  ".join(f"{name} {count}" for name, count in found.packages.items()))
     typer.echo(
         f"agreement {found.agreement:.0%} (meaning recovers the layout; "

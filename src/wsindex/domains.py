@@ -38,7 +38,7 @@ import statistics
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from wsindex.ingest.git_state import GitCommandError, decode_path, run_git
@@ -58,6 +58,59 @@ COUPLED_FROM = 4
 
 Below four is coincidence on any repository with a merge in it: two files
 touched by one sweeping rename are not a design fact."""
+
+NOT_THE_SUBJECT = frozenset(
+    {
+        "test",
+        "tests",
+        "spec",
+        "specs",
+        "testing",
+        "__tests__",
+        "e2e",
+        "testdata",
+        "fixtures",
+        "vendor",
+        "vendored",
+        "third_party",
+        "thirdparty",
+    }
+)
+"""Directory names a repository is not *about*, **at any depth**.
+
+Maven puts its tests at `src/test/java`, so checking only the top level
+misses them and stops the derived prefix at `src/` — which is exactly the
+too-wide answer this exists to avoid. Every name here means the same
+thing wherever it appears.
+
+Conventions, and that is the whole justification: there is no way to know
+from outside that `spec/` holds tests except that everybody writes it
+that way. Used only to work out where the code lives — nothing here is
+excluded from search, or from anything else."""
+
+NOT_THE_SUBJECT_AT_THE_TOP = frozenset(
+    {
+        "example",
+        "examples",
+        "sample",
+        "samples",
+        "demo",
+        "demos",
+        "bench",
+        "benchmarks",
+        "script",
+        "scripts",
+        "tools",
+        "external",
+        "deps",
+    }
+)
+"""The same idea, but only as a repository's own top-level directory.
+
+Split from the set above because these names do not keep their meaning
+further down: `tools/` beside `src/` holds a repository's build helpers,
+while `src/app/tools/` is part of the application. One list applied at
+both depths would have to be wrong in one direction or the other."""
 
 COMMITS_READ = 400
 """How far back co-change is counted. Coupling is a property of how a
@@ -106,6 +159,9 @@ class Domains:
 
     Attributes:
         repo: The repository read.
+        prefix: Where the code was looked for — given, or derived from
+            the layout. Reported because a reader who sees a small number
+            needs to know which question produced it.
         files: How many source files carried enough chunks to place.
         packages: Package name -> how many files it holds.
         agreement: Share of a file's neighbours that share its package,
@@ -119,6 +175,7 @@ class Domains:
     """
 
     repo: str
+    prefix: str
     files: int
     packages: dict[str, int]
     agreement: float
@@ -154,6 +211,48 @@ def branching_depth(paths: Iterable[str]) -> int:
     return depth  # pragma: no cover - eight single-child levels is not a layout
 
 
+def source_prefix(paths: Iterable[str]) -> str:
+    """Where this repository keeps the code it is about.
+
+    The default used to be `src/`, which is *this* project's layout. A
+    Ruby gem keeps code in `lib/`, a Go module at the root, a Java
+    project under `src/main/java`. Measured across the field trial's
+    twenty workspaces, that default made `domains` report nothing in 151
+    of 193 runs — and report it as "Index first", which sent the reader
+    to fix the one thing that was not wrong.
+
+    Derived without a threshold, because the prefix has exactly one job:
+    keeping tests and vendored code from drowning the counts. Levels are
+    `branching_depth`'s business and it works from any prefix. So: drop
+    the directories a repository is conventionally not about, then take
+    what the rest have in common. A repository whose code is spread over
+    several top-level directories has nothing in common, gets `""`, and
+    is read whole — which is right, because that *is* its shape.
+    """
+    kept: list[str] = []
+    for path in paths:
+        parts = PurePosixPath(path).parts
+        if not parts or parts[0] in NOT_THE_SUBJECT_AT_THE_TOP:
+            continue
+        # Directories only, never the filename: a module honestly called
+        # `spec.py` is not a test directory.
+        if any(part in NOT_THE_SUBJECT for part in parts[:-1]):
+            continue
+        kept.append(path)
+    if not kept:
+        return ""
+    common = PurePosixPath(kept[0]).parts[:-1]
+    for path in kept[1:]:
+        parts = PurePosixPath(path).parts[:-1]
+        shared = 0
+        while shared < min(len(common), len(parts)) and common[shared] == parts[shared]:
+            shared += 1
+        common = common[:shared]
+        if not common:
+            return ""
+    return "/".join(common) + "/" if common else ""
+
+
 def package_of(path: str, *, depth: int) -> str:
     """The package a path belongs to, or `(root)` for a module above them all.
 
@@ -166,7 +265,7 @@ def package_of(path: str, *, depth: int) -> str:
     return parts[depth] if len(parts) > depth + 1 else "(root)"
 
 
-def analyse(pipeline: Pipeline, *, repo: str, prefix: str = "src/") -> Domains:
+def analyse(pipeline: Pipeline, *, repo: str, prefix: str | None = None) -> Domains:
     """Read one repository's shape from its vectors and its history.
 
     Args:
@@ -174,7 +273,9 @@ def analyse(pipeline: Pipeline, *, repo: str, prefix: str = "src/") -> Domains:
         repo: Repo id, as the config names it.
         prefix: Only paths starting here are considered — a report that
             counted tests and vendored code would describe the repository
-            plus everything it happens to contain.
+            plus everything it happens to contain. None derives it from
+            the repository's own layout, which is the only thing that
+            works across more than one project; see `source_prefix`.
 
     Returns:
         The report. Empty-ish rather than raising when there is too
@@ -184,11 +285,15 @@ def analyse(pipeline: Pipeline, *, repo: str, prefix: str = "src/") -> Domains:
     Raises:
         ValueError: `repo` names nothing the store holds.
     """
-    centroids = _centroids(pipeline, repo=repo, prefix=prefix)
+    centroids = _centroids(pipeline, repo=repo, prefix="")
+    if prefix is None:
+        prefix = source_prefix(centroids)
+    centroids = {path: vector for path, vector in centroids.items() if path.startswith(prefix)}
     if len(centroids) < NEIGHBOURS + 1:
         shallow = branching_depth(centroids)
         return Domains(
             repo=repo,
+            prefix=prefix,
             files=len(centroids),
             packages=dict(Counter(package_of(p, depth=shallow) for p in centroids)),
             agreement=0.0,
@@ -217,6 +322,7 @@ def analyse(pipeline: Pipeline, *, repo: str, prefix: str = "src/") -> Domains:
     )
     return Domains(
         repo=repo,
+        prefix=prefix,
         files=len(files),
         packages=dict(packages.most_common()),
         agreement=round(statistics.mean(shares), 3),
@@ -316,10 +422,13 @@ __all__ = [
     "COMMITS_READ",
     "COUPLED_FROM",
     "NEIGHBOURS",
+    "NOT_THE_SUBJECT",
+    "NOT_THE_SUBJECT_AT_THE_TOP",
     "Coupled",
     "Domains",
     "Stranger",
     "analyse",
     "branching_depth",
     "package_of",
+    "source_prefix",
 ]

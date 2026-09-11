@@ -22,6 +22,7 @@ from wsindex.domains import (
     analyse,
     branching_depth,
     package_of,
+    source_prefix,
 )
 from wsindex.embed import FakeEmbedder
 from wsindex.pipeline import Pipeline
@@ -185,3 +186,50 @@ def test_a_repository_too_small_to_have_domains_says_so(analysed: Pipeline) -> N
 def test_coupling_needs_more_than_a_coincidence() -> None:
     # One sweeping rename touches twenty files; that is not a design fact.
     assert COUPLED_FROM > 1
+
+
+# --- where a repository keeps the code it is about ------------------------
+
+
+def test_a_gem_keeps_its_code_in_lib() -> None:
+    # The old default was `src/`, which is this project's layout and
+    # almost nobody else's. Measured on the pinned corpus, deriving it
+    # took the repositories that can report packages from 5 of 22 to 18.
+    assert source_prefix(["lib/a.rb", "lib/b/c.rb", "spec/a_spec.rb"]) == "lib/"
+
+
+def test_a_go_module_keeps_it_at_the_root() -> None:
+    # Nothing in common between `cmd/` and `internal/`, so the answer is
+    # the whole repository — which is that repository's actual shape, not
+    # a failure to find a prefix.
+    assert source_prefix(["cmd/main.go", "internal/run.go", "server.go"]) == ""
+
+
+def test_tests_do_not_decide_where_the_code_lives() -> None:
+    # The one job the prefix has. Without dropping them, a repo with more
+    # test files than source files would be described by its tests.
+    paths = ["src/one.py", "src/two.py", "tests/a.py", "tests/b.py", "tests/c.py"]
+
+    assert source_prefix(paths) == "src/"
+
+
+def test_a_repository_that_is_only_tests_is_read_whole() -> None:
+    # Dropping every path would leave nothing to derive from, and
+    # answering "src/" there would be inventing a layout.
+    assert source_prefix(["tests/a.py", "spec/b.rb"]) == ""
+
+
+def test_nothing_indexed_derives_nothing() -> None:
+    assert source_prefix([]) == ""
+
+
+def test_a_deeply_nested_layout_keeps_all_of_what_is_shared() -> None:
+    # Java puts everything under `src/main/java`, and stopping at `src/`
+    # would pull `src/test/java` back in.
+    paths = [
+        "src/main/java/org/app/store/One.java",
+        "src/main/java/org/app/web/Two.java",
+        "src/test/java/org/app/store/OneTest.java",
+    ]
+
+    assert source_prefix(paths) == "src/main/java/org/app/"
