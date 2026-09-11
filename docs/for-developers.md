@@ -42,16 +42,19 @@ and forget it.
 
 ## What it does not give you yet
 
-**Asking in plain English does not work.** This is the honest headline.
-The trial asked 102 questions phrased the way a person thinks — *"is
-there logic that skips the wipe when nothing changed since last time"* —
-deliberately using none of the words in the answer file. wsindex found
-the answer in its top three for **one** of them.
+**Asking in plain English does not work with the default model.** The
+trial asked questions phrased the way a person thinks — *"is there logic
+that skips the wipe when nothing changed since last time"* — deliberately
+using none of the words in the answer file. The default put 2 of 23 in
+the top three.
 
-`ripgrep` found **none** of the 102, so the questions are fair and the
-need is real. But today wsindex does not fill it. The model underneath is
-`all-MiniLM-L6-v2`, a general-purpose sentence model, and it does not
-cross from English to code.
+`ripgrep` found **none** of them, so the questions are fair and the need
+is real. And the limit turns out to be the model rather than the tool:
+the same chunks and the same pipeline, with a frontier code embedder and
+reranker, answer **12 of 23 in the top three and 18 of 23 in the top
+ten**. What you install runs a 23M-parameter model on your own machine
+and sends nothing anywhere, which is the trade — not a ceiling on what
+this is capable of.
 
 **A deeper list still pays.** History no longer floods the results —
 commit messages are capped at a fifth of any list, which is what took
@@ -94,8 +97,10 @@ them is large, and you spend real time looking for where something lives.
 Install it, index, and use `-k 50 --kind code`. It will save you the
 two-hundred-hit grep.
 
-**Not yet, if** what you wanted was to ask questions in words. That is
-the thing it is named for and the thing it does not do yet.
+**Not out of the box, if** what you wanted was to ask questions in
+words. The default answers 2 of 23 of those. The design answers 12 with a
+frontier model, so this is a setting away rather than a rewrite — but it
+is not what you get by typing `wsindex init`.
 
 **No, if** your workspace is Elixir, Scala, Swift or Objective-C and you
 do not want to hand-write a `formats` table first.

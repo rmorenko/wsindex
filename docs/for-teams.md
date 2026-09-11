@@ -65,12 +65,16 @@ the words used in the code. wsindex placed the right answer in its top
 three for one of them.
 
 This is worth reading carefully in both directions. `ripgrep` found
-**none** of those 102, so the gap is real and your developers are living
-with it today. But wsindex does not close it yet, and anyone selling it to
-your team on "ask your codebase a question" would be describing something
-that does not work. The reason is identified — a general-purpose sentence
-model rather than a code-aware one — and it is fixable, but it is not
-fixed.
+**none** of them, so the gap is real and your developers are living with
+it today, and anyone selling you "ask your codebase a question" as a
+finished feature of *this* tool would be describing the default wrongly.
+
+But the ceiling is the model, and that is now measured rather than
+assumed: the same pipeline with a frontier code embedder and reranker
+answers 12 of 23 in the top three. The default is a small local model
+chosen so that nothing leaves the machine. If your team does not need
+that guarantee, the gap is a configuration away rather than a rewrite —
+and if it does, the guarantee is why you are reading this page.
 
 **It is not finished software, though it is less unfinished than the
 trial found it.** Three of the twenty workspaces could not be indexed at
@@ -92,8 +96,8 @@ codebase, the more it is worth.
 
 **A poor fit today:** a single small repository — grep is enough; a
 workspace in an unsupported language — it will index your READMEs and
-nothing else; a team that wants natural-language questions answered —
-that is the part that does not work yet.
+nothing else; a team that wants natural-language questions answered out
+of the box — that part needs a model the default is not.
 
 ## How to decide
 

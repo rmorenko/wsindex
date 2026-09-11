@@ -194,3 +194,28 @@ file first for 92% of verbatim queries, re-indexes 125 000 chunks in
 0.68 s, and beats grep outright on the largest codebase in the corpus is
 a working engine with the wrong model in it, a candidate pool too
 shallow, and history drowning the code.
+
+## What happened next, and it changes the verdict above
+
+That paragraph was written as a consolation and turned out to be the
+finding. Everything it names was fixed or tested afterwards, and the last
+of them settled the question this document could not.
+
+History was capped at a fifth of a result list; chunks were given their
+own name and place to be embedded with; `domains` and `dupes` were made
+to read a workspace rather than one project's layout and one repository;
+the two crashes and the silent skipping were fixed with tests that pin
+the mechanism. The questions here became a permanent instrument, `poe relevance`, with the ripgrep control and a pinned corpus, running in CI.
+
+Then the model was replaced. **Same chunks, same questions, same
+pipeline**: the plain-English class goes from 2 to **12 of 23 in the top
+three** and 5 to **18 of 23 in the top ten**, and identifier questions to
+16 of 16 — every one that is reachable. The gate this trial declared in
+advance, descriptive hit@10 of 0.50, is cleared at 0.78.
+
+So the verdict stands as a description of what shipped on the day, and
+must not be read as a description of the design. The promise was not
+unachievable. It was locked behind a 23M-parameter model chosen to keep
+everything on one laptop, and every part of the system underneath it was
+sound. What is still true: that trade is a real one, and nothing in this
+repository sends your code anywhere by default.

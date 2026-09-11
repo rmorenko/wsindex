@@ -12,17 +12,25 @@ are chunked by their syntax trees, docs by headers; every chunk is
 embedded, and results are ranked rather than listed. Everything runs on
 your machine.
 
-**It is a ranked search, not a question-answering system, and that
-sentence is measured.** This README used to promise "natural-language
-questions", and a [field trial on twenty real
-workspaces](docs/field-trial.md) showed the promise was not kept: of 102
-questions phrased the way a person thinks — deliberately using none of
-the words in the answer file — it put one in the top three. `ripgrep`
-found none of those 102, so the need is real and nothing here meets it
-yet. What it does do, on the same corpus, is beat grep where grep drowns:
-on an 11 786-file Java codebase it put four of four identifier answers in
-the top three, against ripgrep finding one and burying two in lists of
-over twenty files. The bigger the workspace, the more that is worth.
+**Out of the box it is a ranked search, not a question-answering system,
+and both halves of that sentence are measured.** A [field trial on twenty
+real workspaces](docs/field-trial.md) asked questions phrased the way a
+person thinks — deliberately using none of the words in the answer file —
+and the default model answered 2 of 23 in the top three. `ripgrep`
+answered none of them, so the need is real. What the default *does* do is
+beat grep where grep drowns: on an 11 786-file Java codebase it put four
+of four identifier answers in the top three, against ripgrep finding one
+and burying two in lists of over twenty files.
+
+**The limit is the model, not the design, and that is measured too.**
+Swapping in a frontier code embedder and reranker — same chunks, same
+questions, same pipeline — takes those plain-English questions from 2 to
+**12 of 23 in the top three and 18 of 23 in the top ten**, and identifier
+questions to 16 of 16. Everything under the model held: the chunking, the
+store, the history quota, the funnel. What ships by default is a 23M
+parameter model that runs on your laptop and sends nothing anywhere, and
+that is the trade being made — see [Choosing the
+model](#choosing-the-model).
 
 ## Quickstart
 
@@ -172,6 +180,44 @@ questions:
 | gte-modernbert-base (8192)     |   149M |          8 |           5 |          2 | 807 s |
 | bge-large-en-v1.5              |   335M |         11 |           1 |          3 | 488 s |
 | **CodeRankEmbed**              |   137M |     **13** |           2 |          3 | 249 s |
+
+**And then there is the ceiling, which none of them is.** Every model
+above runs on a laptop, which is what the locality promise costs; the
+question of what the *design* can do needed a model that does not.
+Measured on the same 60 questions, against the 16 identifier, 23
+descriptive and 8 cross-repo that are reachable at all:
+
+| Configuration                  | Identifier  | Descriptive | Cross-repo |
+| ------------------------------ | ----------- | ----------- | ---------- |
+| all-MiniLM-L6-v2 (ships)       | 8 / 11      | 2 / 5       | 1 / 3      |
+| MiniLM + `rerank-2.5`          | 13 / 15     | 7 / 12      | 3 / 5      |
+| `voyage-code-4`                | 13 / 16     | 9 / 17      | 3 / 7      |
+| `voyage-code-4` + `rerank-2.5` | **14 / 16** | **12 / 18** | **5 / 7**  |
+
+Cells are top-three / top-ten. Three things follow, and they matter more
+than any of the numbers.
+
+**Nothing under the model was the problem.** The same chunks, the same
+questions, the same pipeline, the same history quota and the same funnel
+produce 2 of 23 with one model and 12 of 23 with another. The design was
+never what was failing.
+
+**The funnel pays on top of a good base, not instead of one.** Adding
+the reranker to the frontier embedder still moves descriptive answers
+from 9 to 12 in the top three. Both stages this project built earn their
+place once the models are good enough to show it.
+
+**A local index with a remote reranker is a real third option.** It
+reaches 7 of 23 and 13 of 16 identifiers — as good as the frontier
+embedder on the class this tool is positioned around — while the corpus
+never leaves the machine: only the query and forty candidate chunks do.
+The cost is per search rather than per chunk, and the crossover on a
+16 000-chunk workspace is about 135 searches.
+
+Neither remote configuration is shipped or default. They are recorded
+because a promise that turns out to be achievable is a different fact
+from a promise that does not, and the difference decides what this
+project should do next.
 
 Three things in that table are worth more than the winner.
 
