@@ -19,6 +19,7 @@ import typer.main
 from typer.testing import CliRunner
 
 import wsindex.pipeline
+from helpers import as_indexed
 from wsindex.cli import DEBUG_ENV, app, run
 from wsindex.cli.interfaces import is_loopback
 from wsindex.config import Config, Provider
@@ -131,7 +132,11 @@ def test_index_then_search_end_to_end(workspace: Path) -> None:
     assert "files: 2" in result.output
     assert "written: 2" in result.output
 
-    result = runner.invoke(app, ["search", PY_TEXT, "-k", "1"])
+    # Asked for with the string the store embedded — a chunk's name and
+    # place ahead of its text. `FakeEmbedder` seeds a vector from its
+    # input, so only the same string scores 1.000.
+    query = as_indexed(PY_TEXT, path="src/main.py", symbol="f")
+    result = runner.invoke(app, ["search", query, "-k", "1"])
     assert result.exit_code == 0
     assert "repo1/src/main.py:1-2" in result.output
     assert "1.000" in result.output

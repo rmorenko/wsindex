@@ -1,12 +1,12 @@
 {
- "found": {
-  "cross-repo": 5,
-  "cross-repo@3": 2,
-  "descriptive": 7,
-  "descriptive@3": 0,
-  "literal": 16,
-  "literal@3": 11
- },
- "full": true,
- "model": "sentence-transformers/all-MiniLM-L6-v2"
+  "found": {
+    "cross-repo": 4,
+    "cross-repo@3": 2,
+    "descriptive": 7,
+    "descriptive@3": 2,
+    "literal": 18,
+    "literal@3": 15
+  },
+  "full": true,
+  "model": "sentence-transformers/all-MiniLM-L6-v2"
 }

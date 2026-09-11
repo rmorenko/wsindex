@@ -16,7 +16,7 @@ import pytest
 
 from wsindex.embed.embedder import FakeEmbedder
 from wsindex.model import Chunk, Kind, SearchFilter, SourceFile
-from wsindex.store.lancedb import LanceDBStore
+from wsindex.store.lancedb import LanceDBStore, retrieval_text
 
 DIM = 8
 
@@ -67,9 +67,11 @@ def store(tmp_path: Path) -> LanceDBStore:
 def test_add_chunks_then_search_nearest_first(store: LanceDBStore) -> None:
     a, b = make_chunk("a"), make_chunk("b")
     assert store.add_chunks("ds", chunks=[a, b]) == 2
-    hits = store.search("ds", query="a", k=2)
+    # Queried with what was embedded, not with the stored slice: the two
+    # are different strings now, and only the first is a vector in there.
+    hits = store.search("ds", query=retrieval_text(a), k=2)
     assert [h.metadata["text"] for h in hits] == ["a", "b"]
-    assert hits[0].score == pytest.approx(1.0)  # exact text match embeds identically
+    assert hits[0].score == pytest.approx(1.0)  # the same string embeds identically
     assert hits[0].score > hits[1].score
     assert hits[0].native_id == a.id
     assert hits[0].metadata == a.to_metadata()  # full metadata round-trip
@@ -95,17 +97,20 @@ def test_duplicates_are_not_reembedded(tmp_path: Path) -> None:
     store.create_dataset("ds", metric="cosine")
     a = make_chunk("a")
     store.add_chunks("ds", chunks=[a, a])
-    assert embedder.embedded == ["a"]  # batch-internal duplicate embedded once
+    # What reaches the embedder is the chunk's name and place followed by
+    # its text, not the text alone — see `retrieval_text`.
+    assert embedder.embedded == [retrieval_text(a)]  # batch-internal duplicate embedded once
     store.add_chunks("ds", chunks=[a])
-    assert embedder.embedded == ["a"]  # second run embedded nothing
+    assert embedder.embedded == [retrieval_text(a)]  # second run embedded nothing
 
 
 def test_incremental_add_chunks_keeps_old_vectors(store: LanceDBStore) -> None:
     a, b = make_chunk("a"), make_chunk("b")
     assert store.add_chunks("ds", chunks=[a]) == 1
     assert store.add_chunks("ds", chunks=[b]) == 1
-    hits = store.search("ds", query="a", k=10)
+    hits = store.search("ds", query=retrieval_text(a), k=10)
     assert len(hits) == 2
+    # The *stored* text is still the verbatim slice, whatever was embedded.
     assert hits[0].metadata["text"] == "a"
 
 
@@ -171,7 +176,10 @@ def test_knn_matches_bruteforce(store: LanceDBStore) -> None:
     store.add_chunks("ds", chunks=chunks)
 
     query = "where is cosine similarity computed"
-    vecs = np.array(store.embedder.embed(texts))
+    # Brute force over what was actually stored: the store embeds each
+    # chunk's name and place with its text, so comparing against the bare
+    # texts would be comparing against vectors that were never written.
+    vecs = np.array(store.embedder.embed([retrieval_text(c) for c in chunks]))
     q = np.array(store.embedder.embed([query])[0])
     cos = (vecs @ q) / (np.linalg.norm(vecs, axis=1) * np.linalg.norm(q))
     order = np.argsort(cos)[::-1][:5]
@@ -778,3 +786,55 @@ def test_refresh_drops_both_memos(tmp_path: Path) -> None:
 
     assert store._query_memo is None
     assert store._ids_of is None
+
+
+# --- what the embedder reads, which is not what the store keeps ----------
+
+
+def test_a_chunk_is_embedded_with_its_own_name_and_place() -> None:
+    # Until this existed the vector knew nothing a reader has before they
+    # open a file: what it is called and what the definition is named.
+    # Measured on 84 blind questions, adding both took identifier answers
+    # in the top three from 11 to 15 and descriptive ones from 0 to 2.
+    source = SourceFile(repo="r", path="ingest/text_chunker.py", lang="python", kind=Kind.CODE)
+    chunk = source.chunk(text="def go():\n    return 1", start_line=1, end_line=2, symbol="go")
+
+    read = retrieval_text(chunk)
+
+    assert read.startswith("go ingest text chunker py\n")
+    assert read.endswith(chunk.text)
+
+
+def test_the_separators_a_sentence_model_cannot_read_become_spaces() -> None:
+    # `ingest/text_chunker.py` tokenises into fragments; `ingest text
+    # chunker py` into words. Symbol alone moved nothing and path alone
+    # moved one answer — together they moved six, which is why both are
+    # here and why they are spelled out rather than pasted in raw.
+    source = SourceFile(repo="r", path="a-b/c_d.e.py", lang="python", kind=Kind.CODE)
+    chunk = source.chunk(text="x = 1", start_line=1, end_line=1)
+
+    assert retrieval_text(chunk).startswith("a b c d e py\n")
+
+
+def test_what_the_store_keeps_is_untouched_by_what_the_embedder_reads() -> None:
+    # The promise this had to not break: stored text is a verbatim slice
+    # of its line range, because a hit points at `file:line` and the two
+    # must agree. And the id hashes that text with the path, so neither
+    # moves — an index does not have to be rebuilt to be readable, only
+    # to be re-ranked.
+    source = SourceFile(repo="r", path="src/thing.py", lang="python", kind=Kind.CODE)
+    chunk = source.chunk(text="def go():\n    pass", start_line=7, end_line=8, symbol="go")
+
+    assert chunk.text == "def go():\n    pass"
+    assert chunk.id == Chunk.chunk_id("def go():\n    pass", path="src/thing.py")
+    assert retrieval_text(chunk) != chunk.text
+
+
+def test_a_chunk_with_nothing_to_call_it_is_embedded_as_it_was() -> None:
+    # A commit chunk has no symbol worth reading and a synthetic path; a
+    # nameless chunk must come out exactly as before, or this would move
+    # vectors it has nothing to say about.
+    source = SourceFile(repo="r", path="", lang="text", kind=Kind.DOC)
+    chunk = source.chunk(text="plain words", start_line=1, end_line=1)
+
+    assert retrieval_text(chunk) == "plain words"

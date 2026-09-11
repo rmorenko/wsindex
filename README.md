@@ -54,6 +54,46 @@ wsindex/src/wsindex/ingest/text_chunker.py:107-111  0.598  def chunk_text(text: 
 _(After this README itself gets indexed, it will match its own example
 query too — semantic search is honest like that.)_
 
+## What goes into a vector
+
+A chunk is embedded as **its own name and place, then its code**:
+
+```
+go ingest text chunker py
+def go():
+    ...
+```
+
+The stored text is untouched — it has to stay a verbatim slice of its
+line range, because a hit points at `file:line` and the two must agree.
+Only what the *embedder* reads changes, so chunk ids do not move; vectors
+do, so it needs a re-index.
+
+Path separators, underscores and dots become spaces because a sentence
+model tokenises `ingest/text_chunker.py` into fragments and `ingest text chunker` into words. That detail is most of the effect: **symbol alone
+moved nothing and path alone moved one answer, while the two together
+moved six.**
+
+Measured on the 84 blind questions of `poe relevance`, before and after:
+
+| Class       | In the top three   | In the top ten |
+| ----------- | ------------------ | -------------- |
+| Identifier  | 11 -> **15** of 28 | 16 -> **18**   |
+| Descriptive | 0 -> **2** of 42   | 7 -> 7         |
+| Cross-repo  | 2 -> 2 of 14       | 5 -> **4**     |
+
+The gain is in the top three rather than the top ten, which is the half a
+person reads: answers move *up* rather than appearing. Descriptive
+questions reach the top three for the first time. One cross-repo answer
+fell out of the top ten — it sat at rank 7 before — and that is the whole
+cost, stated rather than folded into the total.
+
+**Commit chunks are left alone.** Their path is a synthetic
+`commits/<date>-<sha>` and their symbol is the sha, so spelling that into
+words puts a hash in a vector. Applying this everywhere and applying it
+to code and docs only scored identically, so the version without the hash
+is the one kept.
+
 ## Ranking the results
 
 Search is one funnel. The store returns k×4 candidates by vector

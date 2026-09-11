@@ -16,6 +16,7 @@ The `VectorStore` contract is unchanged: `dataset_name` maps onto the
 `dataset` column, so the pipeline never learns there is only one table.
 """
 
+import re
 from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
@@ -78,6 +79,43 @@ def _filter_predicates(filters: SearchFilter) -> list[str]:
         pattern = "%" + _sql_quote(_glob_to_like(filters.symbol)) + "%"
         parts.append(f"symbol LIKE '{pattern}' ESCAPE '\\'")
     return parts
+
+
+def retrieval_text(chunk: Chunk) -> str:
+    """What the embedder reads, which is not what the store keeps.
+
+    The stored `text` is a verbatim slice of its line range and has to
+    stay one — a hit points at `file:line` and the two must agree. What
+    goes into the *vector* is under no such obligation, and until now it
+    was the same string, which threw away everything a reader has before
+    they open a file: what the file is called and what the definition is
+    named.
+
+    So a chunk is embedded as its own name and location followed by its
+    code. Path separators, underscores and dots become spaces because a
+    sentence model tokenises `ingest/text_chunker.py` into fragments and
+    `text chunker` into words.
+
+    **Commit chunks are left alone**, and that is measured rather than
+    assumed. Their "path" is a synthetic `commits/<date>-<sha>` and their
+    symbol is the sha — a date and a hash spelled into words, which is
+    noise by construction. Across the sixty blind questions, applying
+    this everywhere and applying it to code only scored identically, so
+    the version that keeps a sha out of a vector is the one to keep.
+
+    Chunk ids do not move: `Chunk.chunk_id` hashes the stored text and
+    the path, neither of which this touches. Vectors do, so changing it
+    means re-indexing.
+    """
+    if chunk.kind == Kind.COMMIT.value:
+        return chunk.text
+    named = " ".join(part for part in (chunk.symbol, chunk.path) if part)
+    return f"{_words(named)}\n{chunk.text}" if named else chunk.text
+
+
+def _words(name: str) -> str:
+    """`ingest/text_chunker.py` -> `ingest text chunker py`."""
+    return re.sub(r"[/_.\-]+", " ", name).strip()
 
 
 class LanceDBStore(VectorStore):
@@ -206,7 +244,7 @@ class LanceDBStore(VectorStore):
             new_chunks.append(chunk)
         if not new_chunks:
             return 0
-        vectors = self.embedder.embed([chunk.text for chunk in new_chunks])
+        vectors = self.embedder.embed([retrieval_text(chunk) for chunk in new_chunks])
         rows = []
         for chunk, vec in zip(new_chunks, vectors, strict=True):
             row = chunk.to_metadata()

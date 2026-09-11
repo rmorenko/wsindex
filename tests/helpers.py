@@ -6,6 +6,8 @@ has said `importlib` is where it is heading. A plain module beside the
 tests is imported by the same rules as the code under test.
 """
 
+import re
+
 import pytest
 
 
@@ -34,3 +36,21 @@ def needs_grammar(*langs: str) -> pytest.MarkDecorator:
         bool(missing),
         reason=f"needs the ast extra ({', '.join(missing) or ', '.join(langs)})",
     )
+
+
+def as_indexed(text: str, *, path: str, symbol: str | None = None) -> str:
+    """The string the store embedded for a chunk, for tests that must match it.
+
+    `FakeEmbedder` seeds a vector from a sha256 of its input, so nothing
+    is *near* anything: the only way a test can find a chunk is to hand
+    the store the same string it embedded. That used to be the chunk's
+    text, and since the store began embedding a chunk's name and place
+    alongside it (`retrieval_text`), it is not.
+
+    Spelled out here rather than by calling `retrieval_text`, so that a
+    change to the format has to break these tests loudly instead of
+    following them around.
+    """
+    named = " ".join(part for part in (symbol, path) if part)
+    spelled = re.sub(r"[/_.\-]+", " ", named).strip()
+    return f"{spelled}\n{text}" if spelled else text

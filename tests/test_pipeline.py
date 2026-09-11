@@ -23,6 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import wsindex.pipeline
+from helpers import as_indexed
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest import IndexState, NotAGitRepositoryError, Skip, chunk_file
@@ -32,6 +33,11 @@ from wsindex.rank.reranker import FakeReranker
 from wsindex.store import LanceDBStore
 
 PY_TEXT = "def f():\n    return 1"
+
+INDEXED_MAIN = as_indexed(PY_TEXT, path="src/main.py", symbol="f")
+"""What the store embedded for `src/main.py`, which is what a test has to
+ask for: `FakeEmbedder` seeds a vector from its input, so nothing is near
+anything and only the same string comes back."""
 
 # README.md yields two markdown sections, main.py one plain chunk.
 EXPECTED_CHUNKS = 3
@@ -139,7 +145,7 @@ def test_report_counts(pipeline: Pipeline) -> None:
 
 def test_store_search_finds_exact_chunk(pipeline: Pipeline, store: LanceDBStore) -> None:
     pipeline.index()
-    hits = store.search(dataset_name="repo1", query=PY_TEXT, k=3)
+    hits = store.search(dataset_name="repo1", query=INDEXED_MAIN, k=3)
     assert hits[0].metadata["path"] == "src/main.py"  # rel_path, POSIX, no tmp leak
     assert hits[0].score == pytest.approx(1.0)
 
@@ -180,7 +186,7 @@ def test_missing_repo_is_reported_not_fatal(
 
 def test_search_exact_text_wins(pipeline: Pipeline) -> None:
     pipeline.index()
-    hits = pipeline.search(PY_TEXT, k=3)
+    hits = pipeline.search(INDEXED_MAIN, k=3)
     assert hits[0].metadata["path"] == "src/main.py"
     assert hits[0].score == pytest.approx(1.0)
     scores = [h.score for h in hits]
@@ -192,7 +198,7 @@ def test_search_merges_across_repos(
 ) -> None:
     add_repo(config, tmp_path, "repo2", commit=commit)
     pipeline.index()
-    hits = pipeline.search("print('two')", k=3)
+    hits = pipeline.search(as_indexed("print('two')", path="app.py"), k=3)
     assert hits[0].metadata["repo"] == "repo2"
     assert hits[0].score == pytest.approx(1.0)
 
@@ -204,7 +210,10 @@ def test_search_tie_keeps_config_repo_order(
     # stable merge must keep the config repo order.
     add_repo(config, tmp_path, "repo2", full=True, commit=commit)
     pipeline.index()
-    hits = pipeline.search(PY_TEXT, k=2)
+    # The same file at the same relative path in both repos, so the
+    # string the store embedded is the same too — the tie survives the
+    # store learning a chunk's name and place.
+    hits = pipeline.search(INDEXED_MAIN, k=2)
     assert [h.score for h in hits] == [pytest.approx(1.0)] * 2
     assert [h.metadata["repo"] for h in hits] == ["repo1", "repo2"]
 
