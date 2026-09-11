@@ -70,6 +70,21 @@ def index() -> None:
             + (" ..." if len(report.unreadable) > 3 else ""),
             err=True,
         )
+    if report.mostly_unclaimed:
+        # The loudest silence there was. A workspace of 417 Elixir files
+        # indexed 30 of them and said `files: 30`, which is true and
+        # tells the reader nothing; `status` then showed three healthy
+        # repos. Skipping a file by policy is not news, but skipping a
+        # *language* is, so the suffixes are named and counted.
+        worst = ", ".join(f"{count} {suffix}" for suffix, count in report.unclaimed[:3])
+        typer.echo(
+            f"warning: {report.unclaimed_files} of {report.candidates} file(s) matched no "
+            f"language and were not indexed — {worst}"
+            + (" ..." if len(report.unclaimed) > 3 else "")
+            + " (add a `formats` entry for the ones that hold code; "
+            "`wsindex explain <path>` says which rule left a file out)",
+            err=True,
+        )
     if pipeline.links is not None:
         drift = pipeline.links.dangling()
         if drift:

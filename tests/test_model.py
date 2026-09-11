@@ -1,5 +1,6 @@
 """Tests for the core data model (Chunk, Hit, chunk_id)."""
 
+import hashlib
 from dataclasses import FrozenInstanceError
 from typing import Any
 
@@ -93,3 +94,35 @@ def test_a_hit_carries_the_only_name_a_chunk_has() -> None:
     hit = Hit(score=0.5, metadata=chunk.to_metadata(), native_id=chunk.id)
 
     assert hit.to_json()["id"] == chunk.id
+
+
+def test_a_commit_message_git_could_not_decode_still_gets_an_id() -> None:
+    # `read_commits` decodes git's bytes with surrogate escapes, so a
+    # message written in Latin-1 arrives holding a lone surrogate.
+    # `encode("utf-8")` raises on those, and the field trial watched that
+    # end a whole index run on six of FreeType's 8 545 messages — names
+    # written between 2000 and 2005. An index that dies on a twenty-year
+    # old commit message is not robust to real history.
+    latin1 = "16bit fixes from Wolfgang Domr\udcf6se.\n"
+
+    assert len(Chunk.chunk_id(latin1, path="commits/2000-01-01-bc1837a")) == 64
+
+
+def test_the_surrogate_fix_did_not_move_any_existing_id() -> None:
+    # `surrogatepass` only changes what happens to lone surrogates; for
+    # every other string it emits byte-for-byte what `encode("utf-8")`
+    # emitted. Ids are the key dedup and every link are built on, so this
+    # pins the promise rather than trusting it.
+    for text, path in (
+        ("def f(): pass", "a.py"),
+        ("# коммит по-русски", "src/модуль.py"),
+        ("", "empty"),
+        ("emoji \U0001f600 and ü", "mixed.md"),
+    ):
+        expected = hashlib.sha256()
+        expected.update(text.encode("utf-8"))
+        expected.update(len(text).to_bytes(8, "big"))
+        expected.update(path.encode("utf-8"))
+        expected.update(len(path).to_bytes(8, "big"))
+
+        assert Chunk.chunk_id(text, path=path) == expected.hexdigest()

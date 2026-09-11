@@ -90,6 +90,18 @@ class Chunk:
         Each part is hashed together with its length so that pairs like
         ("ab", "c") and ("a", "bc") do not collide after concatenation.
 
+        **`surrogatepass`, and it is not cosmetic.** Git hands back bytes,
+        and `read_commits` decodes them with surrogate escapes, so a
+        commit message written in Latin-1 arrives as a string holding a
+        lone surrogate. Plain `encode("utf-8")` raises on those, and the
+        field trial of 2026-09-11 watched that end a whole index run:
+        six of FreeType's 8 545 messages carry one — names written
+        between 2000 and 2005 — and `wsindex index` died on a traceback
+        with an empty store. Ids do not move: for any text without a
+        surrogate `surrogatepass` produces byte-for-byte what
+        `encode("utf-8")` produced, so every id computed before this
+        change is still the id computed after it.
+
         Args:
             text: Verbatim chunk text.
             path: Repo-relative path of the file the text came from.
@@ -98,9 +110,11 @@ class Chunk:
             64-character sha256 hex digest, stable across runs and machines.
         """
         h = hashlib.sha256()
-        h.update(text.encode("utf-8"))
+        h.update(text.encode("utf-8", errors="surrogatepass"))
         h.update(len(text).to_bytes(8, "big"))
-        h.update(path.encode("utf-8"))
+        # Paths get the same treatment: a filename can carry bytes that are
+        # not UTF-8 just as a commit message can.
+        h.update(path.encode("utf-8", errors="surrogatepass"))
         h.update(len(path).to_bytes(8, "big"))
         return h.hexdigest()
 

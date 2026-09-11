@@ -27,6 +27,7 @@ from wsindex.ingest.commits import (
     commit_chunks,
     read_commits,
 )
+from wsindex.ingest.git_state import GIT_TIMEOUT
 from wsindex.links import LinkKind, LinkStore
 from wsindex.model import Kind, SearchFilter, SourceFile
 from wsindex.pipeline import Pipeline
@@ -376,3 +377,22 @@ def test_an_incremental_run_is_bounded_by_the_diff_not_the_cap(
     monkeypatch.setattr(commits_module, "MAX_COMMITS", 1)
 
     assert len(read_commits(repo, since=first)) == 5
+
+
+def test_a_huge_batch_does_not_overflow_the_child_timeout() -> None:
+    # `GIT_TIMEOUT * len(rel_paths)` reaches `poll()`, which takes
+    # milliseconds as a 32-bit int, so past 17 896 files it raised
+    # `OverflowError` before a single file was read. The field trial met
+    # that on two real corpora — syncthing's 33 048 pre-rendered docs and
+    # Ladybird's 19 253 sources — and both ended with an empty store.
+    poll_ceiling = (2**31 - 1) / 1000
+
+    for files in (18_000, 33_048, 1_000_000):
+        assert commits_module.child_timeout(files) <= poll_ceiling
+
+
+def test_a_small_batch_still_scales_with_its_size() -> None:
+    # The ceiling must not flatten the ordinary case into one constant:
+    # four files should not be given the same grace as four thousand.
+    assert commits_module.child_timeout(4) < commits_module.child_timeout(40)
+    assert commits_module.child_timeout(4) == pytest.approx(GIT_TIMEOUT * 4)

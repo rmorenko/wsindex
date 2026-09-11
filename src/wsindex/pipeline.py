@@ -284,6 +284,7 @@ class Pipeline:
             commits=history.written,
             unreadable=tuple(picked.unreadable),
             unparsed=files.unparsed,
+            unclaimed=tuple(picked.unclaimed.most_common()),
         )
 
     def _index_commits(

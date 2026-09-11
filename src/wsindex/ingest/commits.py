@@ -235,6 +235,35 @@ auto-tuned value would be confidently wrong on exactly the CI runners and
 Docker hosts that need it, and it would make two benchmark runs
 incomparable for a reason nobody could see."""
 
+BLAME_DEADLINE = 3600.0
+"""Ceiling on the wall clock one blame child gets, whatever the batch size.
+
+`GIT_TIMEOUT * len(rel_paths)` on its own is not a timeout, it is an
+`OverflowError` waiting for a large repository. `subprocess` hands the
+value down to `poll()`, which takes milliseconds as a 32-bit int, so
+anything past 2**31-1 ms raises *before a single file is read* — 17 896
+files at the current `GIT_TIMEOUT`. The field trial of 2026-09-11 hit
+that twice on real corpora: syncthing's pre-rendered documentation
+(33 048 files) and Ladybird (19 253 source files) both ended in a
+traceback with an empty store.
+
+An hour, because this is a deadman switch for a wedged child and not a
+budget for honest work. The largest batch that finished in that trial was
+dbeaver's 11 786 files, inside a whole-index run of 244 seconds — two
+orders of magnitude of headroom, and still short enough that nobody sits
+through it by accident."""
+
+
+def child_timeout(files: int) -> float:
+    """How long to wait on the blame child before calling it wedged.
+
+    Split out from the call so the boundary can be tested without
+    spawning anything: the bug this exists for was not in the child, it
+    was in a number handed to `subprocess`.
+    """
+    return min(GIT_TIMEOUT * files, BLAME_DEADLINE)
+
+
 HELPER_FROM = 4
 """How many files it takes before the batch is worth a child process.
 
@@ -315,10 +344,11 @@ def _in_child(root: Path, rel_paths: Sequence[str]) -> dict[str, dict[int, str]]
             # The read-only hint is set here and inherited by every git
             # the child starts, so the child makes no policy of its own.
             env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
-            # Per file, times the batch: each git inside has GIT_TIMEOUT
-            # of its own, and this only stops a child that stopped
-            # answering altogether.
-            timeout=GIT_TIMEOUT * len(rel_paths),
+            # Per file, times the batch, but bounded: each git inside has
+            # GIT_TIMEOUT of its own, and this only stops a child that
+            # stopped answering altogether. See BLAME_DEADLINE for why the
+            # bound is not optional.
+            timeout=child_timeout(len(rel_paths)),
         )
         blamed = json.loads(finished.stdout)
         return {path: {int(n): sha for n, sha in lines.items()} for path, lines in blamed.items()}

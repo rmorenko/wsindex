@@ -14,11 +14,12 @@ it can be read on its own — which is the point of the split.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from wsindex.config import Repository
 from wsindex.ingest import PARSE_ERROR, IndexState, Skip, WalkedFile, examine
@@ -38,6 +39,24 @@ thousand chunks is a few megabytes in flight and turns a 3458-chunk repo
 into two writes instead of 149."""
 
 
+UNCLAIMED_SHARE = 0.1
+"""Share of a repo's examined paths that may go unclaimed in silence.
+
+Not every skipped suffix is news: a `LICENSE`, a `.png`, a `.lock` are
+left out by design and saying so every run would be noise. What is news
+is a *language* nobody claims, and the field trial of 2026-09-11 showed
+what that looks like from the outside — `wsindex index` printed
+`files: 30` on a workspace holding 417 source files, and `status` showed
+three healthy repositories. 249 `.ex` and 132 `.exs` had been skipped
+whole, and nothing said so.
+
+A tenth, because the same trial put a gap there with room on both sides:
+the fourteen workspaces that indexed properly left out a few per cent,
+and the three that were broken left out two thirds, 85% and 93%. Any
+line between 0.06 and 0.6 would separate them; a tenth is the round one,
+far from both edges."""
+
+
 @dataclass(frozen=True, kw_only=True)
 class _Totals:
     """One repo's contribution to an IndexReport; summed by `index`."""
@@ -49,6 +68,7 @@ class _Totals:
     commits: int
     unreadable: tuple[str, ...] = ()
     unparsed: tuple[str, ...] = ()
+    unclaimed: tuple[tuple[str, int], ...] = ()
 
 
 class FullPass(StrEnum):
@@ -126,11 +146,15 @@ class _Selection:
             indexable nor forgettable: they are a problem to report, not
             a decision to act on, and folding them into either list is
             how they went unmentioned for as long as they did.
+        unclaimed: Suffixes no language claims, and how many files carry
+            each. The same kind of fact as `unreadable` and reported for
+            the same reason — see `UNCLAIMED_SHARE`.
     """
 
     indexable: list[WalkedFile]
     forget: list[str]
     unreadable: list[str]
+    unclaimed: Counter[str]
 
 
 def _selection(
@@ -155,6 +179,7 @@ def _selection(
     indexable: list[WalkedFile] = []
     forget: list[str] = list(deleted)
     unreadable: list[str] = []
+    unclaimed: Counter[str] = Counter()
     for rel_path in changed:
         walked = examine(root, rel_path, ignore=repo.ignore, formats=repo.formats)
         if isinstance(walked, WalkedFile):
@@ -162,10 +187,14 @@ def _selection(
             continue
         if walked is Skip.UNREADABLE:
             unreadable.append(rel_path)
+        if walked is Skip.UNKNOWN_SUFFIX:
+            unclaimed[PurePosixPath(rel_path).suffix or "(no suffix)"] += 1
         # Unreadable paths are forgotten too: whatever the store still
         # holds for one is from a version nobody can confirm any more.
         forget.append(rel_path)
-    return _Selection(indexable=indexable, forget=forget, unreadable=unreadable)
+    return _Selection(
+        indexable=indexable, forget=forget, unreadable=unreadable, unclaimed=unclaimed
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -267,6 +296,9 @@ class IndexReport:
             They are in the index, as text windows rather than
             definitions — worse to search and, until now, impossible to
             notice.
+        unclaimed: Suffixes no language claims, commonest first, with
+            how many files carry each. Always populated; ask
+            `mostly_unclaimed` before saying anything about it.
         seconds: How long the run took. The server already recorded this
             per run; a person at a terminal deserves the same, and it is
             the only number that makes two runs comparable.
@@ -281,7 +313,35 @@ class IndexReport:
     full_repos: tuple[tuple[str, FullPass], ...]
     unreadable: tuple[str, ...] = ()
     unparsed: tuple[str, ...] = ()
+    unclaimed: tuple[tuple[str, int], ...] = ()
     seconds: float = 0.0
+
+    @property
+    def unclaimed_files(self) -> int:
+        """How many files were left out for want of a language."""
+        return sum(count for _, count in self.unclaimed)
+
+    @property
+    def candidates(self) -> int:
+        """Files the walker reached that a language could have claimed.
+
+        Read plus left out, and nothing else. Counting everything the
+        walker looked at would fold in paths rejected for reasons that
+        have nothing to do with languages — inside a hidden directory,
+        excluded by `ignore` — and a repository with a large `.wsindex`
+        beside it would dilute its own share into silence.
+        """
+        return self.files + self.unclaimed_files
+
+    @property
+    def mostly_unclaimed(self) -> bool:
+        """Whether so much went unclaimed that the run must say so.
+
+        The judgement lives here rather than in the CLI because it is a
+        fact about the run, and the server and MCP have the same reason
+        to want it (ADR-10). See `UNCLAIMED_SHARE`.
+        """
+        return bool(self.candidates) and self.unclaimed_files > self.candidates * UNCLAIMED_SHARE
 
 
 def _unparsed(chunks: list[Chunk]) -> bool:
@@ -338,6 +398,7 @@ class _Tally:
     full: list[tuple[str, FullPass]] = field(default_factory=list)
     unreadable: list[str] = field(default_factory=list)
     unparsed: list[str] = field(default_factory=list)
+    unclaimed: Counter[str] = field(default_factory=Counter)
 
     def add(self, repo_id: str, totals: _Totals) -> None:
         """Fold in what one repo produced, qualifying its paths by repo."""
@@ -346,6 +407,7 @@ class _Tally:
         self.written += totals.written
         self.deleted += totals.deleted
         self.commits += totals.commits
+        self.unclaimed.update(dict(totals.unclaimed))
         self.unreadable.extend(f"{repo_id}/{path}" for path in totals.unreadable)
         self.unparsed.extend(f"{repo_id}/{path}" for path in totals.unparsed)
 
@@ -361,6 +423,7 @@ class _Tally:
             full_repos=tuple(self.full),
             unreadable=tuple(self.unreadable),
             unparsed=tuple(self.unparsed),
+            unclaimed=tuple(self.unclaimed.most_common()),
             seconds=seconds,
         )
 

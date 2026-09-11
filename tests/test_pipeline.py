@@ -833,3 +833,42 @@ def test_fitting_does_not_reorder_by_size(pipeline: Pipeline) -> None:
 
 def test_nothing_to_fit_is_not_an_error(pipeline: Pipeline) -> None:
     assert pipeline.fit([], budget=100) == ([], 0)
+
+
+def test_a_language_nobody_claims_is_reported_not_passed_over(
+    tmp_path: Path, pipeline: Pipeline, commit: Committer
+) -> None:
+    # The loudest silence the field trial found. A workspace of 417
+    # Elixir files indexed 30 of them and printed `files: 30` — true, and
+    # it told the reader nothing; `status` then showed three healthy
+    # repos. Skipping a `LICENSE` is policy and not news. Skipping a
+    # *language* is, and nothing said so.
+    source = tmp_path / "repo1" / "src"
+    for n in range(12):
+        (source / f"mod{n}.ex").write_text(f"defmodule M{n} do\nend\n")
+    (source / "mix.exs").write_text("defmodule Mix do\nend\n")
+    commit(tmp_path / "repo1")
+
+    report = pipeline.index()
+
+    assert report.mostly_unclaimed
+    assert report.unclaimed_files == 13
+    assert dict(report.unclaimed) == {".ex": 12, ".exs": 1}
+
+
+def test_the_odd_unclaimed_file_is_not_worth_a_warning(
+    tmp_path: Path, pipeline: Pipeline, commit: Committer
+) -> None:
+    # The other half of the promise: a repo that leaves out a licence and
+    # an icon has nothing wrong with it, and a run that complained every
+    # time would teach the reader to stop reading warnings.
+    source = tmp_path / "repo1" / "src"
+    for n in range(12):
+        (source / f"mod{n}.py").write_text(f"def f{n}():\n    return {n}\n")
+    (tmp_path / "repo1" / "LICENSE").write_text("All rights reserved.\n")
+    commit(tmp_path / "repo1")
+
+    report = pipeline.index()
+
+    assert report.unclaimed_files == 1
+    assert not report.mostly_unclaimed
