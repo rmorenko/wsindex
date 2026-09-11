@@ -1129,7 +1129,7 @@ def test_recording_can_be_turned_off(workspace: Path) -> None:
 
 
 def test_every_module_is_named_in_the_architecture_document() -> None:
-    """ARCH_en.md lists the components; nothing regenerates that either.
+    """The architecture document lists the components; nothing regenerates it.
 
     The same guard as `test_every_command_is_documented`, added for the
     same reason and after the same thing happened: the list had gone
@@ -1145,7 +1145,7 @@ def test_every_module_is_named_in_the_architecture_document() -> None:
         if (path.is_dir() and not path.name.startswith("__"))
         or (path.suffix == ".py" and path.name != "__init__.py")
     }
-    described = Path("ARCH_en.md").read_text()
+    described = Path("docs/design/architecture.md").read_text()
     components = described.split("## Components, in one line each")[1].split("\n## ")[0]
 
     # A package is written with its slash — `cli/` — and a module without.

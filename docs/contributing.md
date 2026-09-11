@@ -46,5 +46,6 @@ uv run poe hooks
 1. Ensure `uv run poe check` passes locally.
 1. Open a PR; CI must be green before merge.
 
-See the design docs (`CONCEPT_en.md`, `BRD_en.md`, `ARCH_en.md`) for where the
+See the design docs (`design/concept.md`, `design/brd.md`,
+`design/architecture.md`) for where the
 project is heading.

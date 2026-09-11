@@ -20,13 +20,13 @@
 
 | Question                                      | Where                                               |
 | --------------------------------------------- | --------------------------------------------------- |
-| What does it do, and how well?                | [README.md](README.md) — with measurements          |
-| Why is the storage like that?                 | `docs/adr/adr-007-post-mvp-storage.md`              |
-| Where do the config and index live?           | `docs/adr/adr-008-path-resolution.md`               |
-| What are `refs` and `why` built on?           | `docs/adr/adr-009-links-as-entities.md`             |
-| Why are links not in the vector store?        | `docs/adr/adr-011-links-backend.md`                 |
-| Where is the line between library and server? | `docs/adr/adr-010-library-server-boundary.md`       |
-| Why does indexing start a child process?      | `docs/adr/adr-012-spawning-processes.md`            |
+| What does it do, and how well?                | [README.md](../../README.md) — with measurements    |
+| Why is the storage like that?                 | `../adr/adr-007-post-mvp-storage.md`                |
+| Where do the config and index live?           | `../adr/adr-008-path-resolution.md`                 |
+| What are `refs` and `why` built on?           | `../adr/adr-009-links-as-entities.md`               |
+| Why are links not in the vector store?        | `../adr/adr-011-links-backend.md`                   |
+| Where is the line between library and server? | `../adr/adr-010-library-server-boundary.md`         |
+| Why does indexing start a child process?      | `../adr/adr-012-spawning-processes.md`              |
 | What can `wsindex.toml` say?                  | `wsindex.schema.json` (generated) and the README    |
 | Why is this line of code like that?           | the docstring above it — 45% of `src/` is reasoning |
 
@@ -125,7 +125,7 @@ through every decision below.
 - **Context.** A self-hosted vector store with k-NN is needed. Tensorus v1 is the project's target DB (including as an educational demonstration of Tensorus itself). But requiring a running Rust server for every run is a barrier for learning and tests.
 - **Decision.** The primary backend is `TensorusStore` (REST to v1, HNSW, cosine). Plus `LocalStore` (numpy brute-force cosine, local files) as an offline fallback. The backend is chosen in the config.
 - **Consequences.** (+) The project runs and is tested without external services; (+) a real production path through Tensorus. (−) Two implementations must be kept at semantic parity (both cosine, the same contract, the unified `Hit` type). (−) LocalStore does not scale, but that is not its job.
-- **Superseded by ADR-7** (`docs/adr/adr-007-post-mvp-storage.md`, 2026-08-19): the premises above died — see ADR-7's Context.
+- **Superseded by ADR-7** (`../adr/adr-007-post-mvp-storage.md`, 2026-08-19): the premises above died — see ADR-7's Context.
 
 ### ADR-3. Single-vector in the MVP, tensor re-rank deferred
 
@@ -154,7 +154,7 @@ through every decision below.
 
 ### ADR-7 onwards
 
-From ADR-7 each decision is its own file under `docs/adr/`, which is
+From ADR-7 each decision is its own file under `../adr/`, which is
 where they are read:
 
 - **ADR-7** — post-MVP storage: LanceDB, one table with a `dataset`
@@ -164,3 +164,5 @@ where they are read:
 - **ADR-10** — the library/server boundary, and the one-writer rule.
 - **ADR-11** — why links keep their own SQL store, and when it may be
   shared. Refines ADR-9 with the measurements that decide it.
+- **ADR-12** — why indexing starts its processes from a small child
+  rather than from the engine.

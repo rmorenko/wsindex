@@ -1,5 +1,20 @@
 # WSIndex — Concept (One-Pager)
 
+> **A record of intent, not of the current build.** This document says
+> what was asked for when it was written. Much of it came true; the
+> storage decision did not survive. **Tensorus v1 was replaced by
+> LanceDB in ADR-7 (August 2026) and the code removed on 2026-08-21**, so
+> every FR-4xx requirement, every REST endpoint and both backend names
+> below describe a design that no longer exists. `LocalStore` is gone
+> with it.
+>
+> Left standing rather than rewritten, and that is deliberate: threading
+> the new decision through fourteen sections would turn a record of what
+> was wanted into a claim about what is, and lose the ability to see what
+> changed. What the system does today is in
+> [README.md](../../README.md), which is measured and tested against the
+> CLI; why the storage changed is in `../adr/adr-007-post-mvp-storage.md`.
+
 ## 1. The Problem: Why Searching Across Multiple Repositories Is Hard
 
 Imagine a team that doesn't have just one project but a whole organization of repositories. Take a real example — the `tensorus` organization on GitHub: it hosts `tensorus`, `mcp`, `samples`, `datasets`, `models`, `tensorus-website` side by side, along with `v1`, `v1_web`, `v1_docs`. It's polyglot: code in Python, Rust, and TypeScript, configs (TOML/YAML/JSON, Dockerfile), documentation (Markdown, txt, rst, notebooks). Knowledge of "how things work" is smeared across dozens of places.
@@ -57,6 +72,10 @@ Documentation has a different nature: coherent text without rigid syntax. Splitt
 | Documentation | `v1_docs`, README                  | text              | by headings / window with overlap |
 
 ## 5. Why Tensorus v1 as the Database
+
+> Superseded by ADR-7: the store is LanceDB, a file beside the
+> config rather than a server to run. The reasoning below is kept
+> because ADR-7's Context answers it point by point.
 
 The index store is **Tensorus v1** (`github.com/tensorus/v1`), a tensor database with a REST API. The choice is not accidental and takes the hardest part off our shoulders.
 

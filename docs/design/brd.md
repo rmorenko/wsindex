@@ -1,5 +1,20 @@
 # BRD — Business Requirements Document: WSIndex (Workspace Indexer)
 
+> **A record of intent, not of the current build.** This document says
+> what was asked for when it was written. Much of it came true; the
+> storage decision did not survive. **Tensorus v1 was replaced by
+> LanceDB in ADR-7 (August 2026) and the code removed on 2026-08-21**, so
+> every FR-4xx requirement, every REST endpoint and both backend names
+> below describe a design that no longer exists. `LocalStore` is gone
+> with it.
+>
+> Left standing rather than rewritten, and that is deliberate: threading
+> the new decision through fourteen sections would turn a record of what
+> was wanted into a claim about what is, and lose the ability to see what
+> changed. What the system does today is in
+> [README.md](../../README.md), which is measured and tested against the
+> CLI; why the storage changed is in `../adr/adr-007-post-mvp-storage.md`.
+
 | Field            | Value                                                                   |
 | ---------------- | ----------------------------------------------------------------------- |
 | Product          | WSIndex (Workspace Indexer) — working title                             |
@@ -160,6 +175,11 @@ ID scheme: **FR-1xx** — indexing/ingest; **FR-2xx** — search/retrieval; **FR
 | FR-306 | Meaningful return codes and error messages                                  | Should   | An error (no server, no model) gives a clear message and a non-zero code                                    |
 
 ### 6.4 Storage and Tensorus integration (FR-4xx)
+
+> Superseded in full by ADR-7. The `VectorStore` abstraction (FR-401)
+> survived and is the one thing here still true; everything else —
+> `TensorusStore`, `LocalStore`, the REST endpoints, the API key —
+> was removed with the backend.
 
 | ID     | Requirement                                                                                                                          | Priority | Acceptance criterion                                                                                                                                                                            |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

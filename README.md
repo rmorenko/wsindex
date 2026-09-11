@@ -1207,13 +1207,14 @@ lists them.
 
 ## Design docs
 
-- Concept — [CONCEPT_en.md](CONCEPT_en.md)
-- Business requirements — [BRD_en.md](BRD_en.md)
+- Concept — [docs/design/concept.md](docs/design/concept.md)
+- Business requirements — [docs/design/brd.md](docs/design/brd.md)
 - Quality attributes and the early decisions (ADR-1 to ADR-6) —
-  [ARCH_en.md](ARCH_en.md). A map, deliberately short: what the tool does
+  [docs/design/architecture.md](docs/design/architecture.md). A map, deliberately short: what the tool does
   today is this file, which is measured and tested against the CLI.
 
-_(Russian originals: `CONCEPT_ru.md`, `BRD_ru.md`, `ARCH_ru.md`.)_
+_(Russian versions sit beside each: `concept.ru.md`, `brd.ru.md`,
+`architecture.ru.md`.)_
 
 ## Toolchain
 

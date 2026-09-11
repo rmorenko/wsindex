@@ -2,7 +2,7 @@
 
 The entry point lives in `wsindex.cli`. What the tool does and what it
 costs is in the README; the decisions behind it are in `docs/adr/`, with
-the early ones and the quality attributes in ARCH_en.md.
+the early ones and the quality attributes in docs/design/architecture.md.
 
 Logging follows the rule libraries are supposed to follow and this one
 did not: modules log, the package handles nothing, and whoever embeds it
