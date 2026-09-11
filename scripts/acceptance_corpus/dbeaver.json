@@ -1,0 +1,161 @@
+{
+  "org": "dbeaver",
+  "questions": [
+    {
+      "id": "q1",
+      "class": "literal",
+      "text": "AGENTS.md tells me long-running work should extend AbstractJob instead of a plain Eclipse Job. What does AbstractJob actually add, and what must my subclass implement?",
+      "truth": {
+        "repo": "dbeaver",
+        "path": "plugins/org.jkiss.dbeaver.model/src/org/jkiss/dbeaver/model/runtime/AbstractJob.java",
+        "lines": [44, 146]
+      },
+      "how_found": "Read dbeaver/AGENTS.md ('Long-running tasks' section names AbstractJob), then located the single AbstractJob.java under plugins/org.jkiss.dbeaver.model and read the class body: it wraps Eclipse Job, owns a DBRProgressMonitor, tracks finished/blockCanceled/cancelTimestamp state, keeps a CURRENT_JOB ThreadLocal and an attachedJob override, and declares the single abstract hook `protected abstract IStatus run(@NotNull DBRProgressMonitor monitor)` at line 146.",
+      "rg_query": "AbstractJob",
+      "why_asked": "It is the first rule you are handed about async work, and you need to know what the base class does for you before you write your first background task."
+    },
+    {
+      "id": "q2",
+      "class": "literal",
+      "text": "What does the --stateless flag do when passed to the dbvr CLI, and do subcommands inherit it?",
+      "truth": {
+        "repo": "dbvr",
+        "path": "bundles/org.dbvr.cli/src/org/dbvr/cli/app/CLITopLevelCommand.java",
+        "lines": [30, 46]
+      },
+      "how_found": "Grepped the workspace for the literal string '--stateless'; the only definition is OPTION_STATELESS in CLITopLevelCommand, declared as a picocli @Option with scope = CommandLine.ScopeType.INHERIT (so every subcommand sees it), defaultValue 'false', description 'Disables some functionality related to state storage'.",
+      "rg_query": "--stateless",
+      "why_asked": "You see the flag in a script or a colleague's command line and need to know whether it is safe to add, and whether it applies to the whole invocation or just the top-level command."
+    },
+    {
+      "id": "q3",
+      "class": "literal",
+      "text": "A user reported the error 'Too frequent authentication requests'. What raises it, and which setting controls the threshold?",
+      "truth": {
+        "repo": "cloudbeaver",
+        "path": "server/bundles/io.cloudbeaver.service.security/src/io/cloudbeaver/service/security/bruteforce/BruteForceUtils.java",
+        "lines": [33, 67]
+      },
+      "how_found": "Grepped for the exact message. It is thrown by BruteForceUtils.checkLoginInterval when the gap since the oldest recent login attempt is shorter than SMControllerConfiguration.getMinimumLoginTimeout(); the same class also enforces getMaxFailedLogin()/getBlockLoginPeriod(). The knobs are exposed as minimumLoginTimeout / maxFailedLogin / blockLoginPeriod under server.sm in config/template/cloudbeaver-base.conf.",
+      "rg_query": "Too frequent authentication requests",
+      "why_asked": "A support ticket lands on you with an exact error string and you have to say whether it is a bug or a configured rate limit."
+    },
+    {
+      "id": "q4",
+      "class": "literal",
+      "text": "When should I call UUIDv7.secureRandomUUID() instead of UUIDv7.randomUUID()?",
+      "truth": {
+        "repo": "dbeaver-common",
+        "path": "modules/org.jkiss.utils/src/main/java/org/jkiss/utils/UUIDv7.java",
+        "lines": [116, 137]
+      },
+      "how_found": "Grepped for secureRandomUUID; only UUIDv7 defines it. The javadoc on the class (lines 33-58) and on secureRandomUUID (116-134) explains the trade-off: randomUUID() uses a per-thread SplitMix64 state for throughput and per-thread monotonicity, secureRandomUUID() uses a per-thread SecureRandom for unpredictability at a much higher cost, and neither should be used as an auth token because UUIDv7 embeds the creation timestamp.",
+      "rg_query": "secureRandomUUID",
+      "why_asked": "There are two generators with nearly identical names in a shared utility module; picking the wrong one is either a performance bug or a security smell."
+    },
+    {
+      "id": "q5",
+      "class": "descriptive",
+      "text": "Two SSH client libraries ship with the app. Which one is used if nothing picks one?",
+      "truth": {
+        "repo": "dbeaver",
+        "path": "plugins/org.jkiss.dbeaver.net.ssh/src/org/jkiss/dbeaver/model/net/ssh/SSHTunnelImpl.java",
+        "lines": [45, 87]
+      },
+      "how_found": "Listed the org.jkiss.dbeaver.net.ssh* bundles (an sshj one and a jsch one, each contributing an <implementation id=.../> to the org.jkiss.dbeaver.net.ssh extension point in its plugin.xml). SSHTunnelImpl.initializeHandler reads SSHConstants.PROP_IMPLEMENTATION from the handler configuration and, if it is empty or unknown, falls back to DEF_IMPLEMENTATION, declared on line 48 as \"sshj\"; if even that descriptor is missing it throws \"Can't find SSH tunnel implementation\".",
+      "rg_query": "ssh",
+      "why_asked": "Two interchangeable back ends for the same feature is the kind of thing that bites you when a connection behaves differently on someone else's machine, so you need to know which is in play by default."
+    },
+    {
+      "id": "q6",
+      "class": "descriptive",
+      "text": "While a user is busy in the browser tab, how often does the page send a heartbeat so the back end does not decide it has gone away?",
+      "truth": {
+        "repo": "cloudbeaver",
+        "path": "webapp/packages/core-root/src/SessionActivityService.ts",
+        "lines": [13, 40]
+      },
+      "how_found": "Followed core-root's module registrations. SessionActivityService subscribes to ClientActivityService.onActiveStateChange; on each transition to active it calls sessionResource.pingSession() and then sets a guard timer of SESSION_TOUCH_TIME_PERIOD = 1000 * 60 (one minute) so no more than one ping is sent per minute. The companion INACTIVE_PERIOD_TIME (also one minute) in core-client-activity/src/ClientActivityService.ts is what flips the user back to inactive.",
+      "rg_query": "heartbeat",
+      "why_asked": "You need to know whether an idle-logout complaint is a front-end or a back-end problem, and what the client is actually doing on the wire while a tab sits open."
+    },
+    {
+      "id": "q7",
+      "class": "descriptive",
+      "text": "In the browser grid, how big is the first batch of records, and what ceiling can an operator raise it to?",
+      "truth": {
+        "repo": "cloudbeaver",
+        "path": "webapp/packages/plugin-data-viewer/src/DataViewerSettingsService.ts",
+        "lines": [24, 34]
+      },
+      "how_found": "Searched the webapp for the data-viewer settings schema. DataViewerSettingsService declares FETCH_MIN = 10, FETCH_MAX = 5000 and DEFAULT_FETCH_SIZE = 200; 'resultset.maxrows' defaults to 200 and is clamped to [10, 5000], while 'plugin.data-viewer.fetchMax' defaults to FETCH_MAX. getDefaultRowsCount() (line 123) clamps any requested value between minFetchSize and maxFetchSize. Both keys also have deprecated core.app.dataViewer.* aliases.",
+      "rg_query": "batch",
+      "why_asked": "The very first thing anyone asks after opening a big table in the UI is why it stopped where it did, and whether the ceiling is a client or server decision."
+    },
+    {
+      "id": "q8",
+      "class": "descriptive",
+      "text": "Running a query from the terminal client, how much comes back if I pass nothing extra, and how do I page past the first chunk?",
+      "truth": {
+        "repo": "dbvr",
+        "path": "bundles/org.dbvr.cli.sql/src/org/dbvr/cli/sql/DataTransferOptions.java",
+        "lines": [26, 67]
+      },
+      "how_found": "Read the picocli option classes under bundles/org.dbvr.cli.sql. DataTransferOptions declares -l / --limit with defaultValue \"1000\" and the format \"[offset,]limit\"; getOffset() returns the part before the comma (0 when absent) and getLimit() the part after it, so `-l 500,100` skips 500 rows and returns 100. The same class also holds -format/--output-format (default txt) and -op/--output-format-parameters.",
+      "rg_query": "page",
+      "why_asked": "You script the CLI against a big table and need to know the silent cap you are getting and whether the tool can walk through results at all."
+    },
+    {
+      "id": "q9",
+      "class": "descriptive",
+      "text": "When everything runs on one machine, which container is walled off so the piece that terminates inbound traffic cannot reach it?",
+      "truth": {
+        "repo": "team-edition-deploy",
+        "path": "compose/cbte/docker-compose.yml",
+        "lines": [11, 57]
+      },
+      "how_found": "Read the compose stack. Two bridges are declared, cloudbeaver-te-private-net and cloudbeaver-te-common-net. The nginx web-proxy (and cloudbeaver-te, -rm, kafka) sit only on the common bridge; postgres sits only on the private bridge, so nothing on the common bridge can reach it. The dc, qm and tm services are the only members of both bridges and are therefore the bridge between the proxy-facing side and the metadata store.",
+      "rg_query": "container",
+      "why_asked": "Before you debug a connection failure in the local stack you need the actual reachability map, not the service list."
+    },
+    {
+      "id": "q10",
+      "class": "descriptive",
+      "text": "The desktop app keeps a tiny local listener so another process can drive it. What stops a rogue program on the same machine from issuing commands - is there a shared secret?",
+      "truth": {
+        "repo": "dbeaver",
+        "path": "plugins/org.jkiss.dbeaver.model.cli/src/org/jkiss/dbeaver/model/cli/rest/BearerRequestHandler.java",
+        "lines": [50, 62]
+      },
+      "how_found": "Traced the desktop IPC path: DBeaverLauncher POSTs the argv to http://localhost:<port>/handleCommandLine with an Authorization: Bearer header whose value is read out of dbeaver-instance.properties in the workspace (org.jkiss.dbeaver.launcher.InstanceServerProperties). On the receiving side BearerRequestHandler.handle rejects the exchange with SC_FORBIDDEN and 'Not authorized' unless the header is present, starts with the Bearer prefix, and the remainder equals the handler's token. So yes: a per-instance shared secret stored in the workspace.",
+      "rg_query": "secret",
+      "why_asked": "A localhost HTTP endpoint that executes command lines looks alarming on first sight, and you want to know whether it is actually guarded before you file a security issue."
+    },
+    {
+      "id": "q11",
+      "class": "cross-repo",
+      "text": "Names in the navigator tree sort so that item2 comes before item10 rather than in plain text order. Which comparator does that, and can I reuse it elsewhere?",
+      "truth": {
+        "repo": "dbeaver-common",
+        "path": "modules/org.jkiss.utils/src/main/java/org/jkiss/utils/AlphanumericComparator.java",
+        "lines": [43, 116]
+      },
+      "how_found": "Started in the dbeaver repo where the tree lives - DBNUtils, NavigatorResources and ResourceUtils all sort with AlphanumericComparator.getInstance() - but the class itself is not in dbeaver at all. It lives in dbeaver-common's org.jkiss.utils module: compare() walks both strings with CharBuffer windows, adjustBufferWindow groups each run of digits or non-digits and skips leading zeroes, and digit runs are compared by length first then lexically, which is what makes item2 sort before item10. It is a singleton with a compareIgnoreCase() variant, so yes, reusable.",
+      "rg_query": "comparator",
+      "why_asked": "Sort order bugs get filed against the UI, so you open the UI repo - but the shared utility repo is where the rule actually lives, and knowing that saves you from writing a second comparator."
+    },
+    {
+      "id": "q12",
+      "class": "cross-repo",
+      "text": "When CloudBeaver offers PostgreSQL in the connection dialog, where do the pre-filled port 5432 and the JDBC URL template come from?",
+      "truth": {
+        "repo": "dbeaver",
+        "path": "plugins/org.jkiss.dbeaver.ext.postgresql/plugin.xml",
+        "lines": [306, 340]
+      },
+      "how_found": "cloudbeaver/server/drivers/postgresql contains only a pom.xml that pulls jars, and there is no driver metadata anywhere in the cloudbeaver repo. The actual declaration is the <driver id=\"postgres-jdbc\"> element in the dbeaver repo's org.jkiss.dbeaver.ext.postgresql plugin.xml: defaultPort=\"5432\", sampleURL=\"jdbc:postgresql://{host}[:{port}]/[{database}]\", class=\"org.postgresql.Driver\", defaultDatabase/defaultUser postgres, plus the maven: <file> entries that resolve the jars.",
+      "rg_query": "5432",
+      "why_asked": "You are asked to change a driver default for the web product and would naturally look in the web product's repo, but every driver definition is inherited from the desktop repo's OSGi extensions."
+    }
+  ]
+}

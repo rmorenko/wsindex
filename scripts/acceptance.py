@@ -1,4 +1,15 @@
-"""Automated MVP acceptance: index a real corpus, grade fixed criteria, report.
+"""MVP smoke test: index one real corpus, grade ten fixed criteria, report.
+
+**This is not the relevance instrument.** It answers "did the whole thing
+run end to end on a real repository, on both backends, and did ten
+familiar queries still work" — a regression net, and a good one. It does
+not answer "does it find the right file", and the field trial of
+2026-09-11 showed the difference is enormous: four of the ten criteria
+below expect a path fragment sharing a stem with a word in the query,
+three are identifier lookups, and a match counts when a fragment appears
+anywhere in the top five. Ten of ten pass here while blind questions on
+twenty workspaces scored one in a hundred. `scripts/relevance.py` is the
+instrument for that; keep both, and do not read this one as the verdict.
 
 The criteria queries and their expected path fragments are fixed in code
 BEFORE any run — the antidote to confirmation bias. The script indexes the

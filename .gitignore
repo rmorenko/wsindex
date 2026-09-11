@@ -74,3 +74,6 @@ Thumbs.db
 .env.*
 !.env.example
 .claude/
+
+# Written by `poe relevance`; the questions are committed, the run is not.
+relevance_report.md

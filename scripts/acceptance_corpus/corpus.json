@@ -1,0 +1,202 @@
+{
+ "DatabaseCleaner": {
+  "tier": "routine",
+  "repos": [
+   {
+    "id": "database_cleaner",
+    "url": "https://github.com/DatabaseCleaner/database_cleaner.git",
+    "sha": "09b47d0"
+   },
+   {
+    "id": "database_cleaner-active_record",
+    "url": "https://github.com/DatabaseCleaner/database_cleaner-active_record.git",
+    "sha": "874dea9"
+   },
+   {
+    "id": "database_cleaner-sequel",
+    "url": "https://github.com/DatabaseCleaner/database_cleaner-sequel.git",
+    "sha": "abe3494"
+   }
+  ]
+ },
+ "orbitinghail": {
+  "tier": "routine",
+  "repos": [
+   {
+    "id": "graft",
+    "url": "https://github.com/orbitinghail/graft.git",
+    "sha": "b07d931"
+   },
+   {
+    "id": "splinter-rs",
+    "url": "https://github.com/orbitinghail/splinter-rs.git",
+    "sha": "a5e2171"
+   },
+   {
+    "id": "sqlite-plugin",
+    "url": "https://github.com/orbitinghail/sqlite-plugin.git",
+    "sha": "023ee14"
+   },
+   {
+    "id": "sqlsync",
+    "url": "https://github.com/orbitinghail/sqlsync.git",
+    "sha": "7dc1af6"
+   }
+  ]
+ },
+ "0no-co": {
+  "tier": "routine",
+  "repos": [
+   {
+    "id": "GraphQLSP",
+    "url": "https://github.com/0no-co/GraphQLSP.git",
+    "sha": "7a939c4"
+   },
+   {
+    "id": "gql.tada",
+    "url": "https://github.com/0no-co/gql.tada.git",
+    "sha": "b530869"
+   },
+   {
+    "id": "graphql-web-lite",
+    "url": "https://github.com/0no-co/graphql-web-lite.git",
+    "sha": "e8b88d7"
+   },
+   {
+    "id": "hoofd",
+    "url": "https://github.com/0no-co/hoofd.git",
+    "sha": "f949a2f"
+   },
+   {
+    "id": "reghex",
+    "url": "https://github.com/0no-co/reghex.git",
+    "sha": "3d64f0a"
+   },
+   {
+    "id": "wonka",
+    "url": "https://github.com/0no-co/wonka.git",
+    "sha": "9c28bb0"
+   }
+  ]
+ },
+ "caddyserver": {
+  "tier": "routine",
+  "repos": [
+   {
+    "id": "caddy",
+    "url": "https://github.com/caddyserver/caddy.git",
+    "sha": "425a3381"
+   },
+   {
+    "id": "caddy-docker",
+    "url": "https://github.com/caddyserver/caddy-docker.git",
+    "sha": "7035032"
+   },
+   {
+    "id": "certmagic",
+    "url": "https://github.com/caddyserver/certmagic.git",
+    "sha": "722bda8"
+   },
+   {
+    "id": "forwardproxy",
+    "url": "https://github.com/caddyserver/forwardproxy.git",
+    "sha": "0aab84d"
+   },
+   {
+    "id": "ingress",
+    "url": "https://github.com/caddyserver/ingress.git",
+    "sha": "0e3de1e"
+   },
+   {
+    "id": "xcaddy",
+    "url": "https://github.com/caddyserver/xcaddy.git",
+    "sha": "e0e8f68"
+   }
+  ]
+ },
+ "pow-auth": {
+  "tier": "routine",
+  "repos": [
+   {
+    "id": "assent",
+    "url": "https://github.com/pow-auth/assent.git",
+    "sha": "1707085"
+   },
+   {
+    "id": "pow",
+    "url": "https://github.com/pow-auth/pow.git",
+    "sha": "fe09223"
+   },
+   {
+    "id": "pow_assent",
+    "url": "https://github.com/pow-auth/pow_assent.git",
+    "sha": "9833bc4"
+   }
+  ]
+ },
+ "dbeaver": {
+  "tier": "full",
+  "repos": [
+   {
+    "id": "cloudbeaver",
+    "url": "https://github.com/dbeaver/cloudbeaver.git",
+    "sha": "bdc8413d5"
+   },
+   {
+    "id": "dbeaver",
+    "url": "https://github.com/dbeaver/dbeaver.git",
+    "sha": "106c8e4256"
+   },
+   {
+    "id": "dbeaver-common",
+    "url": "https://github.com/dbeaver/dbeaver-common.git",
+    "sha": "ff69b56"
+   },
+   {
+    "id": "dbvr",
+    "url": "https://github.com/dbeaver/dbvr.git",
+    "sha": "9a5c2c9"
+   },
+   {
+    "id": "team-edition-deploy",
+    "url": "https://github.com/dbeaver/team-edition-deploy.git",
+    "sha": "d4a05ad"
+   }
+  ]
+ },
+ "icsharpcode": {
+  "tier": "full",
+  "repos": [
+   {
+    "id": "AvalonEdit",
+    "url": "https://github.com/icsharpcode/AvalonEdit.git",
+    "sha": "ed0bd14"
+   },
+   {
+    "id": "CodeConverter",
+    "url": "https://github.com/icsharpcode/CodeConverter.git",
+    "sha": "26060772"
+   },
+   {
+    "id": "ILSpy",
+    "url": "https://github.com/icsharpcode/ILSpy.git",
+    "sha": "dbf23c6e4"
+   },
+   {
+    "id": "SharpZipLib",
+    "url": "https://github.com/icsharpcode/SharpZipLib.git",
+    "sha": "ff2d7c3"
+   },
+   {
+    "id": "WpfDesigner",
+    "url": "https://github.com/icsharpcode/WpfDesigner.git",
+    "sha": "88127f7"
+   },
+   {
+    "id": "ilspy-vscode",
+    "url": "https://github.com/icsharpcode/ilspy-vscode.git",
+    "sha": "e7a8949"
+   }
+  ]
+ }
+}

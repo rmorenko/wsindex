@@ -1,0 +1,161 @@
+{
+  "org": "pow-auth",
+  "questions": [
+    {
+      "id": "q1",
+      "class": "literal",
+      "text": "I keep seeing `pow_prevent_user_enumeration` set in conn.private in the guides and tests. What does it actually control?",
+      "truth": {
+        "repo": "pow",
+        "path": "lib/pow/plug.ex",
+        "lines": [212, 223]
+      },
+      "how_found": "Grepped the whole workspace for `pow_prevent_user_enumeration`; the extension READMEs and PowEmailConfirmation.Phoenix.ControllerCallbacks only mention it, the decision function `Pow.Plug.__prevent_user_enumeration__/2` is in pow/lib/pow/plug.ex:212-223. It returns false when the private key is explicitly false, otherwise true unless the changeset carries a unique-constraint error on :email (in which case it also returns true), so callers show the generic success message instead of 'has already been taken'.",
+      "rg_query": "pow_prevent_user_enumeration",
+      "why_asked": "A newcomer sees the flag in a controller test or a guide and has no idea whether flipping it is a security downgrade or just a test convenience."
+    },
+    {
+      "id": "q2",
+      "class": "literal",
+      "text": "What is the `:session_ttl_renewal` option, what is its default, and how does Pow decide a session is stale?",
+      "truth": {
+        "repo": "pow",
+        "path": "lib/pow/plug/session.ex",
+        "lines": [289, 296]
+      },
+      "how_found": "Grepped `session_ttl_renewal`. Docs at lib/pow/plug/session.ex:46-50 and 82-106, the module attribute `@session_ttl_renewal :timer.minutes(15)` at line 114, and the actual test `inserted_at + ttl < timestamp()` in `session_stale?/2,3` at lines 289-296. Setting it to nil disables renewal entirely; setting it to 0 regenerates the session id on every request.",
+      "rg_query": "session_ttl_renewal",
+      "why_asked": "Sessions silently rotating (and old ones being deleted) is the single most confusing Pow behaviour when you first debug a 'user got logged out' report."
+    },
+    {
+      "id": "q3",
+      "class": "literal",
+      "text": "Where does the error `Authorization request has expired` come from in the Telegram strategy, and how big is the window?",
+      "truth": {
+        "repo": "assent",
+        "path": "lib/assent/strategies/telegram.ex",
+        "lines": [174, 187]
+      },
+      "how_found": "Grepped the literal string. `verify_ttl/2` in assent/lib/assent/strategies/telegram.ex:174-187 reads the `auth_date` param and rejects it if `now - auth_date` exceeds `@auth_ttl_seconds`, defined as 60 at line 94. There is no config option to widen it.",
+      "rg_query": "Authorization request has expired",
+      "why_asked": "Telegram logins fail intermittently in staging and the message gives no hint that there is a hard-coded 60 second clock-skew budget."
+    },
+    {
+      "id": "q4",
+      "class": "literal",
+      "text": "What does setting `pow_assent_registration` to false in conn.private do to the provider callback?",
+      "truth": {
+        "repo": "pow_assent",
+        "path": "lib/pow_assent/plug.ex",
+        "lines": [169, 173]
+      },
+      "how_found": "Grepped `pow_assent_registration`. Documented at pow_assent/lib/pow_assent/plug.ex:89-92 and implemented in the `maybe_create_user/2` clause at lines 169-173: instead of creating a user it sets `pow_assent_callback_state` to `{:error, :create_user}` with a nil error. The value is derived automatically in AuthorizationController.set_registration_option/2 (lib/pow_assent/phoenix/controllers/authorization_controller.ex:190-206) by checking whether a registration route exists.",
+      "rg_query": "pow_assent_registration",
+      "why_asked": "Turning off self-service signup while keeping provider login for existing accounts is a very common first-week request, and this is the switch."
+    },
+    {
+      "id": "q5",
+      "class": "descriptive",
+      "text": "Could an outsider learn which e-mail addresses are already registered by clocking how quickly a doomed login gets refused?",
+      "truth": {
+        "repo": "pow",
+        "path": "lib/pow/ecto/context.ex",
+        "lines": [109, 115]
+      },
+      "how_found": "Read pow/lib/pow/ecto/context.ex. `authenticate/2` looks the row up, then pipes the result into `verify_password/3`; the nil clause at lines 109-115 builds a throwaway struct with a nil hash and still calls `user_mod.verify_password(user, \"\")` before returning nil, so the expensive pbkdf2 round runs either way and the two paths cost the same. The matching guard in lib/pow/ecto/schema/changeset.ex:224-228 does the same at the changeset level. Leak check: every 4+ letter word of the question (could, outsider, learn, which, mail, addresses, already, registered, clocking, quickly, doomed, login, gets, refused) is absent as a case-insensitive substring of the answer file.",
+      "rg_query": "rejected login quicker",
+      "why_asked": "It is the first thing a security-minded joiner wants to confirm about any auth library, and the code that guarantees it is deliberately invisible."
+    },
+    {
+      "id": "q6",
+      "class": "descriptive",
+      "text": "Why does hitting our login page sometimes bounce me straight off to Google instead of showing the form?",
+      "truth": {
+        "repo": "pow_assent",
+        "path": "lib/pow_assent/plug/reauthorization.ex",
+        "lines": [71, 97]
+      },
+      "how_found": "Read pow_assent/lib/pow_assent/plug/reauthorization.ex. `call/2` at lines 71-97 asks the handler whether this request qualifies, reads the `reauthorization_provider` cookie (lines 134-148, which also checks the name is a configured one), clears the cookie, calls `handler.reauthorize/3` and halts the pipeline. The cookie is written by `store_reauthorization_provider/3` (lines 99-101) as a create-session callback, with a 30 day max age from `@cookie_max_age` at line 45. Verified with grep that none of the content words (hitting, our, login, page, sometimes, bounce, me, straight, off, Google, instead, showing, form) appear in the file.",
+      "rg_query": "login page redirect",
+      "why_asked": "It looks like a bug the first time it happens to you, and nothing in the router or the session controller explains it."
+    },
+    {
+      "id": "q7",
+      "class": "descriptive",
+      "text": "Everybody gets kicked out to the sign-in screen on every deploy, and it got worse once we ran another box. Is that expected?",
+      "truth": {
+        "repo": "pow",
+        "path": "lib/pow/store/backend/ets_cache.ex",
+        "lines": [2, 18]
+      },
+      "how_found": "Traced the default backend: Pow.Plug.Base and the guides fall back to `Pow.Store.Backend.EtsCache`. Its moduledoc at pow/lib/pow/store/backend/ets_cache.ex:2-18 says outright that it is 'not recommended for production', that 'All data is stored in-memory', and that values are 'not shared between machines'; `init_table/0` at lines 151-153 simply calls `:ets.new/2` on boot, so nothing survives a restart. The fix is pow/lib/pow/store/backend/mnesia_cache.ex, which defaults to `disc_copies: [node()]` (line 410) and can join a cluster via `:extra_db_nodes`. Leak check: every 4+ letter word of the question (everybody, gets, kicked, sign, screen, every, deploy, worse, once, then ran, another, expected, that) is absent as a case-insensitive substring of the answer file.",
+      "rg_query": "kicked out every deploy",
+      "why_asked": "Losing every logged-in visitor on each deploy looks like a bug in your own code, and nothing names EtsCache as the culprit until you go looking for which backend is the default."
+    },
+    {
+      "id": "q8",
+      "class": "descriptive",
+      "text": "Some people mark their contact address private on their repository page, yet we always seem to wind up knowing it anyway. Why?",
+      "truth": {
+        "repo": "assent",
+        "path": "lib/assent/strategies/github.ex",
+        "lines": [51, 79]
+      },
+      "how_found": "Read assent/lib/assent/strategies/github.ex. `fetch_user/2` at lines 51-57 does the normal profile lookup and then makes a second authenticated request to `:user_emails_url` (default `/user/emails`, line 31); `get_primary_email/1` at lines 73-79 walks the returned list and takes the entry flagged primary, returning `{nil, false}` if there isn't one. The result is merged over the profile map at lines 65-69. No other strategy in the repo does an extra round trip like this. Leak check: every 4+ letter word of the question (some, people, mark, their, contact, address, private, repository, page, always, seem, wind, knowing, anyway) is absent as a case-insensitive substring of the answer file.",
+      "rg_query": "private contact address",
+      "why_asked": "Per-provider quirks decide whether your user_id field can ever be null, and this is the one provider that quietly does an extra round trip to avoid it."
+    },
+    {
+      "id": "q9",
+      "class": "descriptive",
+      "text": "What stops somebody detaching their last remaining external sign-in and locking themselves out?",
+      "truth": {
+        "repo": "pow_assent",
+        "path": "lib/pow_assent/ecto/user_identities/context.ex",
+        "lines": [249, 274]
+      },
+      "how_found": "Read pow_assent/lib/pow_assent/ecto/user_identities/context.ex. `delete/3` at lines 249-255 force-preloads the association and splits it; the guarded `maybe_delete/3` clause at 257-266 only runs the delete_all when something else is left over or a hash is already stored, otherwise the fallback at 267-274 returns `{:error, {:no_password, changeset}}`. The flash for that tuple is in lib/pow_assent/phoenix/controllers/authorization_controller.ex:160-164. Leak check: every 4+ letter word of the question (what, stops, somebody, detaching, their, last, remaining, external, sign, locking, themselves) is absent as a case-insensitive substring of the answer file.",
+      "rg_query": "detach last remaining sign-in",
+      "why_asked": "It is the obvious way to brick an account, and you want to know the guard exists before you write a custom unlink UI."
+    },
+    {
+      "id": "q10",
+      "class": "descriptive",
+      "text": "Why does a visitor who is already logged in keep seeing stale details after I edit their row straight in the database?",
+      "truth": {
+        "repo": "pow",
+        "path": "lib/pow/store/credentials_cache.ex",
+        "lines": [174, 197]
+      },
+      "how_found": "Read pow/lib/pow/store/credentials_cache.ex. `get/2` at lines 174-189 returns the struct that was snapshotted at sign-in time, and `maybe_reload/2` at lines 191-197 only goes back to the context when `:reload` is truthy - the default is false (documented at lines 45-47, with a `# TODO: By 1.1.0 set this to true` note). Turning it on also requires `:pow_config` in the store config or `fetch_pow_config!/1` at line 199 raises. Verified with grep that none of the content words (visitor, already, logged, keep, seeing, stale, details, edit, row, straight, database) appear in the file.",
+      "rg_query": "stale details database",
+      "why_asked": "Everyone hits this within the first week - you change a role or a flag, nothing happens, and you cannot tell whether it is caching, the plug, or your own code."
+    },
+    {
+      "id": "q11",
+      "class": "cross-repo",
+      "text": "Our provider callback occasionally dies with a CSRF error about the `state` param. Where is that comparison actually performed, and can it be turned off?",
+      "truth": {
+        "repo": "assent",
+        "path": "lib/assent/strategies/oauth2.ex",
+        "lines": [271, 285]
+      },
+      "how_found": "Started in pow_assent, which is where the callback route and the flash live (lib/pow_assent/phoenix/controllers/authorization_controller.ex) - it only passes `:session_params` through to the strategy (lib/pow_assent/plug.ex:200-211). The check itself is `verify_state/3` in assent/lib/assent/strategies/oauth2.ex:271-285: it is skipped when `:state` is configured as false, otherwise it compares the stored value against the returned param with `Assent.constant_time_compare/2` and raises `CallbackCSRFError` (assent/lib/assent.ex:37-47) on mismatch. The value is generated as 32 random URL-safe bytes at lines 187-201.",
+      "rg_query": "CSRF",
+      "why_asked": "The error surfaces in the PowAssent controller, so that is where you look - but nothing in pow_assent implements it, and you need to know whether an intermittent failure means a lost cookie or an attack."
+    },
+    {
+      "id": "q12",
+      "class": "cross-repo",
+      "text": "PowAssent keeps the OAuth session params in a signed `auth_session` cookie. What produces that signature, and why does it blow up saying the app secret is too short?",
+      "truth": {
+        "repo": "pow",
+        "path": "lib/pow/plug/message_verifier.ex",
+        "lines": [42, 56]
+      },
+      "how_found": "pow_assent/lib/pow_assent/plug.ex:435-570 defines `@cookie_key \"auth_session\"` and calls `Pow.Plug.sign_token/4` / `verify_token/4` with its own module name as the salt. Those delegate to a configurable `:message_verifier` (pow/lib/pow/plug.ex:225-267), defaulting to Pow.Plug.MessageVerifier. The raises live in pow/lib/pow/plug/message_verifier.ex:42-56: `\"No conn.secret_key_base set\"` for nil, and `\"conn.secret_key_base has to be at least 64 bytes\"` for anything shorter than 64 bytes; the derived key length can be tuned with `:key_generator_opts`.",
+      "rg_query": "auth_session",
+      "why_asked": "The cookie is a pow_assent feature, so that is the repo you open, but the signing rules and the 64-byte floor are enforced one repo over - and this fails on day one in a fresh test env with a short secret."
+    }
+  ]
+}

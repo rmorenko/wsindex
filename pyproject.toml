@@ -219,8 +219,12 @@ help = "Load the HTTP server and judge it against the SLO fixed in scripts/load.
 cmd = "python scripts/load.py"
 
 [tool.poe.tasks.acceptance]
-help = "Full MVP acceptance on a real corpus, writes acceptance_report.md"
+help = "Smoke test: ten criteria on one repo, both backends, writes acceptance_report.md"
 cmd = "python scripts/acceptance.py"
+
+[tool.poe.tasks.relevance]
+help = "Does it find the right file? Blind questions, pinned corpus, ripgrep control"
+cmd = "python scripts/relevance.py"
 
 [tool.poe.tasks.hooks]
 help = "Run pre-commit on all files"
