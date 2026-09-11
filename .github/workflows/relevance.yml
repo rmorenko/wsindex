@@ -1,0 +1,77 @@
+name: Relevance
+
+# Does it still find the right file? Separate from CI because it is the
+# only check that needs the network, a real embedding model and five
+# minutes — and separate is better than absent, which is what it was.
+#
+# It runs when the thing it measures could have changed, rather than on
+# every commit: the paths below are the ones between a question and an
+# answer. A tool you have to remember to run is a tool nobody runs.
+
+on:
+  pull_request:
+    paths:
+      - src/wsindex/pipeline.py
+      - src/wsindex/run.py
+      - src/wsindex/embed/**
+      - src/wsindex/store/**
+      - src/wsindex/rank/**
+      - src/wsindex/ingest/**
+      - src/wsindex/model.py
+      - scripts/relevance.py
+      - scripts/acceptance_corpus/**
+      - scripts/relevance_baseline.json
+  schedule:
+    # Weekly, because a model download or a hub change can break this
+    # without anybody touching the code.
+    - cron: 0 6 * * 1
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  relevance:
+    name: 60 blind questions against a pinned corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+          python-version: '3.12'
+
+      # The ml extra is the point here, unlike in CI: this measures a real
+      # model or it measures nothing.
+      - name: Install dependencies
+        run: uv sync --extra ast --extra ml
+
+      # ripgrep is the control. Without it the report says the control did
+      # not run rather than scoring wsindex against itself, but a run with
+      # no control is half a measurement, so install it.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Cache the pinned corpus and the model
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/wsindex-relevance
+            ~/.cache/huggingface
+          key: relevance-${{ hashFiles('scripts/acceptance_corpus/corpus.json') }}
+          restore-keys: relevance-
+
+      - name: Measure, and fail if any class answers fewer questions
+        run: uv run python scripts/relevance.py --check scripts/relevance_baseline.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relevance-report
+          path: relevance_report.md

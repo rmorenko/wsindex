@@ -31,6 +31,8 @@ control this becomes another way of grading wsindex against itself.
 Usage:
     uv run poe relevance          # routine tier, 60 questions
     uv run poe relevance --full   # adds dbeaver and icsharpcode, 84
+    uv run poe relevance -- --save scripts/relevance_baseline.json
+    uv run poe relevance -- --check scripts/relevance_baseline.json
 
 Environment:
     WSINDEX_RELEVANCE_DIR   corpus cache (default: ~/.cache/wsindex-relevance)
@@ -54,13 +56,19 @@ from pathlib import Path
 
 from wsindex.config import Config, Repository
 from wsindex.embed import SentenceTransformerEmbedder
-from wsindex.model import Kind, SearchFilter
+from wsindex.model import Hit, Kind, SearchFilter
 from wsindex.pipeline import Pipeline
 from wsindex.store import LanceDBStore
 
 HERE = Path(__file__).resolve().parent
 CORPUS = HERE / "acceptance_corpus"
 CACHE = Path(os.environ.get("WSINDEX_RELEVANCE_DIR", Path.home() / ".cache" / "wsindex-relevance"))
+
+Repo = dict[str, str]
+"""One pinned repository from `acceptance_corpus/corpus.json`."""
+
+Baseline = dict[str, object]
+"""A saved run: the model it used, the tier, and the counts per class."""
 
 DEFAULT_K = 10
 """What `wsindex search` gives a person who types nothing extra."""
@@ -126,7 +134,7 @@ def run_git(*args: str, cwd: Path | None = None) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
 
 
-def materialise(org: str, repos: list[dict]) -> Path:
+def materialise(org: str, repos: list[Repo]) -> Path:
     """Clone or update the workspace, every repo at its pinned sha."""
     root = CACHE / org
     root.mkdir(parents=True, exist_ok=True)
@@ -174,7 +182,7 @@ def control(root: Path, rg_query: str, truth: str) -> tuple[str, int]:
     return ("found" if len(files) <= DROWNED_AT else "drowned"), len(files)
 
 
-def rank_of(hits: list, truth: str) -> int | None:
+def rank_of(hits: list[Hit], truth: str) -> int | None:
     for index, hit in enumerate(hits, start=1):
         meta = hit.metadata
         if f"{meta.get('repo')}/{meta.get('path')}" == truth:
@@ -182,7 +190,7 @@ def rank_of(hits: list, truth: str) -> int | None:
     return None
 
 
-def build(org: str, repos: list[dict], root: Path) -> Pipeline:
+def build(org: str, repos: list[Repo], root: Path) -> Pipeline:
     """A pipeline over one freshly indexed workspace.
 
     Split from `grade` so a probe can reuse the wiring without copying
@@ -234,7 +242,7 @@ def build(org: str, repos: list[dict], root: Path) -> Pipeline:
     return Pipeline(store=store, config=config, state_dir=state)
 
 
-def grade(org: str, repos: list[dict]) -> Workspace:
+def grade(org: str, repos: list[Repo]) -> Workspace:
     """Index one workspace and put its frozen questions to both tools."""
     root = materialise(org, repos)
     questions = json.loads((CORPUS / f"{org}.json").read_text(encoding="utf-8"))["questions"]
@@ -335,12 +343,53 @@ def report_on(spaces: list[Workspace]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def counted(spaces: list[Workspace]) -> dict[str, int]:
+    """Answers found per class — the whole of what a baseline compares."""
+    found: dict[str, int] = {}
+    for space in spaces:
+        for graded in space.graded:
+            found[graded.klass] = found.get(graded.klass, 0) + graded.hit10
+            found[graded.klass + "@3"] = found.get(graded.klass + "@3", 0) + graded.hit3
+    return found
+
+
+def compare(now: dict[str, int], saved: Baseline) -> list[str]:
+    """Every class that answers fewer questions than the baseline did.
+
+    No tolerance band, unlike `scripts/bench.py`: that one measures time,
+    which is noisy, and this one measures which file came back, on a
+    corpus pinned to a sha with a fixed model. Repeated runs of it have
+    been identical. One answer fewer is a regression, not a fluctuation.
+    """
+    lines: list[str] = []
+    was_model = saved.get("model")
+    if was_model and was_model != Config().model:
+        # A different model is a different question, not a worse answer.
+        lines.append(
+            f"- **the baseline is from another model**: `{was_model}`, "
+            f"now `{Config().model}` — read the rest as trivia"
+        )
+    found = saved.get("found") or {}
+    assert isinstance(found, dict)
+    for klass, before in sorted(found.items()):
+        after = now.get(klass, 0)
+        if after < before:
+            lines.append(f"- **{klass}**: {before} -> {after}")
+    return lines
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--full",
         action="store_true",
         help="add the two large workspaces (84 questions instead of 60)",
+    )
+    parser.add_argument("--save", type=Path, help="Write these counts as a baseline")
+    parser.add_argument(
+        "--check",
+        type=Path,
+        help="Fail if any class answers fewer questions than the baseline",
     )
     args = parser.parse_args()
 
@@ -355,6 +404,32 @@ def main() -> int:
     text = report_on(spaces)
     Path("relevance_report.md").write_text(text, encoding="utf-8")
     print("\n" + text)
+
+    found = counted(spaces)
+    if args.save:
+        args.save.write_text(
+            json.dumps(
+                {"model": Config().model, "full": args.full, "found": found},
+                indent=1,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"baseline written to {args.save}")
+    if args.check:
+        saved = json.loads(args.check.read_text(encoding="utf-8"))
+        if saved.get("full") != args.full:
+            print(
+                f"\nbaseline is for {'--full' if saved.get('full') else 'the routine tier'}; "
+                "run the same tier to compare"
+            )
+            return 1
+        worse = compare(found, saved)
+        if worse:
+            print("\n## Fewer answers than the baseline\n\n" + "\n".join(worse))
+            return 1
+        print("\nNo class answers fewer questions than the baseline.")
     return 0
 
 
