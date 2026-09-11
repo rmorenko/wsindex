@@ -72,11 +72,12 @@ that does not work. The reason is identified — a general-purpose sentence
 model rather than a code-aware one — and it is fixable, but it is not
 fixed.
 
-**It is not finished software.** Three of the twenty workspaces could not
-be indexed at all: two crashed on a repository with more than ~17 900
-files, one on a twenty-year-old commit message containing a non-UTF-8
-character. Three more indexed almost nothing because their language is
-not supported, and reported success while doing it.
+**It is not finished software, though it is less unfinished than the
+trial found it.** Three of the twenty workspaces could not be indexed at
+all — two crashed on a repository with more than ~17 900 files, one on a
+twenty-year-old commit message containing a non-UTF-8 character — and
+three more indexed almost nothing while reporting success. All of that
+is fixed and tested. What is not fixed is the class of question below.
 
 **It does not support every language.** Sixteen languages get a real
 syntax tree. Elixir, Scala, Swift and Objective-C get nothing at all

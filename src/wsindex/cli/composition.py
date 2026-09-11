@@ -195,6 +195,9 @@ def build_store(config: Config) -> VectorStore:
                         config.model,
                         cache_folder=resolve_cache_dir() / "models",
                         dim=config.dim,
+                        query_prefix=config.query_prefix,
+                        trust_remote_code=config.trust_remote_code,
+                        max_seq=config.max_seq,
                     )
                 case Provider.FAKE:
                     embedder = FakeEmbedder(dim=config.dim)

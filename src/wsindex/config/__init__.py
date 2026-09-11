@@ -266,6 +266,40 @@ class Config:
         return int(self._data["embeddings"]["dim"])
 
     @property
+    def query_prefix(self) -> str:
+        """What this model wants in front of a question and not a passage.
+
+        Empty for the default model and for every symmetric one, which is
+        why it is optional. Asymmetric models document their own and lose
+        real accuracy without it — see `SentenceTransformerEmbedder`.
+        """
+        value = self._setting("embeddings", "query_prefix")
+        return str(value) if value is not None else ""
+
+    @property
+    def max_seq(self) -> int | None:
+        """Cap on the model's input window, or None for whatever it declares.
+
+        A memory setting, not a quality one: a model advertising 8192
+        tokens allocates for 8192, and one of them asked for a 96 GiB
+        buffer to encode chunks of a few hundred characters.
+        """
+        value = self._setting("embeddings", "max_seq")
+        return int(value) if value is not None else None
+
+    @property
+    def trust_remote_code(self) -> bool:
+        """Whether this model may run its own code from the hub.
+
+        Off unless a workspace says otherwise, and that is a deliberate
+        piece of friction rather than an oversight: executing code
+        downloaded from a model host sits badly beside a tool whose
+        premise is that nothing leaves the machine. Some code-specialized
+        models need it, so it is reachable — by a line somebody typed.
+        """
+        return bool(self._setting("embeddings", "trust_remote_code") or False)
+
+    @property
     def store_uri(self) -> str:
         """LanceDB location — a local path or an `s3://` uri.
 

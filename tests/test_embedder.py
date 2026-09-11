@@ -272,3 +272,25 @@ def test_a_model_of_the_wrong_width_says_both_numbers(monkeypatch: pytest.Monkey
 
     with pytest.raises(RuntimeError, match=r"768.*384"):
         embedder.embed(["x"])
+
+
+def test_a_question_and_a_passage_are_not_the_same_call() -> None:
+    # The contract used to say "a query is a batch of one", which is a
+    # claim about the model rather than a shortcut. For an asymmetric
+    # model the two vectors differ by the instruction the model was
+    # trained to see on the question side.
+    class Asymmetric(FakeEmbedder):
+        def embed_query(self, query: str) -> list[float]:
+            return self.embed(["QUERY: " + query])[0]
+
+    embedder = Asymmetric(dim=8)
+
+    assert embedder.embed_query("where do we retry") != embedder.embed(["where do we retry"])[0]
+
+
+def test_a_symmetric_embedder_is_untouched_by_the_new_contract() -> None:
+    # Every existing embedder must keep answering exactly as it did, or
+    # this change would silently rewrite what is already in a store.
+    embedder = FakeEmbedder(dim=8)
+
+    assert embedder.embed_query("anything") == embedder.embed(["anything"])[0]

@@ -34,6 +34,9 @@ Usage:
 
 Environment:
     WSINDEX_RELEVANCE_DIR   corpus cache (default: ~/.cache/wsindex-relevance)
+    WSINDEX_MODEL           model id to grade instead of the default
+    WSINDEX_QUERY_PREFIX    that model's query instruction, if it wants one
+    WSINDEX_TRUST_REMOTE    "1" to let that model run its own code
 """
 
 from __future__ import annotations
@@ -189,6 +192,27 @@ def build(org: str, repos: list[dict], root: Path) -> Pipeline:
     # `Config.default` replaces the process-wide instance, which is what a
     # script wants: it must never pick up a real workspace config.
     config = Config.default(f"relevance-{org}")
+    # Overridable so a model can be graded through the real configuration
+    # path rather than a spike's own wiring — the point of step 5 is that
+    # choosing a model is a config line, and this proves it is one.
+    if os.environ.get("WSINDEX_MODEL"):
+        # Reaching into the document rather than through a setter, and
+        # saying so: `Config` has no writer for these, because a workspace
+        # writes them once by hand. A measuring script is the one caller
+        # that wants to change them per run.
+        config._data["embeddings"].update(
+            {
+                "model": os.environ["WSINDEX_MODEL"],
+                "dim": int(os.environ.get("WSINDEX_DIM", "768")),
+                "query_prefix": os.environ.get("WSINDEX_QUERY_PREFIX", ""),
+                "trust_remote_code": os.environ.get("WSINDEX_TRUST_REMOTE") == "1",
+                **(
+                    {"max_seq": int(os.environ["WSINDEX_MAX_SEQ"])}
+                    if os.environ.get("WSINDEX_MAX_SEQ")
+                    else {}
+                ),
+            }
+        )
     for repo in repos:
         config.add_repo(Repository(id=repo["id"], path=str(root / repo["id"])))
     state = CACHE / ".index" / org
@@ -199,7 +223,13 @@ def build(org: str, repos: list[dict], root: Path) -> Pipeline:
     # whole point of step 4. A fake embedder would make this instrument
     # grade its own fixture, the failure mode it exists to catch.
     store = LanceDBStore(
-        uri=str(state / "data.lance"), embedder=SentenceTransformerEmbedder(config.model)
+        uri=str(state / "data.lance"),
+        embedder=SentenceTransformerEmbedder(
+            config.model,
+            query_prefix=config.query_prefix,
+            trust_remote_code=config.trust_remote_code,
+            max_seq=config.max_seq,
+        ),
     )
     return Pipeline(store=store, config=config, state_dir=state)
 

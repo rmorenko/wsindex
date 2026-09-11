@@ -43,9 +43,10 @@ class Embedder(ABC):
         """Dimensionality of produced vectors."""
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed a batch of texts.
+        """Embed a batch of passages — the things being searched.
 
-        A query is a batch of one: `embed([query])[0]`.
+        A question goes to `embed_query` instead, which is not the same
+        call for every model.
 
         Args:
             texts: Texts to embed; a bare string is rejected even though
@@ -65,6 +66,25 @@ class Embedder(ABC):
     @abstractmethod
     def _embed(self, texts: Sequence[str]) -> list[list[float]]:
         """Do the embedding; override this, input is already validated."""
+
+    def embed_query(self, query: str) -> list[float]:
+        """Embed a question, which is not the same as embedding a passage.
+
+        This used to be `embed([query])[0]`, and that was a claim rather
+        than a shortcut: it says a model encodes a question exactly as it
+        encodes the code being searched. Symmetric models do. **Most
+        retrieval models trained since do not** — they are trained on
+        (question, passage) pairs with an instruction on the question
+        side, and they lose real accuracy without it.
+
+        The step 4 spike of 2026-09-11 had to reach around this contract
+        with a mode flag to measure `bge-large` and `CodeRankEmbed`
+        fairly, which is how the gap was found. The default here keeps
+        every symmetric embedder exactly as it was — `FakeEmbedder` and
+        MiniLM are unchanged, byte for byte — and gives the asymmetric
+        ones somewhere to put the difference.
+        """
+        return self.embed([query])[0]
 
     def count_tokens(self, text: str) -> int:
         """How many tokens this text costs a caller with a budget.
@@ -114,7 +134,14 @@ class SentenceTransformerEmbedder(Embedder):
     """
 
     def __init__(
-        self, model_name: str, cache_folder: Path | None = None, dim: int | None = None
+        self,
+        model_name: str,
+        cache_folder: Path | None = None,
+        dim: int | None = None,
+        *,
+        query_prefix: str = "",
+        trust_remote_code: bool = False,
+        max_seq: int | None = None,
     ) -> None:
         """Prepare an embedder; the model itself loads on first use.
 
@@ -139,6 +166,28 @@ class SentenceTransformerEmbedder(Embedder):
                 keeps a command that never embeds from paying for a
                 model. The claim is checked against the real model the
                 first time it loads.
+            query_prefix: Put in front of a question and never in front
+                of a passage. Empty for a symmetric model, which is why
+                the default changes nothing. Asymmetric models document
+                their own — `bge` wants "Represent this sentence for
+                searching relevant passages: " and `CodeRankEmbed`
+                "Represent this query for searching relevant code: " —
+                and measurably underperform without it.
+            max_seq: Cap the model's input window, or None to accept
+                whatever it declares. Not a quality knob — a memory one.
+                A model advertising 8192 tokens will allocate for 8192
+                whether or not anything is that long, and `CodeRankEmbed`
+                asked this machine for a **96 GiB buffer** encoding
+                chunks of a few hundred characters. Nothing wsindex
+                produces needs that width: the text chunker caps a window
+                at 900 characters, roughly 256 tokens.
+            trust_remote_code: Let the model run its own modelling code
+                from the hub. Off by default and it should stay off for
+                anything shipped: a tool whose premise is that nothing
+                leaves the machine should not quietly execute code that
+                arrived from one. Two of the three code-specialized
+                models tried in step 4 also break on a transformers
+                upgrade precisely because they ship their own.
 
         Nothing is imported here either. Checking for the `ml` extra
         meant importing torch, which is 1.9 s — paid by `compact`, which
@@ -149,6 +198,9 @@ class SentenceTransformerEmbedder(Embedder):
         self._model_name = model_name
         self._cache_folder = cache_folder
         self._declared_dim = dim
+        self._query_prefix = query_prefix
+        self._trust_remote_code = trust_remote_code
+        self._max_seq = max_seq
         self._loaded: Any = None
 
     def _model(self) -> Any:
@@ -176,6 +228,8 @@ class SentenceTransformerEmbedder(Embedder):
             ) from exc
 
         kwargs: dict[str, Any] = {}
+        if self._trust_remote_code:
+            kwargs["trust_remote_code"] = True
         if self._cache_folder is not None:
             self._cache_folder.mkdir(parents=True, exist_ok=True)
             kwargs["cache_folder"] = str(self._cache_folder)
@@ -183,6 +237,9 @@ class SentenceTransformerEmbedder(Embedder):
             self._loaded = SentenceTransformer(self._model_name, local_files_only=True, **kwargs)
         except Exception:
             self._loaded = SentenceTransformer(self._model_name, **kwargs)
+
+        if self._max_seq is not None:
+            self._loaded.max_seq_length = self._max_seq
 
         actual: int | None = self._loaded.get_embedding_dimension()
         if actual is None:
@@ -206,6 +263,10 @@ class SentenceTransformerEmbedder(Embedder):
     def count_tokens(self, text: str) -> int:
         """Exactly what the model will read, since this one has its tokeniser."""
         return len(self._model().tokenizer.encode(text, add_special_tokens=False))
+
+    def embed_query(self, query: str) -> list[float]:
+        """Embed a question, with whatever instruction this model wants on it."""
+        return self.embed([self._query_prefix + query])[0]
 
     def _embed(self, texts: Sequence[str]) -> list[list[float]]:
         vectors = self._model().encode(

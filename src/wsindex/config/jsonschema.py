@@ -126,6 +126,30 @@ def _embeddings() -> dict[str, Any]:
                 "description": "Vector width; must match what the model produces.",
             },
             "provider": {"type": "string", "enum": _enum(Provider)},
+            "query_prefix": {
+                "type": "string",
+                "description": (
+                    "Instruction put in front of a question and never in front of a "
+                    "passage. Empty for symmetric models; asymmetric ones document "
+                    "their own and underperform without it."
+                ),
+            },
+            "max_seq": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Cap the model's input window. A memory setting: a model "
+                    "advertising 8192 tokens allocates for 8192 even when nothing "
+                    "is that long."
+                ),
+            },
+            "trust_remote_code": {
+                "type": "boolean",
+                "description": (
+                    "Let the model run its own code from the hub. Off by default, "
+                    "on purpose: this tool's premise is that nothing leaves the machine."
+                ),
+            },
         },
         required=["model", "dim", "provider"],
     )

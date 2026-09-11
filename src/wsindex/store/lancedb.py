@@ -314,7 +314,10 @@ class LanceDBStore(VectorStore):
         memo = self._query_memo
         if memo is not None and memo[0] == query:
             return memo[1]
-        vector: list[float] = self.embedder.embed([query])[0]
+        # `embed_query`, not `embed([query])[0]`: for an asymmetric model
+        # those are different vectors, and the difference is the model's
+        # own instruction on the question side.
+        vector: list[float] = self.embedder.embed_query(query)
         self._query_memo = (query, vector)
         return vector
 

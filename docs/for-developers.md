@@ -53,17 +53,24 @@ need is real. But today wsindex does not fill it. The model underneath is
 `all-MiniLM-L6-v2`, a general-purpose sentence model, and it does not
 cross from English to code.
 
-**Two defaults will cost you answers.** Out of the box, `wsindex search`
-returns ten hits and includes commit messages. On a small repository with
-a long history the index can be 89% commit messages, and they crowd out
-the code — in one measured case the top ten hits for a constant were all
-commits, scored within 0.005 of each other. Searching with
+**A deeper list still pays.** History no longer floods the results —
+commit messages are capped at a fifth of any list, which is what took
+descriptive answers from 0 to 4 of 30 and identifier answers from 3 to 5
+in the top three. What the cap cannot do is make the list longer, and a
+fifth of the answers sit at ranks 10 to 50. Searching with
 
 ```console
 $ wsindex search "your question" -k 50 --kind code --kind doc
 ```
 
-found **28** of those 102 answers instead of 5. Make that your habit.
+still finds roughly a third of the descriptive answers against the
+default's one in seven. Worth the habit.
+
+**There is a second model, and it is a trade.** `CodeRankEmbed` lifts
+identifier answers from 9 of 20 to 13, and from 1 to 4 at rank one — and
+drops descriptive from 4 to 2. If what you do is find where things live,
+it is the better choice; see the README for the four config lines it
+needs and the reasons each one exists.
 
 **If your language is not in the table, you get an empty index and no
 warning.** Elixir and Scala have no entry, so those files are not chunked
@@ -72,11 +79,13 @@ as text — they are skipped. One workspace indexed 30 files out of 417 and
 source file before you trust an index; if it says *no language claims this
 suffix*, add a `formats` entry for the repo and re-index.
 
-**Two crashes are waiting in real repositories.** A repository with more
-than about 17 900 files ends the run with `OverflowError`. A single commit
-message containing a non-UTF-8 byte — a name like *Würkner* written in
-1996 — ends it with `UnicodeEncodeError`. Three of the twenty workspaces
-hit one of these.
+**Two crashes used to be waiting in real repositories, and are fixed.**
+A repository with more than about 17 900 files ended the run with
+`OverflowError`; a single commit message carrying a non-UTF-8 byte — a
+name like *Würkner* written in 1996 — ended it with
+`UnicodeEncodeError`. Three of the twenty trial workspaces hit one of
+them. Both now have a test pinning the exact mechanism, and an index run
+that skips a whole language says so instead of reporting `files: 30`.
 
 ## Is it worth your twenty minutes
 

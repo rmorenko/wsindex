@@ -3,13 +3,26 @@
 [![CI](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml/badge.svg)](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Frmorenko%2Fwsindex%2Fbadges%2Fcoverage.json)](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml)
 
-**WSIndex** is a CLI that semantically indexes a developer workspace — multiple
-repositories at once — and answers natural-language questions with exact
+**WSIndex** is a CLI that indexes a developer workspace — several
+repositories at once — and finds where things live, with exact
 `file:line` locations. Code (Python, JavaScript/JSX, TypeScript/TSX, Java,
 C, C++, C#, Go, Rust, Kotlin, PHP, Ruby), front-end components (Vue,
 Svelte, Angular templates) and configs (TOML, YAML, JSON, XML, Dockerfile)
-are chunked by their syntax trees, docs by headers; every chunk is embedded
-and searched by meaning, not by keywords.
+are chunked by their syntax trees, docs by headers; every chunk is
+embedded, and results are ranked rather than listed. Everything runs on
+your machine.
+
+**It is a ranked search, not a question-answering system, and that
+sentence is measured.** This README used to promise "natural-language
+questions", and a [field trial on twenty real
+workspaces](docs/field-trial.md) showed the promise was not kept: of 102
+questions phrased the way a person thinks — deliberately using none of
+the words in the answer file — it put one in the top three. `ripgrep`
+found none of those 102, so the need is real and nothing here meets it
+yet. What it does do, on the same corpus, is beat grep where grep drowns:
+on an 11 786-file Java codebase it put four of four identifier answers in
+the top three, against ripgrep finding one and burying two in lists of
+over twenty files. The bigger the workspace, the more that is worth.
 
 ## Quickstart
 
@@ -100,6 +113,74 @@ corpus rather than in the abstract:
 The threshold for revisiting either is a real recall failure: a query
 whose answer never reaches the candidate set at all. Re-ranking cannot
 help there, and neither can any amount of it.
+
+## Choosing the model
+
+The default is `all-MiniLM-L6-v2`: 23M parameters, 384 dimensions, a
+256-token window, no extra dependencies and nothing downloaded that runs
+its own code. Eight candidates were graded against it on the sixty blind
+questions of `poe relevance`, and the result is a trade rather than a
+ladder — hit@10 out of 20 identifier / 30 descriptive / 10 cross-repo
+questions:
+
+| Model                          | Params | Identifier | Descriptive | Cross-repo | Index |
+| ------------------------------ | -----: | ---------: | ----------: | ---------: | ----: |
+| **all-MiniLM-L6-v2** (default) |    23M |          9 |           4 |          4 |  29 s |
+| st-codesearch-distilroberta    |    82M |          9 |       **6** |          2 |  51 s |
+| all-mpnet-base-v2              |   109M |          8 |           3 |          3 | 181 s |
+| gte-base                       |   109M |          9 |           1 |          1 | 137 s |
+| gte-modernbert-base (8192)     |   149M |          8 |           5 |          2 | 807 s |
+| bge-large-en-v1.5              |   335M |         11 |           1 |          3 | 488 s |
+| **CodeRankEmbed**              |   137M |     **13** |           2 |          3 | 249 s |
+
+Three things in that table are worth more than the winner.
+
+**Bigger is not better.** `mpnet` and `gte-base`, both five times the
+default's size, are worse than it at everything that matters.
+
+**A long context buys nothing here.** `gte-modernbert` reads 8192 tokens
+against MiniLM's 256 and gains one descriptive answer for 28 times the
+indexing cost — so truncation is not what the misses are made of.
+
+**Code-specialized models buy identifiers, not descriptions.**
+`CodeRankEmbed` lifts identifier answers from 9 to 13 and from 1 to 4 at
+rank one, while dropping descriptive from 4 to 2. That is the class this
+tool actually serves, so it is worth having; it is not the class the old
+README promised.
+
+To use it, and this is the whole change:
+
+```toml
+[embeddings]
+model = "nomic-ai/CodeRankEmbed"
+dim = 768
+provider = "sentence-transformers"
+query_prefix = "Represent this query for searching relevant code: "
+trust_remote_code = true
+max_seq = 512
+```
+
+Four of those lines exist because of what this model needs, and each is
+worth understanding before turning it on:
+
+- `query_prefix` is put in front of a question and never in front of a
+  passage. **Most retrieval models trained recently are asymmetric** and
+  lose real accuracy without their own instruction; `embed([query])[0]`
+  was a claim about the model, not a shortcut, and the contract now says
+  so.
+- `trust_remote_code` lets the model run code it brought from the hub.
+  Off by default and it should stay off wherever you can help it: a tool
+  whose premise is that nothing leaves the machine should not quietly
+  execute what arrived from one. It is also fragile — two of the three
+  genuinely code-specialized models tried are broken by a transformers
+  upgrade right now, for exactly this reason.
+- `max_seq` is memory, not quality. This model advertises 8192 tokens and
+  will allocate for 8192; on a laptop that meant a **96 GiB buffer** to
+  encode chunks of a few hundred characters.
+- It needs `einops` installed, which the `ml` extra does not pull in.
+
+Re-indexing is required after any of this changes, and the index doubles
+in size with the dimension.
 
 ## Marking up a repository
 

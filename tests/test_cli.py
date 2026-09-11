@@ -170,12 +170,21 @@ def test_st_provider_builds_st_embedder(workspace: Path, monkeypatch: pytest.Mon
         # Same constructor signature as the real class; dim must match
         # config.dim (384) or the composition-root guard rejects it.
         def __init__(
-            self, model_name: str, cache_folder: Path | None = None, dim: int | None = None
+            self,
+            model_name: str,
+            cache_folder: Path | None = None,
+            dim: int | None = None,
+            *,
+            query_prefix: str = "",
+            trust_remote_code: bool = False,
+            max_seq: int | None = None,
         ) -> None:
             super().__init__(dim=dim or 384)
             captured["model"] = model_name
             captured["cache_folder"] = cache_folder
             captured["dim"] = dim
+            captured["query_prefix"] = query_prefix
+            captured["trust_remote_code"] = trust_remote_code
 
     # Patch where the name is looked up: cli.py imported its own reference.
     monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", StubST)
@@ -206,7 +215,14 @@ def test_the_workspace_width_reaches_the_embedder(
 
     class StubST(FakeEmbedder):
         def __init__(
-            self, model_name: str, cache_folder: Path | None = None, dim: int | None = None
+            self,
+            model_name: str,
+            cache_folder: Path | None = None,
+            dim: int | None = None,
+            *,
+            query_prefix: str = "",
+            trust_remote_code: bool = False,
+            max_seq: int | None = None,
         ) -> None:
             super().__init__(dim=dim or 384)
             captured["dim"] = dim
@@ -1154,3 +1170,77 @@ def test_every_module_is_named_in_the_architecture_document() -> None:
     }
 
     assert not missing, f"not in the component list: {sorted(missing)}"
+
+
+def test_an_asymmetric_model_gets_its_query_prefix_from_the_config(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `embed([query])[0]` was a claim, not a shortcut: it said a model
+    # encodes a question exactly as it encodes the code being searched.
+    # Most retrieval models trained since do not, and the step 4 spike
+    # had to reach around the contract to measure them fairly. The
+    # workspace now says what its model wants, and it has to arrive.
+    captured: dict[str, object] = {}
+
+    class StubST(FakeEmbedder):
+        def __init__(
+            self,
+            model_name: str,
+            cache_folder: Path | None = None,
+            dim: int | None = None,
+            *,
+            query_prefix: str = "",
+            trust_remote_code: bool = False,
+            max_seq: int | None = None,
+        ) -> None:
+            super().__init__(dim=dim or 384)
+            captured["query_prefix"] = query_prefix
+            captured["trust_remote_code"] = trust_remote_code
+
+    monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", StubST)
+    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+    config_file = workspace / "wsindex.toml"
+    config_file.write_text(
+        config_file.read_text().replace(
+            'provider = "sentence-transformers"',
+            'provider = "sentence-transformers"\n'
+            'query_prefix = "Represent this query for searching relevant code: "\n'
+            "trust_remote_code = true",
+        )
+    )
+
+    assert runner.invoke(app, ["index"]).exit_code == 0
+    assert captured["query_prefix"] == "Represent this query for searching relevant code: "
+    assert captured["trust_remote_code"] is True
+
+
+def test_a_workspace_that_says_nothing_gets_the_symmetric_default(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other half: the default model is symmetric, so every existing
+    # config must keep behaving exactly as it did.
+    captured: dict[str, object] = {}
+
+    class StubST(FakeEmbedder):
+        def __init__(
+            self,
+            model_name: str,
+            cache_folder: Path | None = None,
+            dim: int | None = None,
+            *,
+            query_prefix: str = "",
+            trust_remote_code: bool = False,
+            max_seq: int | None = None,
+        ) -> None:
+            super().__init__(dim=dim or 384)
+            captured["query_prefix"] = query_prefix
+            captured["trust_remote_code"] = trust_remote_code
+
+    monkeypatch.setattr("wsindex.cli.composition.SentenceTransformerEmbedder", StubST)
+    runner.invoke(app, ["init", "ws"])
+    runner.invoke(app, ["add-repo", "repo1", str(workspace / "repo1")])
+
+    assert runner.invoke(app, ["index"]).exit_code == 0
+    assert captured["query_prefix"] == ""
+    assert captured["trust_remote_code"] is False
