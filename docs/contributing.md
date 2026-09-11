@@ -51,6 +51,13 @@ by, and for the same reason. If a change makes the numbers better, move
 the baseline with `--save` and say so in the commit message. If it makes
 them worse, that is the finding.
 
+Two tiers. A pull request gets the routine one — 60 questions, five
+minutes — and the weekly run adds `dbeaver` and `icsharpcode` against
+`scripts/relevance_baseline_full.json`. Those two are the large codebases
+where this beats grep outright (on dbeaver, 6 of 12 answers in the top
+three against ripgrep's 1 of 12), so they are the half most worth
+guarding and the half too slow to guard on every push.
+
 CI runs this automatically on any pull request touching the pipeline, the
 store, the embedders, the ranker, the chunkers or the corpus itself — the
 paths between a question and an answer. `poe acceptance` is a different

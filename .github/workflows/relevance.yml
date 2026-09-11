@@ -21,6 +21,7 @@ on:
       - scripts/relevance.py
       - scripts/acceptance_corpus/**
       - scripts/relevance_baseline.json
+      - scripts/relevance_baseline_full.json
   schedule:
     # Weekly, because a model download or a hub change can break this
     # without anybody touching the code.
@@ -66,8 +67,18 @@ jobs:
           key: relevance-${{ hashFiles('scripts/acceptance_corpus/corpus.json') }}
           restore-keys: relevance-
 
+      # Two tiers, split by what each is for. A pull request gets the
+      # fast one, 60 questions in five minutes. The weekly run adds
+      # dbeaver and icsharpcode — the large codebases where this tool
+      # actually beats grep, and therefore the half most worth guarding.
       - name: Measure, and fail if any class answers fewer questions
-        run: uv run python scripts/relevance.py --check scripts/relevance_baseline.json
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            uv run python scripts/relevance.py --full \
+              --check scripts/relevance_baseline_full.json
+          else
+            uv run python scripts/relevance.py --check scripts/relevance_baseline.json
+          fi
 
       - name: Keep the report
         if: always()
