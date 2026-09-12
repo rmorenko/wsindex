@@ -79,12 +79,15 @@ def refs(name: str) -> None:
 
     The inverted index over the links `index` recorded. Ask it about a
     port and it answers who reads it and who publishes it; about a
-    ticket, which commits mention it.
+    ticket, which commits mention it; about a function, where it is
+    defined and which files name it.
 
-    Not "who calls this function": code-to-code edges are deferred until
-    they can be shown to pay for their noise (ADR-9 measured 11% of
-    resolvable call names as ambiguous), so a function name has no
-    callers to list yet — only its definition.
+    That last one is not "who calls this": a name in a comment or a
+    string counts, and nothing resolves which definition a use refers to.
+    Code-to-code *call* edges remain deferred until they can be shown to
+    pay for their noise (ADR-9 measured 11% of resolvable call names as
+    ambiguous). What is here is the cheaper claim — this name occurs
+    here — which is a search result rather than a call graph.
     """
     config = config_or_default()
     require_config_file(config)

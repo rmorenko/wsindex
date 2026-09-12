@@ -22,6 +22,7 @@ import pytest
 from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.links import Link, LinkKind, LinkStore
+from wsindex.model import Chunk, Kind
 from wsindex.pipeline import Pipeline
 from wsindex.store import LanceDBStore
 
@@ -318,6 +319,88 @@ def test_a_port_key_in_a_config_is_a_declaration() -> None:
         text="server:\n  port: 8000\n",
     )
     assert [(link.kind, link.name) for link in links_for([cfg])] == [(LinkKind.DECLARES, "8000")]
+
+
+# --- the name pair -------------------------------------------------------
+
+
+def code(text: str, *, symbol: str | None = None, path: str = "a.go", line: int = 1) -> Chunk:
+    return Chunk(
+        repo="r",
+        path=path,
+        lang="go",
+        kind=Kind.CODE,
+        symbol=symbol,
+        node_type=None,
+        start_line=line,
+        end_line=line,
+        text=text,
+    )
+
+
+def test_a_definition_and_a_use_of_the_same_name_meet(links: LinkStore) -> None:
+    # The join this pair exists for, and the thing the config pair could
+    # almost never do: across five workspaces exactly three names of
+    # 6 896 had both a READS_KEY and a DECLARES. Both sides are stored
+    # unresolved, because the extractor sees one file and the definition
+    # is usually in another repository entirely.
+    from wsindex.ingest.link_extract import links_for
+
+    definition = links_for([code("func ServeHTTP() {}", symbol="ServeHTTP")])
+    use = links_for([code("h.ServeHTTP(w, r)", path="b.go")])
+    links.add_links(definition, repo="r", path="a.go")
+    links.add_links(use, repo="r", path="b.go")
+
+    found = {(edge.kind, edge.path) for edge in links.by_name("ServeHTTP")}
+    assert found == {(LinkKind.DEFINES, "a.go"), (LinkKind.MENTIONS, "b.go")}
+
+
+def test_a_chunk_does_not_mention_the_name_it_defines() -> None:
+    # Otherwise every definition answers its own query and `refs` reports
+    # the definition twice, once under each label.
+    from wsindex.ingest.link_extract import links_for
+
+    found = links_for([code("func ServeHTTP() {\n  return ServeHTTP\n}", symbol="ServeHTTP")])
+
+    assert [edge.kind for edge in found] == [LinkKind.DEFINES]
+
+
+def test_a_keyword_is_not_a_name_worth_an_edge() -> None:
+    # The filter that makes this affordable, and it is a measured choice
+    # rather than taste. Storing every token of four characters or more
+    # kept all 810 of caddyserver's cross-file names but cost 186 100
+    # edges — nineteen per chunk, 1.9M rows on a 100k-chunk workspace.
+    # Requiring an internal word boundary keeps 664 of the 810 for
+    # 31 839 edges, and it needs no per-language stop-list precisely
+    # because keywords are single lowercase words in all sixteen
+    # grammars.
+    from wsindex.ingest.link_extract import links_for
+
+    found = links_for([code("return errors.New(string(value))\nreadConfig()\n")])
+
+    assert [edge.name for edge in found] == ["readConfig"]
+
+
+def test_a_name_is_recorded_once_at_its_first_line() -> None:
+    # A variable used nine times inside its own function is one fact, not
+    # nine, and the nine tell a reader nothing they cannot see once the
+    # file is open.
+    from wsindex.ingest.link_extract import links_for
+
+    found = links_for([code("x := maxRetries\ny := maxRetries\n", line=40)])
+
+    assert [(edge.name, edge.line) for edge in found] == [("maxRetries", 40)]
+
+
+def test_a_method_is_stored_under_its_bare_name() -> None:
+    # The store holds `Cls.method` for `search --symbol`, but a call site
+    # spells it `method`, and a qualified name here would join with
+    # nothing.
+    from wsindex.ingest.link_extract import links_for
+
+    found = links_for([code("def run_once(self): pass", symbol="Scheduler.run_once")])
+
+    assert [(edge.kind, edge.name) for edge in found] == [(LinkKind.DEFINES, "run_once")]
 
 
 def test_a_database_from_before_a_column_existed_still_reads(tmp_path: Path) -> None:

@@ -126,6 +126,25 @@ noise before any judgement about the idea was possible.
    ranked list rather than a claim. It must never be the input to
    anything that looks like a fact.
 
+   *(Shipped 2026-09-12, and the ambiguity problem is sidestepped
+   rather than solved. `DEFINES`/`MENTIONS` claims only that a name
+   occurs in a place — which is never a guess — instead of claiming
+   which definition a use refers to, which is what the 11% was about.
+   A call graph is still deferred.*
+
+   *Two things were measured before writing it. The pair's value: 1 090
+   names in caddyserver have a definition in one file and a mention in
+   another, against **three** names across five workspaces for the
+   config pair, because `links_for` had never read `chunk.symbol` and so
+   a vocabulary of nine was the ceiling of what four regexes caught. The
+   pair's cost: the extractor sees one file and cannot know the symbol
+   table, so the filter has to be decidable from a token alone. Storing
+   every token of four characters or more kept all of the value and cost
+   186 100 edges — nineteen per chunk, 1.9M rows on a 100k-chunk
+   workspace. Requiring an internal word boundary keeps 82% for 31 839,
+   and needs no per-language stop-list because every keyword in all
+   sixteen grammars is a single lowercase word. The second was chosen.)*
+
 1. **BLAMED_BY is worth building** — exam 2 answered a real design
    question from data already on disk. It depends on commits being a
    corpus (step 27), so it follows that step rather than leading it.

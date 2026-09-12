@@ -87,9 +87,27 @@ accept."""
 class LinkKind(StrEnum):
     """What one link asserts.
 
-    Only the two the spike measured at zero false alarms are here.
-    ADR-9 lists more (CALLS, IMPORTS, READS_ENV, BLAMED_BY,
-    EXPLAINED_IN); each arrives with the evidence that it pays.
+    Six, and they are not equally useful — measured on the pinned corpus
+    rather than assumed. In a 569-file infrastructure workspace:
+    `BLAMED_BY` 15 086 edges, `REFERENCES` 1 384, `READS_KEY` 170 and
+    **`DECLARES` 9**. Since `refs` answers only where a name has both a
+    `READS_KEY` and a `DECLARES`, that ceiling is nine — and across five
+    workspaces exactly three names of 6 896 had both. `why`, which walks
+    `BLAMED_BY`, answered 40 of the 40 commonest symbols.
+
+    The two halves had opposite verdicts, and the reason was where each
+    came from: blame is given by git, while the config pair is found by
+    four regular expressions over chunk *text*. `links_for` never looked
+    at `chunk.symbol` — the name the syntax tree already extracted and
+    the store already held — so a vocabulary of nine was the ceiling of
+    what four regexes happened to catch, not of what was known.
+
+    `DEFINES`/`MENTIONS` is that omission repaired, and it is a repair
+    rather than the `CALLS` edge ADR-9 defers: a mention is not a
+    resolved call, and this claims only what it can see. Measured on
+    caddyserver, 9 741 chunks: 810 names defined in one file and named in
+    another, against **three** for the config pair across five
+    workspaces.
     """
 
     READS_KEY = "reads_key"
@@ -97,6 +115,18 @@ class LinkKind(StrEnum):
 
     DECLARES = "declares"
     """A configuration publishes a value code may name."""
+
+    DEFINES = "defines"
+    """A chunk is the definition of a symbol — the name the syntax tree
+    gave it. One per chunk that has one, so this side is nearly free."""
+
+    MENTIONS = "mentions"
+    """A chunk names a symbol it does not define. Unresolved on purpose:
+    the extractor sees one file and cannot know whose definition this is,
+    so both ends are stored as names and meet in `by_name`, exactly as
+    the config pair does. Deliberately *not* a call graph — a name in a
+    comment counts, which is a feature for search and would be a lie in
+    a call graph."""
 
     REFERENCES = "references"
     """A commit message or document points at something outside the
@@ -112,6 +142,8 @@ class LinkKind(StrEnum):
 KIND_LABELS: dict[LinkKind, str] = {
     LinkKind.READS_KEY: "read by",
     LinkKind.DECLARES: "declared by",
+    LinkKind.DEFINES: "defined in",
+    LinkKind.MENTIONS: "named in",
     LinkKind.REFERENCES: "mentioned in",
     LinkKind.BLAMED_BY: "wrote",
 }
