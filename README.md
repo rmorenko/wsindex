@@ -550,7 +550,7 @@ LanceDBStore.add_chunks  self/src/wsindex/store/lancedb.py:171-209
 ```
 
 `refs` is the inverted index over links: ask about a port, a ticket, a
-commit or a url, and it answers who names it.
+commit, a url or a function, and it answers who names it.
 
 ```
 $ uv run wsindex refs 8080
@@ -558,12 +558,30 @@ $ uv run wsindex refs 8080
   read by:
     svc/client.py:1
   (nothing declares it — code and configuration have drifted)
+
+$ uv run wsindex refs provisionContext
+provisionContext
+  defined in:
+    caddy/caddy.go:479
+  named in:
+    caddy/caddy.go:420
+    caddy/caddy.go:352
 ```
 
-Not "who calls this function": code-to-code edges are deferred until they
-can be shown to pay for their noise — 11% of resolvable call names in
-this repository are ambiguous — so a function name has no callers to
-list yet. See [ADR-9](docs/adr/adr-009-links-as-entities.md).
+The last one is not "who calls this function". A name in a comment or a
+string counts, and nothing resolves *which* definition a use refers to —
+11% of resolvable call names in this repository are ambiguous, so a call
+graph is still deferred. What is here is the cheaper claim, this name
+occurs here, which is a search result rather than a fact about calls.
+
+That distinction is what made it affordable. The extractor sees one file
+at a time and cannot know the workspace's symbol table, so a token earns
+an edge only if it carries an internal word boundary — `ServeHTTP`,
+`read_config`. Storing every token instead would have kept 18% more
+links at six times the rows. On caddyserver 1 090 names have a definition
+in one file and a mention in another; before this, across five
+workspaces, three names had both sides of any link.
+See [ADR-9](docs/adr/adr-009-links-as-entities.md).
 
 ## Commits are part of the corpus
 

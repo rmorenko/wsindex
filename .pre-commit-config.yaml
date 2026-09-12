@@ -1,10 +1,19 @@
 # See https://pre-commit.com for more information.
 # Run against all files: `uv run pre-commit run --all-files`.
 repos:
+  # Kept equal to the floor in pyproject's dev dependencies on purpose.
+  # They drifted — the hook pinned 0.6.9 while the project required
+  # >=0.16 — and two formatters with different ideas about the same file
+  # rewrite each other's work: `poe fmt` reflowed an assert message, the
+  # hook put it back, and every commit touching that file did it again.
+  # CI lints with the project's ruff, so the hook was also the weaker of
+  # the two checks.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.0
     hooks:
-      - id: ruff
+      # `ruff-check` rather than `ruff`: the latter still works and
+      # announces itself as a legacy alias every run.
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 

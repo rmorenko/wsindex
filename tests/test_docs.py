@@ -68,6 +68,6 @@ def test_a_translation_keeps_the_shape_of_its_original(english: Path, russian: P
     other is a fact about the file, and it is the shape a document loses
     first.
     """
-    assert skeleton(russian) == skeleton(
-        english
-    ), f"{russian} and {english} no longer describe the same document"
+    assert skeleton(russian) == skeleton(english), (
+        f"{russian} and {english} no longer describe the same document"
+    )

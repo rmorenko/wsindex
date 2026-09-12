@@ -207,6 +207,13 @@ to read a workspace rather than one project's layout and one repository;
 the two crashes and the silent skipping were fixed with tests that pin
 the mechanism. The questions here became a permanent instrument, `poe relevance`, with the ripgrep control and a pinned corpus, running in CI.
 
+The thin link vocabulary was diagnosed rather than accepted. `refs` found
+nothing in 29 attempts because the extractor had never read the name the
+syntax tree already put on every chunk — the vocabulary was whatever four
+regular expressions caught, and nothing else. Reading it gives caddyserver
+1 090 names with a definition in one file and a mention in another, where
+five workspaces had previously produced three.
+
 Then the model was replaced. **Same chunks, same questions, same
 pipeline**: the plain-English class goes from 2 to **12 of 23 in the top
 three** and 5 to **18 of 23 in the top ten**, and identifier questions to
