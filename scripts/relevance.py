@@ -67,11 +67,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from wsindex.cli.composition import _reranker, build_store
 from wsindex.config import Config, Repository
-from wsindex.embed import SentenceTransformerEmbedder
 from wsindex.model import Hit, Kind, SearchFilter
 from wsindex.pipeline import Pipeline
-from wsindex.store import LanceDBStore
 
 HERE = Path(__file__).resolve().parent
 CORPUS = HERE / "acceptance_corpus"
@@ -344,25 +343,43 @@ def build(org: str, repos: list[Repo], root: Path) -> Pipeline:
                 ),
             }
         )
+    if os.environ.get("WSINDEX_PROVIDER"):
+        # The hosted path, same three settings a workspace would write.
+        # Measuring it through a probe's own client would measure the
+        # probe; this way the thing graded is the thing that ships.
+        config._data["embeddings"].update(
+            {
+                "provider": os.environ["WSINDEX_PROVIDER"],
+                "url": os.environ.get("WSINDEX_EMBED_URL", ""),
+                "token_env": os.environ.get("WSINDEX_EMBED_TOKEN_ENV", ""),
+                "input_types": os.environ.get("WSINDEX_INPUT_TYPES") == "1",
+            }
+        )
+    if os.environ.get("WSINDEX_RANK_MODEL"):
+        config._data["rank"] = {
+            "enabled": True,
+            "model": os.environ["WSINDEX_RANK_MODEL"],
+            "provider": os.environ.get("WSINDEX_RANK_PROVIDER", "sentence-transformers"),
+            "url": os.environ.get("WSINDEX_RANK_URL", ""),
+            "token_env": os.environ.get("WSINDEX_RANK_TOKEN_ENV", ""),
+        }
     for repo in repos:
         config.add_repo(Repository(id=repo["id"], path=str(root / repo["id"])))
     state = CACHE / ".index" / org
     shutil.rmtree(state, ignore_errors=True)
     state.mkdir(parents=True, exist_ok=True)
-    # The real model, always, and the one the config names — so that
-    # changing the default model changes what this measures, which is the
-    # whole point of step 4. A fake embedder would make this instrument
-    # grade its own fixture, the failure mode it exists to catch.
-    store = LanceDBStore(
-        uri=str(state / "data.lance"),
-        embedder=SentenceTransformerEmbedder(
-            config.model,
-            query_prefix=config.query_prefix,
-            trust_remote_code=config.trust_remote_code,
-            max_seq=config.max_seq,
-        ),
+    config._data["store"]["uri"] = str(state / "data.lance")
+    # Built by the composition root, not here. The real model, the real
+    # provider switch, the real reranker wiring — so that changing a
+    # default changes what this measures, which is the point of the
+    # instrument. A fake embedder, or a second hand-rolled one, would make
+    # it grade its own fixture: the failure mode it exists to catch.
+    return Pipeline(
+        store=build_store(config),
+        config=config,
+        state_dir=state,
+        reranker=_reranker(config),
     )
-    return Pipeline(store=store, config=config, state_dir=state)
 
 
 def grade(org: str, repos: list[Repo], *, harvested: bool = False) -> Workspace:
