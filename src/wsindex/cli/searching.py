@@ -11,7 +11,7 @@ from wsindex.cli.composition import (
     config_or_default,
     require_config_file,
 )
-from wsindex.links import KIND_LABELS, LinkKind
+from wsindex.links import KIND_LABELS, OCCURRENCE_ORDER, LinkKind
 from wsindex.model import Kind, SearchFilter
 from wsindex.pipeline import Authorship
 from wsindex.ui import render_hits
@@ -88,6 +88,10 @@ def refs(name: str) -> None:
     pay for their noise (ADR-9 measured 11% of resolvable call names as
     ambiguous). What is here is the cheaper claim — this name occurs
     here — which is a search result rather than a call graph.
+
+    Each occurrence says which sort it is, and they are reported calls
+    first, comments last. That ordering is most of what resolution would
+    have bought, at the price of a regular expression.
     """
     config = config_or_default()
     require_config_file(config)
@@ -101,10 +105,16 @@ def refs(name: str) -> None:
         group = [edge for edge in edges if edge.kind is kind]
         if not group:
             continue
+        # Calls before type references before comments, which is what
+        # somebody asking "where is this used" means by the question.
+        # Edges with nothing to say about it keep the file order they
+        # were read in.
+        group.sort(key=lambda edge: OCCURRENCE_ORDER[edge.via] if edge.via else 0)
         typer.echo(f"  {label}:")
         for edge in group:
             suffix = f"  -> {edge.url}" if edge.url else ""
-            typer.echo(f"    {edge.repo}/{edge.path}:{edge.line}{suffix}")
+            where = f"  ({edge.via})" if edge.via else ""
+            typer.echo(f"    {edge.repo}/{edge.path}:{edge.line}{where}{suffix}")
     if any(edge.kind is LinkKind.READS_KEY for edge in edges) and not any(
         edge.kind is LinkKind.DECLARES for edge in edges
     ):

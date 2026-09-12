@@ -392,6 +392,72 @@ def test_a_name_is_recorded_once_at_its_first_line() -> None:
     assert [(edge.name, edge.line) for edge in found] == [("maxRetries", 40)]
 
 
+def test_each_sort_of_occurrence_is_told_apart() -> None:
+    # Why this is recorded rather than filtered on: measured on
+    # caddyserver, 51% of mentions are calls and 42% are other real code
+    # — receivers, struct literals, field accesses. A call graph would
+    # throw that 42% away to remove the 6% that is comment, import and
+    # string. Labelling keeps both readers.
+    from wsindex.ingest.link_extract import links_for
+    from wsindex.links import Occurrence
+
+    found = links_for(
+        [
+            code(
+                "import loggingPkg\n"
+                "// see requestCount for why\n"
+                'label := "metricName"\n'
+                "total := requestTotal\n"
+                "computeSum(total)\n"
+            )
+        ]
+    )
+
+    assert {edge.name: edge.via for edge in found} == {
+        "loggingPkg": Occurrence.IMPORT,
+        "requestCount": Occurrence.COMMENT,
+        "metricName": Occurrence.STRING,
+        "requestTotal": Occurrence.CODE,
+        "computeSum": Occurrence.CALL,
+    }
+
+
+def test_the_best_occurrence_wins_not_the_first() -> None:
+    # A docstring precedes the body, so the first occurrence of a name is
+    # often prose about it while the call is further down. Keeping the
+    # first would send a reader to the comment and label the edge
+    # `comment`, which is the least useful answer to "where is this
+    # used".
+    from wsindex.ingest.link_extract import links_for
+    from wsindex.links import Occurrence
+
+    found = links_for([code("# wraps parseHeader\nx = 1\nparseHeader(x)\n", line=10)])
+
+    assert [(edge.via, edge.line) for edge in found] == [(Occurrence.CALL, 12)]
+
+
+def test_the_occurrence_survives_a_round_trip(links: LinkStore) -> None:
+    # It is a column, and a column that is written and not read is the
+    # ordinary way a field like this quietly becomes decorative.
+    from wsindex.ingest.link_extract import links_for
+    from wsindex.links import Occurrence
+
+    links.add_links(links_for([code("computeSum(total)")]), repo="r", path="a.go")
+
+    assert [edge.via for edge in links.by_name("computeSum")] == [Occurrence.CALL]
+
+
+def test_a_kind_with_nothing_to_say_about_placement_says_nothing(links: LinkStore) -> None:
+    # `via` is an attribute of MENTIONS. A DEFINES edge is the definition
+    # wherever it sits, and a default of `code` would read as a measured
+    # claim rather than as an absence.
+    from wsindex.ingest.link_extract import links_for
+
+    links.add_links(links_for([code("func doThing() {}", symbol="doThing")]), repo="r", path="a.go")
+
+    assert [edge.via for edge in links.by_name("doThing")] == [None]
+
+
 def test_a_method_is_stored_under_its_bare_name() -> None:
     # The store holds `Cls.method` for `search --symbol`, but a call site
     # spells it `method`, and a qualified name here would join with

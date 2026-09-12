@@ -564,8 +564,8 @@ provisionContext
   defined in:
     caddy/caddy.go:479
   named in:
-    caddy/caddy.go:420
-    caddy/caddy.go:352
+    caddy/caddy.go:420  (call)
+    caddy/caddy.go:590  (call)
 ```
 
 The last one is not "who calls this function". A name in a comment or a
@@ -573,6 +573,15 @@ string counts, and nothing resolves *which* definition a use refers to —
 11% of resolvable call names in this repository are ambiguous, so a call
 graph is still deferred. What is here is the cheaper claim, this name
 occurs here, which is a search result rather than a fact about calls.
+
+Each use says which sort it is — `call`, `code`, `import`, `string`,
+`comment` — and they are reported calls first, comments last. That is
+deliberate rather than a consolation prize. Measured on caddyserver, 52%
+of uses are calls and 43% are other real code: receivers, struct
+literals, field accesses. A call graph would throw that 43% away to
+remove the 6% that is comment, import and string, and the 43% is most of
+what "where is this used" means. Labelling keeps both readers and costs
+a regular expression.
 
 That distinction is what made it affordable. The extractor sees one file
 at a time and cannot know the workspace's symbol table, so a token earns

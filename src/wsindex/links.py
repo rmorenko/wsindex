@@ -38,6 +38,7 @@ _COLUMNS = {
     "line": "INTEGER NOT NULL",
     "dst_chunk_id": "TEXT",
     "url": "TEXT",
+    "via": "TEXT",
     "repo": "TEXT NOT NULL",
     "path": "TEXT NOT NULL",
 }
@@ -55,6 +56,7 @@ _SCHEMA = (
         line         INTEGER NOT NULL,
         dst_chunk_id TEXT,
         url          TEXT,
+        via          TEXT,
         repo         TEXT NOT NULL,
         path         TEXT NOT NULL,
         PRIMARY KEY (src_chunk_id, kind, name, line)
@@ -139,6 +141,60 @@ class LinkKind(StrEnum):
     indexing run and there is nothing to wait for."""
 
 
+class Occurrence(StrEnum):
+    """How a name occurs where it was found — an attribute of `MENTIONS`.
+
+    This exists because of what it replaced. A resolved call graph was
+    the obvious next edge, and measuring it said no: of the mentions in
+    caddyserver that name something the workspace defines, 51% are calls
+    and 42% are other real code — method receivers, struct literals,
+    type parameters, field accesses. Eighteen sampled at random were
+    legitimate references, none of them junk. A call graph would discard
+    that 42% to remove the 6% that is comment, import and string.
+
+    So the occurrence is *recorded* rather than filtered on. A reader
+    asking "where is this used" wants the type references; a reader
+    asking "who calls this" wants them ranked below the calls. One
+    column serves both, and — unlike resolution — it is decidable from
+    the line the name sits on, which is what keeps links extractable one
+    file at a time.
+
+    Ordered by how much a reader usually wants it, which is the order
+    `refs` reports in.
+    """
+
+    CALL = "call"
+    """The name is applied to arguments: `ServeHTTP(w, r)`."""
+
+    CODE = "code"
+    """A real reference that is not a call — a type, a field, a value.
+    Deliberately not called `type`: `p.ClientAuthentication` is a field
+    and `&FileWriter{}` is a literal, and this does not parse enough to
+    tell them apart. What it does claim is that this is code."""
+
+    IMPORT = "import"
+    """The line brings the name into scope rather than using it."""
+
+    STRING = "string"
+    """Inside a string literal. Often a real reference — a module path,
+    a template name — which is why it is kept and labelled rather than
+    dropped."""
+
+    COMMENT = "comment"
+    """Prose about the name. Last because it is the least likely answer
+    to "where is this used", and kept because it is sometimes the best
+    answer to "what is this"."""
+
+
+OCCURRENCE_ORDER: dict[Occurrence, int] = {
+    occurrence: order for order, occurrence in enumerate(Occurrence)
+}
+"""How much a reader usually wants each occurrence, from the order they
+are declared in. Used twice and therefore defined once: the extractor
+picks which occurrence of a name in a chunk to keep, and `refs` sorts
+what it reports. Two spellings of one order would drift."""
+
+
 KIND_LABELS: dict[LinkKind, str] = {
     LinkKind.READS_KEY: "read by",
     LinkKind.DECLARES: "declared by",
@@ -176,6 +232,8 @@ class Link:
             Resolved at index time from the config's templates, so the
             link store reads on its own — at the cost of going stale if a
             template changes, which a full re-index fixes.
+        via: How the name occurs here, for `MENTIONS`. None for every
+            other kind, which have nothing to say about it.
     """
 
     src_chunk_id: str
@@ -184,6 +242,7 @@ class Link:
     line: int
     dst_chunk_id: str | None = None
     url: str | None = None
+    via: Occurrence | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -202,6 +261,7 @@ class Edge:
         chunk_id: Chunk the link sits in.
         dst_chunk_id: What it resolves to inside the index, if anything.
         url: Where it points outside the repository, if anywhere.
+        via: How the name occurs here, for `MENTIONS`; None otherwise.
         repo: Repo the chunk belongs to.
         path: Repo-relative path of the file.
     """
@@ -214,6 +274,7 @@ class Edge:
     url: str | None
     repo: str
     path: str
+    via: Occurrence | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -423,8 +484,8 @@ class LinkStore:
         cursor.executemany(
             self._sql(
                 f"{self.dialect.insert_prefix} links "
-                "(src_chunk_id, kind, name, line, dst_chunk_id, url, repo, path) "
-                f"VALUES (?, ?, ?, ?, ?, ?, ?, ?){self.dialect.insert_suffix}"
+                "(src_chunk_id, kind, name, line, dst_chunk_id, url, via, repo, path) "
+                f"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?){self.dialect.insert_suffix}"
             ),
             [
                 (
@@ -434,6 +495,7 @@ class LinkStore:
                     link.line,
                     link.dst_chunk_id,
                     link.url,
+                    link.via.value if link.via else None,
                     repo,
                     path,
                 )
@@ -475,7 +537,7 @@ class LinkStore:
         """Read edges matching a WHERE clause, ordered for reading."""
         rows = self._db.execute(
             self._sql(
-                "SELECT kind, name, line, src_chunk_id, dst_chunk_id, url, repo, path "
+                "SELECT kind, name, line, src_chunk_id, dst_chunk_id, url, via, repo, path "
                 f"FROM links WHERE {where} ORDER BY repo, path, line"
             ),
             params,
@@ -488,10 +550,13 @@ class LinkStore:
                 chunk_id=src,
                 dst_chunk_id=dst,
                 url=url,
+                # A database written before this column has NULL here,
+                # which is the truth about what it recorded.
+                via=Occurrence(via) if via else None,
                 repo=repo,
                 path=path,
             )
-            for kind, name, line, src, dst, url, repo, path in rows
+            for kind, name, line, src, dst, url, via, repo, path in rows
         ]
 
     def by_name(self, name: str) -> list[Edge]:

@@ -145,6 +145,34 @@ noise before any judgement about the idea was possible.
    and needs no per-language stop-list because every keyword in all
    sixteen grammars is a single lowercase word. The second was chosen.*
 
+   *Then the call graph itself was measured, and the measurement
+   refused it. Of the caddyserver mentions that name something this
+   workspace defines, **52% are calls and 43% are other real code** —
+   method receivers, struct literals, type parameters, field accesses;
+   eighteen sampled at random were all legitimate references. Actual
+   noise — comment, import, string — is **6%**. A call graph would
+   discard the 43% to remove the 6%, and the 43% is exactly what
+   "where is this used" means.*
+
+   *Resolution is also already done wherever it is possible. **90% of
+   mentions name something with exactly one definition**, which
+   `by_name` joins for free; only 10% are ambiguous, which independently
+   reproduces the 11% above on a corpus many times larger. A call graph
+   would spend all of its difficulty on that 10% and add nothing to the
+   90%. And it would have to: resolving at write time is impossible in
+   an incremental indexer, the lesson this ADR already learned on
+   `READS_KEY`/`DECLARES`, so it would be the first edge kind to break
+   the name-keyed property everything else rests on.*
+
+   *What shipped instead is the `via` column: **which sort** of
+   occurrence this is, decidable from the line the name sits on — which
+   is the property that matters, because it keeps extraction one file at
+   a time. `refs` reports calls first and comments last. That ordering
+   is most of what resolution would have bought, for a regular
+   expression and 0.2 MB. The occurrence kept per chunk is the best one
+   rather than the first, because a docstring precedes the body and the
+   first occurrence of a name is often prose about it.*
+
    *The bill, same repo indexed twice with everything else held equal:
    **0.3s of 24.4** — embedding dominates and this is lost in it — and
    **21.8 MB of `links.db` against 19.1 MB of vectors**. That second

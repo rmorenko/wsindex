@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import Field
 
-from wsindex.links import KIND_LABELS, LinkKind
+from wsindex.links import KIND_LABELS, OCCURRENCE_ORDER, LinkKind
 from wsindex.model import Kind, SearchFilter
 
 if TYPE_CHECKING:  # pragma: no cover - import-time only, for annotations
@@ -164,6 +164,18 @@ def _search(
 def _refs(engine: Pipeline, name: str) -> dict[str, Any]:
     """`refs`, as data, with the drift flag the CLI also reports."""
     edges = engine.references(name)
+    # Most useful first, because an agent reads a prefix of this and
+    # stops: definitions before uses, and within uses, calls before type
+    # references before comments. The CLI groups by relation to get the
+    # same order; here the list is flat, so it has to be sorted.
+    order = list(KIND_LABELS)
+    edges = sorted(
+        edges,
+        key=lambda edge: (
+            order.index(edge.kind),
+            OCCURRENCE_ORDER[edge.via] if edge.via else 0,
+        ),
+    )
     found = [
         {
             "relation": KIND_LABELS[edge.kind],
@@ -171,6 +183,9 @@ def _refs(engine: Pipeline, name: str) -> dict[str, Any]:
             "path": edge.path,
             "line": edge.line,
             "url": edge.url,
+            # None for every relation but "named in". Present regardless
+            # so the shape does not change under an agent mid-list.
+            "via": edge.via.value if edge.via else None,
         }
         for edge in edges
     ]

@@ -7,8 +7,9 @@ Three tools over MCP (`wsindex mcp`, stdio), and the interesting one is
 
 ```
 search(query, k=10, repo=, lang=, kind=, path=, symbol=, budget=)
-refs(name)     — where a name is defined and which files name it;
-                 also ports, tickets, commits, urls
+refs(name)     — where a name is defined and which files name it, each
+                 use labelled call/code/import/string/comment, calls
+                 first; also ports, tickets, commits, urls
 why(symbol)    — the commits that wrote a definition, and their messages
 ```
 

@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 
-from wsindex.links import Link, LinkKind
+from wsindex.links import OCCURRENCE_ORDER, Link, LinkKind, Occurrence
 from wsindex.model import Chunk, Kind
 
 _URL_PORT = re.compile(r"https?://[\w.\-]+:(\d{2,5})\b")
@@ -62,6 +62,19 @@ Eighteen per cent of the links for a sixth of the rows.
 What it rejects is the argument for it: every keyword of every language
 here — `return`, `import`, `error`, `string` — is a single lowercase
 word, so this needs no per-language stop-list to avoid linking them."""
+
+_COMMENT_LINE = re.compile(r"^\s*(?://|#|\*|/\*|--|;)")
+"""A line that is prose about code. Covers the comment openers of every
+grammar registered here, which is cheaper than asking sixteen parsers and
+wrong only for a `#` that is a shell directive or a C preprocessor line —
+neither of which is a use of a symbol either."""
+
+_IMPORT_LINE = re.compile(r"^\s*(?:import|from|package|use|require|include|#include)\b")
+"""A line that brings a name into scope rather than using it."""
+
+_QUOTED = re.compile(r"[\"'`]")
+"""Cheap gate before the real test: most lines have no quote at all, and
+`_in_string` is the one classifier that has to walk a line."""
 
 _MIN_NAME = 4
 """Shorter names are not worth an edge: `get`, `run`, `new`, `id`. With a
@@ -139,6 +152,50 @@ def _reference_links(chunk: Chunk, templates: Mapping[str, str]) -> list[Link]:
     return found
 
 
+def _in_string(line: str, start: int) -> bool:
+    """Is the character at `start` inside a string literal?
+
+    A scan rather than a parse: quote state toggled left to right with
+    backslash escapes honoured. It knows nothing of raw strings,
+    heredocs or a quote inside a comment, and does not need to — the
+    caller asks about comments first, and being wrong labels an edge
+    `code` instead of `string`, which changes an order in a report and
+    nothing else.
+    """
+    quote = ""
+    escaped = False
+    for index, char in enumerate(line):
+        if index == start:
+            return bool(quote)
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif quote:
+            quote = "" if char == quote else quote
+        elif char in "\"'`":
+            quote = char
+    return False
+
+
+def _occurrence(line: str, *, start: int, end: int) -> Occurrence:
+    """What sort of occurrence the name at `start:end` is.
+
+    Decidable from the line alone, which is the property that matters:
+    it is why this can be recorded one file at a time, where resolving
+    a call to its definition cannot.
+    """
+    if _COMMENT_LINE.match(line):
+        return Occurrence.COMMENT
+    if _IMPORT_LINE.match(line):
+        return Occurrence.IMPORT
+    if _QUOTED.search(line) and _in_string(line, start):
+        return Occurrence.STRING
+    if line[end:].lstrip().startswith("("):
+        return Occurrence.CALL
+    return Occurrence.CODE
+
+
 def _symbol_links(chunk: Chunk) -> list[Link]:
     """What one code chunk defines, and which other names it uses.
 
@@ -148,10 +205,16 @@ def _symbol_links(chunk: Chunk) -> list[Link]:
     entirely. Names meet in `by_name` at query time, where the whole
     workspace is visible.
 
-    A name is recorded once per chunk, at the first line it appears on.
-    Recording every occurrence would multiply the store by how often a
-    variable is used inside its own function, which tells a reader
-    nothing they cannot see once they have the file open.
+    A name is recorded once per chunk. Recording every occurrence would
+    multiply the store by how often a variable is used inside its own
+    function, which tells a reader nothing they cannot see once the file
+    is open.
+
+    Which one is kept is not "the first": a Python docstring precedes
+    the body, so the first occurrence of a name is often prose about it
+    while the call is eight lines down. The *best* one is kept instead —
+    highest `OCCURRENCE_ORDER`, earliest line breaking a tie — so stored
+    is the one worth being sent to, and `via` describes that line.
 
     Args:
         chunk: A CODE chunk. Its `symbol` is what the syntax tree named
@@ -174,21 +237,26 @@ def _symbol_links(chunk: Chunk) -> list[Link]:
                 line=chunk.start_line,
             )
         )
-    seen: set[str] = {defined} if defined else set()
+    best: dict[str, tuple[int, int, Occurrence]] = {}
     for offset, line in enumerate(chunk.text.splitlines()):
         for match in _IDENTIFIER.finditer(line):
             name = match.group(0)
-            if len(name) < _MIN_NAME or name in seen or _COMPOUND.search(name) is None:
+            if len(name) < _MIN_NAME or name == defined or _COMPOUND.search(name) is None:
                 continue
-            seen.add(name)
-            found.append(
-                Link(
-                    src_chunk_id=chunk.id,
-                    kind=LinkKind.MENTIONS,
-                    name=name,
-                    line=chunk.start_line + offset,
-                )
-            )
+            via = _occurrence(line, start=match.start(), end=match.end())
+            candidate = (OCCURRENCE_ORDER[via], offset, via)
+            if name not in best or candidate < best[name]:
+                best[name] = candidate
+    found += [
+        Link(
+            src_chunk_id=chunk.id,
+            kind=LinkKind.MENTIONS,
+            name=name,
+            line=chunk.start_line + offset,
+            via=via,
+        )
+        for name, (_, offset, via) in best.items()
+    ]
     return found
 
 
