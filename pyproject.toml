@@ -144,12 +144,14 @@ module = "psycopg.*"
 ignore_missing_imports = true
 
 [tool.codespell]
+# `*_report.md` is a run artifact, already gitignored, and it quotes the
+# harvested questions back — so it carries their spelling too.
 # `harvested` holds issue titles copied verbatim from real trackers, and
 # people writing bug reports misspell things. Correcting them would be
 # editing the measurement to look tidier — those questions are evidence,
 # not prose this project wrote. A glob, because codespell matches these
 # against whole paths rather than directory names.
-skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist,probes,*/harvested/*"
+skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist,probes,*/harvested/*,*_report.md"
 # `thirdparty` is a directory name repositories really use, listed in
 # `domains.NOT_THE_SUBJECT` beside `third_party` for that reason.
 ignore-words-list = "thirdparty"

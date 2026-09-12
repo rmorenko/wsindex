@@ -128,6 +128,67 @@ commits out of ten leaves six. Three times k is enough for the worst case
 measured — a top ten that was entirely history — and the store returning
 thirty rows instead of ten is not what a search spends its time on."""
 
+FUSION_DEPTH = 5
+"""How many times `k` each arm fetches before they are fused.
+
+Fusion can only promote what an arm returned, and the whole point is
+that the two arms disagree: measured on 154 harvested questions, the
+answer was in the vector top ten for 55 and in ripgrep's output for 60,
+with only 28 in both. Fetching just `k` from each would throw away most
+of the disagreement before there was anything to fuse."""
+
+RRF_K = 60
+"""The constant in reciprocal rank fusion, at its usual value.
+
+Fusion by rank rather than by score, because the two arms have no common
+scale — cosine similarity lives in [0, 1] and BM25 is unbounded and
+corpus-dependent, so any weighted sum of them is a weight nobody can
+justify. `1 / (RRF_K + rank)` needs no calibration and cannot be gamed
+by one arm reporting large numbers."""
+
+
+def _fuse(*arms: list[Hit]) -> list[Hit]:
+    """Reciprocal rank fusion over one result list per retrieval arm.
+
+    A chunk found by both arms outranks one found well by either, which
+    is the property worth having here: the arms fail differently, so
+    agreement is evidence and a single arm's confidence is not.
+
+    Here rather than in the store, and that placement was learned by
+    getting it wrong. Fused per dataset, every dataset's best hit gets
+    the identical rank score, so the merge across datasets — which sorts
+    by score — had nothing to order by. The contract already said so:
+    merging and re-ranking across datasets is pipeline policy and lives
+    in exactly one place.
+
+    The returned `score` is a rank score and is not comparable to a
+    cosine. Nothing downstream reads it as one: the quota counts kinds
+    and the reranker replaces it outright.
+
+    Args:
+        arms: Result lists, each already best-first and each already
+            merged across datasets.
+
+    Returns:
+        Every chunk any arm found, best fused score first.
+    """
+    scores: dict[tuple[str, str], float] = {}
+    seen: dict[tuple[str, str], Hit] = {}
+    for arm in arms:
+        for rank, hit in enumerate(arm, start=1):
+            # Keyed by repo *and* id, not id alone. A chunk id is
+            # `sha256(text, path)`, so two repositories holding the same
+            # file hold the same id — which `dupes` exists because of —
+            # and keying on it alone silently merges two real hits into
+            # one. Found by a test that counted what the reranker was
+            # given and got five where twelve were due.
+            key = (str(hit.metadata.get("repo", "")), str(hit.native_id))
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+            seen.setdefault(key, hit)
+    ordered = sorted(scores, key=lambda key: scores[key], reverse=True)
+    return [replace(seen[key], score=scores[key]) for key in ordered]
+
+
 log = logging.getLogger(__name__)
 """Silent unless somebody attaches a handler; `wsindex serve` does.
 What is logged here is what an operator asks about afterwards — which
@@ -265,6 +326,13 @@ class Pipeline:
                 state = state.with_commit(repo.id, diff.head, markup=repo.markup_key)
                 state.save(self.state_dir)
         self._prune_links(defined_before)
+        # Once, after every repo, for the same reason the link prune is
+        # here: the index covers the whole table and rebuilding it per
+        # batch would make a run quadratic in batches. A store without a
+        # lexical arm makes this a no-op.
+        refresh = getattr(self.store, "refresh_text_index", None)
+        if refresh is not None:
+            refresh()
         log.info(
             "index finished in %.2fs: %d files, %d chunks",
             time.monotonic() - started,
@@ -691,12 +759,29 @@ class Pipeline:
         self.store.refresh()
         n = _CANDIDATE_MULTIPLIER if self.reranker else _QUOTA_MULTIPLIER
         all_hits: list[Hit] = []
+        lexical: list[Hit] = []
+        hybrid = self.config.hybrid
         for r in repos:
             try:
                 hits = self.store.search(dataset_name=r.id, query=query, k=k * n, filters=filters)
             except ValueError:
                 continue
             all_hits.extend(hits)
+            if hybrid:
+                lexical.extend(
+                    self.store.lexical(
+                        dataset_name=r.id, query=query, k=k * FUSION_DEPTH, filters=filters
+                    )
+                )
+        if hybrid and lexical:
+            # Each arm is ordered within itself first, because fusion
+            # reads ranks: cosine is comparable across datasets (one
+            # space) and so is BM25 (one index), so each list is
+            # meaningful before the two meet.
+            all_hits = _fuse(
+                sorted(all_hits, key=lambda h: h.score, reverse=True),
+                sorted(lexical, key=lambda h: h.score, reverse=True),
+            )
         if self.reranker:
             # Merge, then cut, then re-score, and the order is the point:
             # cutting on the store's own score keeps the funnel's premise

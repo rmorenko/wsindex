@@ -131,6 +131,38 @@ class VectorStore(ABC):
                 the pipeline skips such datasets silently.
         """
 
+    def lexical(
+        self,
+        dataset_name: str,
+        *,
+        query: str,
+        k: int,
+        filters: SearchFilter | None = None,
+    ) -> list[Hit]:
+        """Chunks of one dataset that *contain* the query's words.
+
+        The other half of hybrid retrieval: matching rather than
+        similarity, which is what serves somebody who pasted a literal
+        out of a stack trace. Fusing this with `search` is the
+        pipeline's business, not a backend's.
+
+        Concrete rather than abstract, returning nothing: a backend
+        without a text index is not broken, it simply has no lexical arm,
+        and the pipeline fuses what it is given. Making this abstract
+        would be demanding an inverted index of every store that ever
+        implements the contract.
+
+        Args:
+            dataset_name: Dataset to search in.
+            query: Query text, matched as words rather than embedded.
+            k: Maximum number of hits.
+            filters: The same structural filters `search` takes.
+
+        Returns:
+            At most k hits, best first; empty when unsupported.
+        """
+        return []
+
     @abstractmethod
     def datasets(self) -> set[str]:
         """Names of the datasets this store holds.

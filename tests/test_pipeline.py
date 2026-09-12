@@ -983,3 +983,20 @@ def test_cutting_before_the_reranker_keeps_the_best_candidates(
 
     assert counter.texts
     assert any(PY_TEXT in text for text in counter.texts)
+
+
+def test_fusion_keeps_the_same_file_in_two_repos_apart() -> None:
+    # A chunk id is `sha256(text, path)`, so two repositories holding the
+    # same file hold the same id — the situation `dupes` exists because
+    # of. Keying fusion on the id alone merged them into one hit, and a
+    # workspace of forks would lose a real answer per duplicate. Found by
+    # a test that counted what the reranker was given and got five where
+    # twelve were due.
+    from wsindex.pipeline import _fuse
+
+    def hit(repo: str) -> Hit:
+        return Hit(score=1.0, native_id="same-sha", metadata={"repo": repo, "path": "a.py"})
+
+    fused = _fuse([hit("one"), hit("two")], [hit("one")])
+
+    assert [h.metadata["repo"] for h in fused] == ["one", "two"]

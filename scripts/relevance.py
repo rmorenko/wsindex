@@ -369,6 +369,8 @@ def build(org: str, repos: list[Repo], root: Path) -> Pipeline:
     shutil.rmtree(state, ignore_errors=True)
     state.mkdir(parents=True, exist_ok=True)
     config._data["store"]["uri"] = str(state / "data.lance")
+    if os.environ.get("WSINDEX_HYBRID") == "1":
+        config._data["store"]["hybrid"] = True
     # Built by the composition root, not here. The real model, the real
     # provider switch, the real reranker wiring — so that changing a
     # default changes what this measures, which is the point of the

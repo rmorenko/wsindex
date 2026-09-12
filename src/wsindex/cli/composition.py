@@ -237,7 +237,7 @@ def build_store(config: Config) -> VectorStore:
                     embedder = FakeEmbedder(dim=config.dim)
                 case _:  # pragma: no cover - mypy proves this branch unreachable
                     assert_never(config.provider)
-            store = LanceDBStore(uri=config.store_uri, embedder=embedder)
+            store = LanceDBStore(uri=config.store_uri, embedder=embedder, hybrid=config.hybrid)
         case _:  # pragma: no cover - mypy proves this branch unreachable
             assert_never(config.backend)
     return store

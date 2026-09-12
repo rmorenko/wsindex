@@ -118,6 +118,45 @@ def _words(name: str) -> str:
     return re.sub(r"[/_.\-]+", " ", name).strip()
 
 
+_FTS_COLUMN = "text"
+"""What BM25 reads: the stored slice, the same bytes `grep` would see.
+
+Not `retrieval_text`, which prepends the symbol and path for the
+embedder. Lexical matching earns its place by being the thing that finds
+a literal a person copied out of a stack trace, and the honest comparison
+is against `grep` over the file — so it reads what `grep` reads."""
+
+_NOT_HISTORY = f"kind != '{Kind.COMMIT.value}'"
+"""Commit messages take no part in the lexical arm, and this was
+measured rather than reasoned.
+
+Fused without it, `hit@3` over 154 harvested questions went *down* —
+29 to 16 — and the reason is visible in the arm's own output: asked
+anything, BM25 answered with `commits/...` for almost every question.
+Prose matching prose, which is the exact failure `COMMIT_SHARE` already
+exists to contain on the vector side ("a message is prose, a query is
+prose, so history scores well on almost anything"). That quota lives in
+`Pipeline.search`, above this, so by the time it ran the code had
+already been crowded out of the k rows this returns — a cap with no
+spares left to promote.
+
+History keeps its place in search; it keeps it through the arm that
+ranks by meaning and under a quota, which is where it earned it."""
+
+
+def _hit(row: dict[str, Any], *, score: float) -> Hit:
+    """One store row as a `Hit`, with the internals dropped."""
+    return Hit(
+        score=score,
+        native_id=row["id"],
+        metadata={
+            key: value
+            for key, value in row.items()
+            if key not in ("vector", "_distance", "_score", "_relevance_score", "dataset")
+        },
+    )
+
+
 class LanceDBStore(VectorStore):
     """Embedded LanceDB backend; disk layout in the module docstring."""
 
@@ -126,6 +165,7 @@ class LanceDBStore(VectorStore):
         uri: str,
         *,
         embedder: Embedder,
+        hybrid: bool = False,
     ) -> None:
         """Connect to the database and ensure both tables exist.
 
@@ -140,8 +180,12 @@ class LanceDBStore(VectorStore):
             embedder: Embeds chunk texts and queries; its `dim` is baked
                 into the vector column, so switching the model requires
                 re-indexing.
+            hybrid: Fuse a BM25 pass over the stored text with the vector
+                pass (see `search`). Off by default until the ranked
+                result is measured, not because the recall is in doubt.
         """
         self.embedder = embedder
+        self.hybrid = hybrid
         self.schema = pa.schema(
             [
                 pa.field("vector", pa.list_(pa.float32(), self.embedder.dim)),
@@ -321,19 +365,65 @@ class LanceDBStore(VectorStore):
             parts.extend(_filter_predicates(filters))
         predicate = " AND ".join(parts)
         builder = cast("LanceVectorQueryBuilder", self.tbl.search(self._query_vector(query)))
-        rows = builder.where(predicate, prefilter=True).distance_type("cosine").limit(k).to_list()
-        return [
-            Hit(
-                score=1 - row["_distance"],
-                native_id=row["id"],
-                metadata={
-                    key: value
-                    for key, value in row.items()
-                    if key not in ("vector", "_distance", "dataset")
-                },
-            )
-            for row in rows
-        ]
+        scan = builder.where(predicate, prefilter=True).distance_type("cosine")
+        rows = scan.limit(k).to_list()
+        return [_hit(row, score=1 - row["_distance"]) for row in rows]
+
+    def lexical(
+        self,
+        dataset_name: str,
+        *,
+        query: str,
+        k: int,
+        filters: SearchFilter | None = None,
+    ) -> list[Hit]:
+        """The BM25 pass over one dataset, best first.
+
+        Scored, not fused: what to do with two disagreeing rankings is
+        `Pipeline.search`'s business, and putting it here was measured to
+        be wrong. Fusing per dataset gives every dataset's best hit the
+        same rank score, so the merge across datasets — which sorts by
+        score — had nothing left to order by and picked arbitrarily. The
+        contract already says this: merging across datasets is pipeline
+        policy and lives in one place.
+
+        Empty rather than an error when there is no text index: it is
+        built at the end of an indexing run, so a store written by an
+        older wsindex has none, and raising here would break every
+        existing workspace on the day hybrid shipped.
+        """
+        parts = [f"dataset = '{_sql_quote(dataset_name)}'", _NOT_HISTORY]
+        if filters is not None and not filters.is_empty:
+            parts.extend(_filter_predicates(filters))
+        try:
+            builder = self.tbl.search(query, query_type="fts", fts_columns=_FTS_COLUMN)
+            rows = builder.where(" AND ".join(parts)).limit(k).to_list()
+        except Exception:  # no index yet, or a query BM25 cannot parse
+            return []
+        return [_hit(row, score=float(row.get("_score", 0.0))) for row in rows]
+
+    def refresh_text_index(self) -> None:
+        """Build or rebuild the BM25 index over the stored text.
+
+        Called once at the end of an indexing run rather than per batch:
+        LanceDB rewrites the whole index, so doing it per `add_chunks`
+        would make a run quadratic in the number of batches.
+
+        A no-op when hybrid search is off, because an index nothing reads
+        is disk and time spent on nothing.
+        """
+        if not self.hybrid or not self.tbl.count_rows():
+            return
+        # `stem` and `remove_stop_words` off: they are built for prose and
+        # this column is source code. Stemming turns `Caching` and `Cached`
+        # into one token, which is the point in English and wrong for two
+        # different identifiers; the stop-word list eats `in`, `is` and
+        # `for`, which are keywords somebody may be searching for.
+        # `create_fts_index` rather than `create_index(config=FTS(...))`,
+        # which the library prefers: in 0.37 the replacement's sync
+        # signature names only a *vector* column, so there is no way to
+        # point it at a text one. Revisit when that changes.
+        self.tbl.create_fts_index(_FTS_COLUMN, replace=True, stem=False, remove_stop_words=False)
 
     def _query_vector(self, query: str) -> list[float]:
         """The query's embedding, remembered for exactly one string.

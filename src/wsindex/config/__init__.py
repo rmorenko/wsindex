@@ -324,6 +324,26 @@ class Config:
         return bool(self._setting("embeddings", "trust_remote_code") or False)
 
     @property
+    def hybrid(self) -> bool:
+        """Whether search fuses a BM25 pass with the vector pass.
+
+        Measured to be better and free: over 154 questions harvested
+        from issue trackers, against the vector arm alone, `hit@3` goes
+        29 -> 45 (19 gained, 3 lost, p = 0.0009) and `hit@10` 55 -> 64,
+        with indexing time unchanged — 11.3 seconds against 11.2 on the
+        largest workspace. It works because the arms fail differently:
+        only 28 of those questions were answered by both.
+
+        Off anyway, and that is not timidity. Fusing changes `score` from
+        a cosine into a rank score, which is a different number in every
+        answer this tool prints, and it puts fewer candidates in front of
+        the reranker than `RERANK_BUDGET` promises. Both are defensible
+        to change; neither should ride along unannounced with a
+        measurement of something else.
+        """
+        return bool(self._setting("store", "hybrid", False))
+
+    @property
     def store_uri(self) -> str:
         """LanceDB location — a local path or an `s3://` uri.
 

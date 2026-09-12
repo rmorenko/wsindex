@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from wsindex.embed.embedder import FakeEmbedder
-from wsindex.model import Chunk, Kind, SearchFilter, SourceFile
+from wsindex.model import Chunk, Hit, Kind, SearchFilter, SourceFile
 from wsindex.store.lancedb import LanceDBStore, retrieval_text
 
 DIM = 8
@@ -838,3 +838,72 @@ def test_a_chunk_with_nothing_to_call_it_is_embedded_as_it_was() -> None:
     chunk = source.chunk(text="plain words", start_line=1, end_line=1)
 
     assert retrieval_text(chunk) == "plain words"
+
+
+# --- the lexical arm and rank fusion --------------------------------------
+
+
+@pytest.fixture
+def hybrid(tmp_path: Path) -> LanceDBStore:
+    s = LanceDBStore(str(tmp_path / "hy"), embedder=FakeEmbedder(dim=DIM), hybrid=True)
+    s.create_dataset("ds", metric="cosine")
+    return s
+
+
+def test_a_literal_is_found_by_the_lexical_arm(hybrid: LanceDBStore) -> None:
+    # What the whole thing is for. The fake embedder's vectors carry no
+    # meaning, so anything found here was found by BM25 — which is the
+    # point: a person pasting a string out of a stack trace is served by
+    # matching, not by similarity.
+    hybrid.add_chunks(
+        "ds",
+        chunks=[make_chunk(f"padding {n}", path=f"p{n}.md") for n in range(20)]
+        + [make_chunk("raise DeletedMoreThanStored(count)", path="pool.go")],
+    )
+    hybrid.refresh_text_index()
+
+    found = hybrid.lexical("ds", query="DeletedMoreThanStored", k=5)
+
+    assert found[0].metadata["path"] == "pool.go"
+
+
+def test_without_the_index_neither_arm_raises(hybrid: LanceDBStore) -> None:
+    # A store written before hybrid shipped has no text index, and an
+    # arm that raised there would break every existing workspace on the
+    # day it landed. Measured while writing this: LanceDB answers a
+    # full-text query without one anyway, so the guarantee is the weaker
+    # and more useful "no index, no crash" rather than "no index, no
+    # results" — which is what the first version of this test asserted
+    # and was wrong about.
+    hybrid.add_chunks("ds", chunks=[make_chunk("a"), make_chunk("b", path="b.md")])
+
+    assert hybrid.lexical("ds", query="a", k=2)
+    assert len(hybrid.search("ds", query="a", k=2)) == 2
+
+
+def test_fusion_prefers_what_both_arms_found() -> None:
+    # The property rank fusion is chosen for: the arms fail differently,
+    # so agreement is evidence where a single arm's confidence is not.
+    # `second` is nobody's top hit and beats two chunks that are.
+    from wsindex.pipeline import _fuse
+
+    def hit(name: str) -> Hit:
+        return Hit(score=1.0, native_id=name, metadata={"path": name})
+
+    fused = _fuse([hit("first"), hit("second")], [hit("other"), hit("second")])
+
+    assert fused[0].native_id == "second"
+
+
+def test_the_lexical_arm_respects_the_dataset_boundary(tmp_path: Path) -> None:
+    # One table holds every repo (ADR-7), so a BM25 pass without the
+    # `dataset` predicate would answer with another repository's code —
+    # a leak the vector arm cannot have because it prefilters.
+    s = LanceDBStore(str(tmp_path / "two"), embedder=FakeEmbedder(dim=DIM), hybrid=True)
+    s.create_dataset("mine", metric="cosine")
+    s.create_dataset("theirs", metric="cosine")
+    s.add_chunks("theirs", chunks=[make_chunk("DeletedMoreThanStored", path="x.go")])
+    s.add_chunks("mine", chunks=[make_chunk("unrelated", path="y.go")])
+    s.refresh_text_index()
+
+    assert [h.metadata["path"] for h in s.lexical("mine", query="DeletedMoreThanStored", k=5)] == []
