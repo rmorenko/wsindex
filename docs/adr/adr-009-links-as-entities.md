@@ -143,7 +143,16 @@ noise before any judgement about the idea was possible.
    186 100 edges — nineteen per chunk, 1.9M rows on a 100k-chunk
    workspace. Requiring an internal word boundary keeps 82% for 31 839,
    and needs no per-language stop-list because every keyword in all
-   sixteen grammars is a single lowercase word. The second was chosen.)*
+   sixteen grammars is a single lowercase word. The second was chosen.*
+
+   *The bill, same repo indexed twice with everything else held equal:
+   **0.3s of 24.4** — embedding dominates and this is lost in it — and
+   **21.8 MB of `links.db` against 19.1 MB of vectors**. That second
+   number is the one to watch. The link store is now the larger half of
+   the index, at 440 bytes a row for a row that holds a name, a kind and
+   a 64-character chunk id repeated across three indexes. Nothing here
+   introduced that width; this change multiplied what it costs by three,
+   which is what makes it worth writing down.)*
 
 1. **BLAMED_BY is worth building** — exam 2 answered a real design
    question from data already on disk. It depends on commits being a
