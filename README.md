@@ -1470,9 +1470,16 @@ It indexes fourteen of the twenty properly, crashes outright on three, and
 answers **one of 102** plain-English questions in its top three — on
 questions where ripgrep answers none.
 
-- What happened, with the numbers — [docs/field-trial.md](docs/field-trial.md)
-- Whether to install it — [docs/for-developers.md](docs/for-developers.md)
-- Whether a team should adopt it — [docs/for-teams.md](docs/for-teams.md)
+Five readers, five questions, five documents — because what convinces one
+of them is noise to the next:
+
+| You are                         | You want to know                | Read                                        |
+| ------------------------------- | ------------------------------- | ------------------------------------------- |
+| Sceptical about the measuring   | Whether the method holds        | [field-trial.md](docs/field-trial.md)       |
+| At a terminal                   | Whether to install it           | [for-developers.md](docs/for-developers.md) |
+| Wiring up an agent              | What it costs in tokens         | [for-agents.md](docs/for-agents.md)         |
+| Deciding for a team             | What it gives and what it risks | [for-teams.md](docs/for-teams.md)           |
+| Deciding whether code may leave | What opens a socket, and when   | [for-security.md](docs/for-security.md)     |
 
 ## Design docs
 

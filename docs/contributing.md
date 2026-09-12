@@ -81,6 +81,12 @@ a measure of whether answers are right.
 1. Ensure `uv run poe check` passes locally.
 1. Open a PR; CI must be green before merge.
 
+Documents are written per reader rather than per feature — `field-trial`,
+`for-developers`, `for-agents`, `for-teams`, `for-security` — because
+what convinces one reader is noise to the next. A change that moves a
+measured number moves it in every document that quotes it; `poe relevance`
+prints the numbers those documents are built from.
+
 See the design docs (`design/concept.md`, `design/brd.md`,
 `design/architecture.md`) for where the
 project is heading.
