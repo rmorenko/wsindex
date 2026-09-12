@@ -69,6 +69,33 @@ from wsindex.store import VectorStore
 
 _CANDIDATE_MULTIPLIER = 4
 
+RERANK_BUDGET = 12
+"""How many candidates per hit the reranker may be given, in total.
+
+**In total, and that word is the whole constant.** Each dataset is asked
+for `k * _CANDIDATE_MULTIPLIER` because the global top may sit entirely
+in one repository, and every one of those used to be handed to the
+reranker — so its cost scaled with the *number of repos*. A six-repo
+workspace paid for 240 pairs to answer a `-k 10` search. Nobody decided
+that; it fell out of the merge loop. Measured on this machine that is 11
+seconds a search with a 568M reranker and 55 with a 1.5B one, and it is
+what made the larger one ask MPS for a 32 GiB attention mask and die.
+
+Twelve because the budget was swept, not picked, on the sixty blind
+questions of `poe relevance` with a hosted reranker over an unchanged
+local index — top-three / top-ten of the reachable answers:
+
+| candidates at k=10 | identifier | descriptive | cross-repo | cost |
+| --- | --- | --- | --- | --- |
+| 40 (`k * 4`) | 13 / 14 | 4 / 8 | 2 / 5 | 294k tokens |
+| **120 (`k * 12`)** | 13 / 15 | **8 / 11** | **4 / 5** | 884k |
+| 240 (the old per-repo behaviour) | 13 / 15 | 7 / 12 | 3 / 5 | 1 397k |
+
+Cutting at `k * 4` loses real answers: the reranker was promoting
+candidates the bi-encoder had ranked below fortieth globally. Going wider
+than this buys nothing and costs 58% more — more candidates is more
+chances for the wrong one to score well."""
+
 COMMIT_SHARE = 0.2
 """How much of a result list history may take before it is crowding.
 
@@ -629,8 +656,13 @@ class Pipeline:
                 continue
             all_hits.extend(hits)
         if self.reranker:
-            scores = self.reranker.rank(query, [hit.text for hit in all_hits])
-            all_hits = [replace(h, score=s) for h, s in zip(all_hits, scores, strict=True)]
+            # Merge, then cut, then re-score, and the order is the point:
+            # cutting on the store's own score keeps the funnel's premise
+            # intact — retrieval proposes, re-ranking disposes — while
+            # bounding the expensive half. See `RERANK_BUDGET`.
+            candidates = sorted(all_hits, key=lambda h: h.score, reverse=True)[: k * RERANK_BUDGET]
+            scores = self.reranker.rank(query, [hit.text for hit in candidates])
+            all_hits = [replace(h, score=s) for h, s in zip(candidates, scores, strict=True)]
         best = _within_quota(sorted(all_hits, key=lambda h: h.score, reverse=True), k=k)
         if self.stats is not None:
             # After the answer is computed, and unable to affect it: a

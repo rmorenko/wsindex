@@ -104,9 +104,10 @@ is the one kept.
 
 ## Ranking the results
 
-Search is one funnel. The store returns k×4 candidates by vector
-similarity, and — when it is enabled — a cross-encoder reads each
-`(query, chunk)` pair properly and re-sorts them down to k:
+Search is one funnel. Each repository is asked for k×4 candidates by
+vector similarity, the merged list is cut to **k×12 in total**, and —
+when it is enabled — a cross-encoder reads each `(query, chunk)` pair
+properly and re-sorts them down to k:
 
 ```toml
 [rank]
@@ -119,6 +120,26 @@ acceptance corpus it moved three of ten queries up and none down —
 "expose dataset operations over http" from rank 4 to 1, "generate
 embeddings for text" from 4 to 2 — at about 4 ms per pair, so a search
 with `-k 5` pays roughly 80 ms.
+
+**The total is the important word.** Every candidate from every
+repository used to reach the reranker, so its cost grew with the *number
+of repos*: a six-repo workspace paid for 240 pairs to answer a `-k 10`
+search. Measured here, that is 11 seconds a search with a 568M local
+reranker and 55 with a 1.5B one — and it is what made the larger model
+ask this laptop for a 32 GiB attention mask and crash. Sweeping the
+budget on the sixty blind questions of `poe relevance`, with a hosted
+reranker over an unchanged local index:
+
+| candidates at k=10      | identifier | descriptive | cross-repo | cost        |
+| ----------------------- | ---------- | ----------- | ---------- | ----------- |
+| 40                      | 13 / 14    | 4 / 8       | 2 / 5      | 294k tokens |
+| **120**                 | 13 / 15    | **8 / 11**  | **4 / 5**  | 884k        |
+| 240 (the old behaviour) | 13 / 15    | 7 / 12      | 3 / 5      | 1 397k      |
+
+Cutting at 40 loses real answers — the reranker was promoting candidates
+the vector search had ranked below fortieth. Going wider buys nothing and
+costs 58% more: more candidates is more chances for the wrong one to
+score well.
 
 **It does not scale, and the number is worth knowing before turning it
 on.** Under load (`poe load --rerank`) the 500 ms budget holds to **six**

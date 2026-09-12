@@ -28,7 +28,13 @@ from wsindex.config import Config, Repository
 from wsindex.embed import FakeEmbedder
 from wsindex.ingest import IndexState, NotAGitRepositoryError, Skip, chunk_file
 from wsindex.model import Chunk, Hit, Kind, SearchFilter, SourceFile
-from wsindex.pipeline import _CANDIDATE_MULTIPLIER, _QUOTA_MULTIPLIER, FullPass, Pipeline
+from wsindex.pipeline import (
+    _CANDIDATE_MULTIPLIER,
+    _QUOTA_MULTIPLIER,
+    RERANK_BUDGET,
+    FullPass,
+    Pipeline,
+)
 from wsindex.rank.reranker import FakeReranker
 from wsindex.store import LanceDBStore
 
@@ -133,6 +139,24 @@ def pipeline(config: Config, store: LanceDBStore, state_dir: Path) -> Pipeline:
     # `config` is requested for its side effect: it installs the workspace
     # as the process-wide Config, which is where Pipeline reads its repos.
     return Pipeline(store=store, state_dir=state_dir)
+
+
+class CountingReranker(FakeReranker):
+    """A reranker that remembers how much work it was given.
+
+    The cost of the funnel's second stage is the thing under test, and it
+    is invisible from the outside: a search that reranks 240 candidates
+    and one that reranks 40 return the same shape.
+    """
+
+    def __init__(self) -> None:
+        self.seen: list[int] = []
+        self.texts: list[str] = []
+
+    def _rank(self, query: str, texts: Sequence[str]) -> list[float]:
+        self.seen.append(len(texts))
+        self.texts = list(texts)
+        return super()._rank(query, texts)
 
 
 def test_report_counts(pipeline: Pipeline) -> None:
@@ -921,3 +945,41 @@ def test_the_quota_never_shortens_a_list_it_could_fill(
     pipeline.index()
 
     assert len(pipeline.search("snapshot", k=10)) == 10
+
+
+def test_the_reranker_is_not_asked_more_because_there_are_more_repos(
+    tmp_path: Path, config: Config, store: LanceDBStore, state_dir: Path, commit: Committer
+) -> None:
+    # It used to be handed `k * multiplier` candidates *per repository*,
+    # so a six-repo workspace paid for 240 pairs to answer a `-k 10`
+    # search. Nobody chose that; it fell out of the merge loop. Measured,
+    # that is 11 seconds a search with a 568M reranker and 55 with a 1.5B
+    # one — and it is what made the larger model ask for a 32 GiB
+    # attention mask and die. Five repos here, so the budget has to bite:
+    # without it the reranker would see fifteen candidates for `-k 1`.
+    for name in ("repo2", "repo3", "repo4", "repo5"):
+        add_repo(config, tmp_path, name, full=True, commit=commit)
+    Pipeline(store=store, state_dir=state_dir).index()
+    counter = CountingReranker()
+
+    Pipeline(store=store, state_dir=state_dir, reranker=counter).search(PY_TEXT, k=1)
+
+    assert len(config.repos) == 5
+    assert counter.seen == [RERANK_BUDGET]
+
+
+def test_cutting_before_the_reranker_keeps_the_best_candidates(
+    tmp_path: Path, config: Config, store: LanceDBStore, state_dir: Path, commit: Committer
+) -> None:
+    # The cut is on the store's own score, which is the funnel's premise:
+    # retrieval proposes, re-ranking disposes. What must not happen is
+    # the right answer being dropped before the stage that would have
+    # found it — so the chunk the query is literally made of survives.
+    add_repo(config, tmp_path, "repo2", full=True, commit=commit)
+    Pipeline(store=store, state_dir=state_dir).index()
+    counter = CountingReranker()
+
+    Pipeline(store=store, state_dir=state_dir, reranker=counter).search(INDEXED_MAIN, k=1)
+
+    assert counter.texts
+    assert any(PY_TEXT in text for text in counter.texts)
