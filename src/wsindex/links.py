@@ -70,6 +70,24 @@ database written before that column, with `no such column`. Found by the
 test that exists for exactly this, when `norm` arrived."""
 
 
+_PRUNED_TABLE = """
+    CREATE TABLE IF NOT EXISTS pruned (
+        norm TEXT PRIMARY KEY
+    )
+    """
+"""Names whose mentions `prune_unjoinable` removed.
+
+The one way pruning turns into a wrong answer rather than a smaller
+file: a repository joins the workspace later, defines a name whose
+mentions were already dropped, and the files holding those mentions have
+not changed — so nothing re-extracts them and `refs` reports a
+definition with no uses. Silence is the worst failure mode here, because
+it reads as a fact about the code.
+
+Names only, and normalised, so this is small against what it guards:
+measured, it is 2% of what pruning saves."""
+
+
 _INDEXES = (
     # Three queries, three indexes. All equality lookups, which is the
     # whole argument for keeping links in SQL rather than beside the
@@ -227,6 +245,12 @@ class Occurrence(StrEnum):
     """Prose about the name. Last because it is the least likely answer
     to "where is this used", and kept because it is sometimes the best
     answer to "what is this"."""
+
+
+_ANCHORS = (LinkKind.DEFINES.value, LinkKind.DECLARES.value)
+"""The two kinds a `MENTIONS` can join to: code defines a name, a config
+declares one. Both, because a mention of `TrustedProxies` meets a json
+key `trusted_proxies` and that is the join `grep` cannot make."""
 
 
 OCCURRENCE_ORDER: dict[Occurrence, int] = {
@@ -463,6 +487,7 @@ class LinkStore:
         column` rather than skipping.
         """
         self._db.execute(_TABLE)
+        self._db.execute(_PRUNED_TABLE)
         self._db.commit()
         self._migrate()
         for statement in _INDEXES:
@@ -671,6 +696,139 @@ class LinkStore:
             where += " AND kind = ?"
             params += (kind.value,)
         return self._rows(where, params)
+
+    def prune_unjoinable(self) -> int:
+        """Drop `MENTIONS` of names nothing here defines or declares.
+
+        Both kinds, and the second was learned by deleting it: a first
+        version asked only about `DEFINES`, and `refs trusted_proxies`
+        went from four uses to none. A config key is anchored by
+        `DECLARES`, so a mention of `TrustedProxies` joins perfectly well
+        with a json file — and that join is the one thing `refs` does
+        that `grep` cannot, which pruning had quietly destroyed.
+
+        Two thirds of them, measured: 18 871 of caddyserver's 28 545
+        mentions name something no `DEFINES` answers — `WriteHeader`,
+        `ParseInt`, the standard library and the vendored world. They
+        can never be half of a join.
+
+        Only safe to call when the whole workspace has just been
+        indexed, which is why `Pipeline.index` calls it and nothing else
+        does. Mid-run the `DEFINES` table is incomplete and this would
+        delete mentions whose definition had not been reached yet.
+
+        Rows written before `norm` existed are left alone. Their `norm`
+        is NULL, every comparison against it is false, and this would
+        read that as "nothing defines it" and empty the table.
+
+        Returns:
+            How many links were removed.
+        """
+        unjoinable = (
+            "kind = ? AND norm IS NOT NULL AND NOT EXISTS ("
+            "  SELECT 1 FROM links AS d WHERE d.kind IN (?, ?) AND d.norm = links.norm)"
+        )
+        kinds = (LinkKind.MENTIONS.value, *_ANCHORS)
+        cursor = self._db.cursor()
+        # A debt this run settled: the name has a definition now, so a
+        # complete pass has just re-extracted whatever mentions it, and
+        # the warning would be about a loss that no longer exists. Kept
+        # first so a name can be forgiven and re-recorded in one call.
+        cursor.execute(
+            self._sql(
+                "DELETE FROM pruned WHERE EXISTS ("
+                "  SELECT 1 FROM links AS d WHERE d.kind IN (?, ?) AND d.norm = pruned.norm)"
+            ),
+            _ANCHORS,
+        )
+        # Remembered before they are deleted, and only then deleted, so a
+        # crash between the two leaves a name recorded that was never
+        # dropped. That way round the failure is a spurious warning; the
+        # other way round it is a wrong answer nobody is told about.
+        cursor.execute(
+            self._sql(
+                f"{self.dialect.insert_prefix} pruned (norm) "
+                f"SELECT DISTINCT norm FROM links WHERE {unjoinable}"
+                f"{self.dialect.insert_suffix}"
+            ),
+            kinds,
+        )
+        cursor.execute(self._sql(f"DELETE FROM links WHERE {unjoinable}"), kinds)
+        self._db.commit()
+        dropped = max(int(cursor.rowcount), 0)
+        if dropped:
+            self._reclaim()
+        return dropped
+
+    def _reclaim(self) -> None:
+        """Give the freed pages back to the filesystem.
+
+        Without this the delete frees nothing a user can see: SQLite
+        keeps emptied pages in the file for reuse, and the first
+        measured run came out *larger* after removing 17 550 rows,
+        because the `pruned` table grew and nothing shrank. Since the
+        whole point of the delete was size, not reclaiming it would have
+        shipped the cost with none of the benefit.
+
+        SQLite only. Postgres has autovacuum, and `VACUUM` there cannot
+        run inside the transaction this connection holds open.
+        """
+        if self.dialect is not SQLITE:
+            return
+        # VACUUM rewrites the database and refuses to run in one, so the
+        # open transaction has to be closed first — `commit` above did
+        # that, and isolation_level=None is not set, so be explicit.
+        self._db.commit()
+        self._db.execute("VACUUM")
+
+    def rescued(self, names: Iterable[str]) -> set[str]:
+        """Of these normalised names, which had mentions pruned away.
+
+        Asked after a run that added definitions. A name here means the
+        store now holds a definition whose uses were deleted as
+        unjoinable, and only a full re-index will put them back.
+
+        Args:
+            names: Normalised names defined during this run.
+
+        Returns:
+            The subset that pruning had already given up on.
+        """
+        wanted = list(dict.fromkeys(names))
+        if not wanted:
+            return set()
+        # Chunked because SQLite caps a statement at 999 parameters by
+        # default and a run can define thousands of names.
+        found: set[str] = set()
+        for start in range(0, len(wanted), 500):
+            batch = wanted[start : start + 500]
+            placeholders = ", ".join("?" for _ in batch)
+            found |= {
+                row[0]
+                for row in self._db.execute(
+                    self._sql(f"SELECT norm FROM pruned WHERE norm IN ({placeholders})"),
+                    tuple(batch),
+                )
+            }
+        return found
+
+    def anchor_names(self) -> set[str]:
+        """Every normalised name this store defines or declares.
+
+        The names a `MENTIONS` can join to, which is what makes one worth
+        keeping. `Pipeline.index` compares this across a run to notice
+        when such a name arrives that would have rescued mentions an
+        earlier prune removed — the one way pruning turns into a wrong
+        answer rather than a smaller file.
+        """
+        return {
+            row[0]
+            for row in self._db.execute(
+                self._sql("SELECT DISTINCT norm FROM links WHERE kind IN (?, ?)"),
+                _ANCHORS,
+            )
+            if row[0]
+        }
 
     def dangling(self) -> list[Edge]:
         """Every `READS_KEY` that no `DECLARES` answers.

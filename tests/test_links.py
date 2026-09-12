@@ -191,6 +191,35 @@ def test_indexing_finds_the_8080_drift(
     assert [(d.name, d.path) for d in found] == [("8080", "config.py")]
 
 
+def test_a_run_says_so_when_a_prune_turns_out_to_have_cost_something(
+    workspace: tuple[Pipeline, LinkStore, Path],
+    commit: Committer,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The safety net pruning is only defensible with, driven through a
+    # real run. Nothing re-extracts the mentions — their files did not
+    # change — so the alternative is `refs` answering with a definition
+    # and no uses, which reads as a fact about the code.
+    pipeline, links, repo = workspace
+    pipeline.index()
+    links.add_links([link("gone", LinkKind.MENTIONS, "handle_request")], repo="r", path="old.py")
+    links.prune_unjoinable()
+    assert links.by_name("handle_request") == []
+
+    (repo / "server.py").write_text("def handle_request():\n    return 1\n")
+    commit(repo)
+    with caplog.at_level("WARNING", logger="wsindex.pipeline"):
+        pipeline.index()
+
+    assert "run a full re-index" in caplog.text
+    # And the debt clears, or the warning outlives the loss and becomes
+    # something people learn to scroll past.
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="wsindex.pipeline"):
+        pipeline.index()
+    assert "run a full re-index" not in caplog.text
+
+
 def test_fixing_the_code_clears_the_drift(
     workspace: tuple[Pipeline, LinkStore, Path], commit: Committer
 ) -> None:
@@ -321,6 +350,118 @@ def test_a_port_key_in_a_config_is_a_declaration() -> None:
     # The key names are declarations too, since config keys arrived; the
     # port *value* is what this case is about.
     assert (LinkKind.DECLARES, "8000") in [(link.kind, link.name) for link in links_for([cfg])]
+
+
+# --- pruning what can never join -----------------------------------------
+
+
+def test_a_mention_nothing_defines_is_dropped(links: LinkStore) -> None:
+    # Two thirds of them, measured: 18 871 of caddyserver's 28 545
+    # mentions name the standard library or a vendored package, and
+    # those can never be half of a join.
+    links.add_links(
+        [
+            link("c1", LinkKind.MENTIONS, "WriteHeader"),
+            link("c1", LinkKind.MENTIONS, "ownThing", line=2),
+            link("c2", LinkKind.DEFINES, "ownThing"),
+        ],
+        repo="r",
+        path="a.go",
+    )
+
+    assert links.prune_unjoinable() == 1
+    assert {edge.name for edge in links.by_name("ownThing")} == {"ownThing"}
+    assert links.by_name("WriteHeader") == []
+
+
+def test_a_mention_a_config_anchors_is_kept(links: LinkStore) -> None:
+    # Caught by re-asking a case an earlier measurement had answered: a
+    # first version of the prune asked only about DEFINES, and
+    # `refs trusted_proxies` went from four uses to none. A config key
+    # anchors a mention just as a definition does, and that join — a
+    # json key meeting a Go identifier — is the one thing `refs` does
+    # that `grep` cannot.
+    links.add_links([link("c1", LinkKind.MENTIONS, "TrustedProxies")], repo="r", path="a.go")
+    links.add_links([link("c2", LinkKind.DECLARES, "trusted_proxies")], repo="r", path="a.json")
+
+    assert links.prune_unjoinable() == 0
+    assert len(links.by_name("trusted_proxies")) == 2
+
+
+def test_pruning_matches_across_spellings(links: LinkStore) -> None:
+    # The mention is `MaxRetries` and the declaration is `max_retries`.
+    # Comparing raw names here would delete exactly the edges the
+    # normalised join exists to keep.
+    links.add_links(
+        [link("c1", LinkKind.MENTIONS, "MaxRetries"), link("c2", LinkKind.DEFINES, "max_retries")],
+        repo="r",
+        path="a.go",
+    )
+
+    assert links.prune_unjoinable() == 0
+
+
+def test_a_definition_arriving_later_is_reported_not_swallowed(links: LinkStore) -> None:
+    # The one way pruning becomes a wrong answer: a repo joins the
+    # workspace and defines a name whose uses were already dropped. The
+    # files holding them have not changed, so nothing re-extracts them,
+    # and `refs` would show a definition with no uses — which reads as a
+    # fact about the code rather than as a hole in the index.
+    links.add_links([link("c1", LinkKind.MENTIONS, "SharedThing")], repo="a", path="a.go")
+    links.prune_unjoinable()
+
+    links.add_links([link("c2", LinkKind.DEFINES, "SharedThing")], repo="b", path="b.go")
+
+    assert links.rescued(["sharedthing"]) == {"sharedthing"}
+
+
+def test_a_settled_debt_stops_being_reported(links: LinkStore) -> None:
+    # Otherwise the warning outlives the loss: a full re-index puts the
+    # mentions back, and a warning that never clears is one people learn
+    # to scroll past.
+    links.add_links([link("c1", LinkKind.MENTIONS, "SharedThing")], repo="a", path="a.go")
+    links.prune_unjoinable()
+    links.add_links(
+        [link("c2", LinkKind.DEFINES, "SharedThing"), link("c3", LinkKind.MENTIONS, "SharedThing")],
+        repo="b",
+        path="b.go",
+    )
+
+    links.prune_unjoinable()
+
+    assert links.rescued(["sharedthing"]) == set()
+
+
+def test_pruning_leaves_a_database_from_before_normalisation_alone(tmp_path: Path) -> None:
+    # Those rows have NULL in `norm`, every comparison against it is
+    # false, and a prune that read that as "nothing defines it" would
+    # empty the table of an index it was only asked to shrink.
+    store = LinkStore(tmp_path / "idx")
+    store.add_links([link("c1", LinkKind.MENTIONS, "Whatever")], repo="r", path="a.go")
+    store._db.execute("UPDATE links SET norm = NULL")
+    store._db.commit()
+
+    assert store.prune_unjoinable() == 0
+    assert store.count() == 1
+    store.close()
+
+
+def test_only_mentions_are_pruned(links: LinkStore) -> None:
+    # A commit nobody references, a url in a doc, a port a config
+    # publishes — none of those is half of a pair, and all of them are
+    # answers on their own.
+    links.add_links(
+        [
+            link("c1", LinkKind.DECLARES, "8000"),
+            link("c2", LinkKind.REFERENCES, "https://example.invalid"),
+            link("c3", LinkKind.BLAMED_BY, "3964bb7"),
+        ],
+        repo="r",
+        path="compose.yml",
+    )
+
+    assert links.prune_unjoinable() == 0
+    assert links.count() == 3
 
 
 # --- settings, and the spellings they are asked about under ---------------

@@ -201,6 +201,27 @@ noise before any judgement about the idea was possible.
    rather than the first, because a docstring precedes the body and the
    first occurrence of a name is often prose about it.*
 
+   *Pruned 2026-09-12, after the size above was challenged. Two thirds
+   of mentions name the standard library or a vendored package and can
+   never be half of a join, so `index` drops them once every repo has
+   been read — which is the earliest moment "nothing defines this" is
+   a true statement, since an extractor sees one file. 50 507 links
+   become 33 300 and `links.db` goes 24.6 MB to 15.1, back under the
+   19.1 MB of vectors. `VACUUM` is part of it and not an afterthought:
+   the first run came out **larger** after deleting 17 550 rows, because
+   SQLite keeps emptied pages for reuse.*
+
+   *Two things this bought that are worth writing down. A mention is
+   anchored by `DECLARES` as well as `DEFINES` — a first version asked
+   only about definitions and took `refs trusted_proxies` from four uses
+   to zero, deleting the config join that is the whole reason the
+   settings work exists. And pruning can go wrong in exactly one way: a
+   repo joins the workspace later, defines a name whose mentions were
+   already dropped, and nothing re-extracts them because their files did
+   not change. A `pruned` table of names — 5 865 of them, 2% of what the
+   delete saved — makes that case a warning instead of a `refs` answer
+   with a definition and no uses.*
+
    *The bill, same repo indexed twice with everything else held equal:
    **0.3s of 24.4** — embedding dominates and this is lost in it — and
    **21.8 MB of `links.db` against 19.1 MB of vectors**. That second

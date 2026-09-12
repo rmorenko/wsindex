@@ -220,6 +220,9 @@ class Pipeline:
         config = self.config
         state = IndexState.load(self.state_dir)
         tally = _Tally()
+        # Before anything is written, so `_prune_links` can tell which
+        # definitions this run brought in. See there for why that matters.
+        defined_before = self.links.anchor_names() if self.links is not None else set()
         for repo in config.repos:
             # The engine says *who* is being read; what to draw with that
             # is the caller's business (see `wsindex.ui`). A plain
@@ -261,6 +264,7 @@ class Pipeline:
                 # run skip those same changes forever.
                 state = state.with_commit(repo.id, diff.head, markup=repo.markup_key)
                 state.save(self.state_dir)
+        self._prune_links(defined_before)
         log.info(
             "index finished in %.2fs: %d files, %d chunks",
             time.monotonic() - started,
@@ -268,6 +272,44 @@ class Pipeline:
             tally.chunks,
         )
         return tally.report(seconds=round(time.monotonic() - started, 2))
+
+    def _prune_links(self, defined_before: set[str]) -> None:
+        """Drop mentions nothing defines, and say so if that cost anything.
+
+        Two thirds of mentions name the standard library or a vendored
+        package — 18 871 of caddyserver's 28 545 — and those can never be
+        half of a join. They are dropped here rather than at write time
+        because an extractor sees one file: "nothing defines this" is
+        only true once every repo in the workspace has been read, which
+        is exactly now.
+
+        The risk it carries, and why the run says something out loud: a
+        repo can join the workspace later and define a name whose
+        mentions were already dropped. The files holding them have not
+        changed, so nothing re-extracts them, and `refs` would answer
+        with a definition and no uses — which reads as a fact about the
+        code rather than as a gap in the index. `LinkStore.rescued` names
+        that case exactly, and a full re-index is the repair.
+
+        Args:
+            defined_before: Normalised names the store already had
+                definitions for when this run started.
+        """
+        if self.links is None:
+            return
+        arrived = self.links.anchor_names() - defined_before
+        lost = self.links.rescued(arrived)
+        if lost:
+            log.warning(
+                "%d name(s) gained a definition whose uses were pruned earlier "
+                "(%s%s) — run a full re-index to restore them",
+                len(lost),
+                ", ".join(sorted(lost)[:3]),
+                ", ..." if len(lost) > 3 else "",
+            )
+        dropped = self.links.prune_unjoinable()
+        if dropped:
+            log.info("pruned %d mention(s) of names nothing in the workspace defines", dropped)
 
     def _plan(self, repo: Repository, *, root: Path, state: IndexState) -> tuple[RepoDiff, bool]:
         """Work out what to read for one repo, and whether HEAD describes it.
