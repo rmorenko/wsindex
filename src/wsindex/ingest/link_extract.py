@@ -43,6 +43,28 @@ implementation detail of the service."""
 _CONFIG_PORT_KEY = re.compile(r"(?:^|[^\w])port\s*[:=]\s*[\"']?(\d{2,5})\b", re.IGNORECASE)
 """`port: 8000` or `port = 8000` in a config file: a declaration too."""
 
+_CONFIG_KEY = re.compile(r"^[\s\-]*[\"']?([A-Za-z_][A-Za-z0-9_.\-]*)[\"']?\s*[:=]")
+"""The *name* a config file publishes, not only the value. One pattern
+for yaml, toml, json, ini and properties, because what they share is the
+only part this needs: a name at the head of a line, then `:` or `=`.
+
+This is where the drift pair was starving. `_declarations` matched ports
+and nothing else, so `max_retries: 3` produced no link at all and 8% of
+a workspace's config keys were known to the store — measured on
+caddyserver, 10 of 120 sampled. Ports were never the interesting half;
+they were the half a regular expression could reach.
+
+Safe to be this permissive because it runs only on CONFIG chunks, where
+a name before a colon is a key by grammar rather than by guess. That is
+also why no `_COMPOUND` test applies here: the filter that separates a
+name from a keyword is needed in code and pointless in a config file."""
+
+_MIN_KEY = 3
+"""Shorter than `_MIN_NAME` on purpose. Four exists to stop `get`, `run`
+and `new` earning edges in code; a config key is a name by grammar, so
+the guard is not needed and the cost of it is real — `ssl`, `env`, `dsn`
+and `api` are settings people ask about."""
+
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 """A token that could be a name. Deliberately not language-aware: the
 chunker registers sixteen code grammars and a per-language lexer for each
@@ -100,7 +122,17 @@ def _references(text: str) -> Iterable[tuple[str, int]]:
 
 
 def _declarations(text: str) -> Iterable[tuple[str, int]]:
+    """What one config chunk publishes: the values, and the names.
+
+    Both, and a line gives both — `port: 8000` declares the port 8000
+    and also declares that this file has a `port` setting. The first
+    answers "who else uses 8000", the second answers "where is this
+    setting configured", and only the first was ever recorded.
+    """
     for offset, line in enumerate(text.splitlines(), start=0):
+        key = _CONFIG_KEY.match(line)
+        if key is not None and len(key.group(1)) >= _MIN_KEY:
+            yield key.group(1), offset
         mapping = _PUBLISHED_PORT.match(line)
         if mapping is not None:
             yield mapping.group(1), offset

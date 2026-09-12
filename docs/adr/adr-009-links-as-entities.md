@@ -110,6 +110,34 @@ noise before any judgement about the idea was possible.
    zero false alarms and it caught the real bug. Matching a literal in
    code against a value a config file *publishes* is the whole rule.
 
+   *(Extended 2026-09-12, and "only by value" was the mistake. A config
+   file publishes its **key names** as much as its values, and matching
+   only values meant `max_retries: 3` produced no link at all —
+   measured, **8%** of a workspace's config keys were known to the
+   store, and `DECLARES` had nine edges. Keys are now declarations too:
+   one pattern for yaml, toml, json, ini and properties, since what they
+   share is the only part this needs, a name at the head of a line
+   before `:` or `=`. No `_COMPOUND` guard applies, because that filter
+   separates a name from a keyword in **code** and a config key is a
+   name by grammar; the length floor drops to three for the same reason,
+   keeping `ssl`, `env` and `dsn`.*
+
+   *Paired with it, a `norm` column: separators stripped, lowercased, so
+   `max_retries` and `MaxRetries` and `MAX_RETRIES` meet. This is the
+   one query `grep` cannot answer — `rg -w` misses the other spelling
+   and `rg -i` misses it too, because they differ by more than case —
+   which is why it is worth a column and an index where the code-symbol
+   case was not. `by_name` reports the exact spelling first and labels
+   the rest, because `Listen` and `listen` also collapse and in Go those
+   are different symbols.*
+
+   *After: **8% → 100%** of config keys in files the walker actually
+   reads (the 39% that looked missing were `.github/` workflows, which
+   are excluded as hidden — so that gap is a walker decision, not this
+   one). `DECLARES` goes from 9 edges to 1 043. Cost is 2.6 MB of 24.6,
+   and most of it is `norm` and its index applying to all 50 507 rows
+   rather than the 1 034 keys themselves.)*
+
 1. **"Dangling" requires a declaration source, named explicitly.** A
    link is dangling when it names something a config in this workspace
    was supposed to declare and does not — not when a value is absent

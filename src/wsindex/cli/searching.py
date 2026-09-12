@@ -75,12 +75,18 @@ def search(
 
 
 def refs(name: str) -> None:
-    """Everything that names something: a port, a ticket, a commit, a url.
+    """Everything that names something: a setting, a port, a ticket, a url.
 
     The inverted index over the links `index` recorded. Ask it about a
     port and it answers who reads it and who publishes it; about a
     ticket, which commits mention it; about a function, where it is
-    defined and which files name it.
+    defined and which files name it; about a setting, which config file
+    declares it and what names it in code.
+
+    Spelling need not match. `max_retries` in a yaml and `MaxRetries` in
+    the code that reads it are one question, and this is the case `grep`
+    cannot serve at all — neither `-w` nor `-i` bridges them. A hit under
+    another spelling is labelled with the one actually found.
 
     That last one is not "who calls this": a name in a comment or a
     string counts, and nothing resolves which definition a use refers to.
@@ -105,16 +111,26 @@ def refs(name: str) -> None:
         group = [edge for edge in edges if edge.kind is kind]
         if not group:
             continue
-        # Calls before type references before comments, which is what
-        # somebody asking "where is this used" means by the question.
-        # Edges with nothing to say about it keep the file order they
-        # were read in.
-        group.sort(key=lambda edge: OCCURRENCE_ORDER[edge.via] if edge.via else 0)
+        # The spelling that was asked for first, then calls before type
+        # references before comments, which is what somebody asking
+        # "where is this used" means by the question. Edges with nothing
+        # to say about it keep the file order they were read in.
+        group.sort(
+            key=lambda edge: (
+                edge.name != name,
+                OCCURRENCE_ORDER[edge.via] if edge.via else 0,
+            )
+        )
         typer.echo(f"  {label}:")
         for edge in group:
             suffix = f"  -> {edge.url}" if edge.url else ""
             where = f"  ({edge.via})" if edge.via else ""
-            typer.echo(f"    {edge.repo}/{edge.path}:{edge.line}{where}{suffix}")
+            # A hit found under a different spelling says so. Asking for
+            # `max_retries` and being shown `MaxRetries` without being
+            # told is the search quietly answering a question that was
+            # not the one asked.
+            spelling = f"  [{edge.name}]" if edge.name != name else ""
+            typer.echo(f"    {edge.repo}/{edge.path}:{edge.line}{where}{spelling}{suffix}")
     if any(edge.kind is LinkKind.READS_KEY for edge in edges) and not any(
         edge.kind is LinkKind.DECLARES for edge in edges
     ):

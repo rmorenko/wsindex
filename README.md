@@ -574,6 +574,24 @@ string counts, and nothing resolves *which* definition a use refers to —
 graph is still deferred. What is here is the cheaper claim, this name
 occurs here, which is a search result rather than a fact about calls.
 
+The case this is actually best at is a setting, because it is the one
+`grep` cannot serve at all:
+
+```
+$ uv run wsindex refs trusted_proxies
+trusted_proxies
+  declared by:
+    caddy/caddytest/integration/caddyfile_adapt/...json:14
+  named in:
+    caddy/modules/caddyhttp/reverseproxy/httptransport.go:71  (code)  [TrustedProxies]
+    caddy/modules/caddyhttp/reverseproxy/caddyfile.go:203  (code)  [trustedProxies]
+```
+
+Three spellings of one setting, met under a normalised key. `rg -w trusted_proxies` misses both code sites and `rg -i` misses them too,
+because they differ by more than case. A hit found under another
+spelling is labelled with the one actually found, so a variant never
+arrives disguised as an exact match.
+
 Each use says which sort it is — `call`, `code`, `import`, `string`,
 `comment` — and they are reported calls first, comments last. That is
 deliberate rather than a consolation prize. Measured on caddyserver, 52%

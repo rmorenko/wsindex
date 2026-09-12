@@ -318,7 +318,92 @@ def test_a_port_key_in_a_config_is_a_declaration() -> None:
         end_line=1,
         text="server:\n  port: 8000\n",
     )
-    assert [(link.kind, link.name) for link in links_for([cfg])] == [(LinkKind.DECLARES, "8000")]
+    # The key names are declarations too, since config keys arrived; the
+    # port *value* is what this case is about.
+    assert (LinkKind.DECLARES, "8000") in [(link.kind, link.name) for link in links_for([cfg])]
+
+
+# --- settings, and the spellings they are asked about under ---------------
+
+
+def config(text: str, *, path: str = "app.yaml", line: int = 1) -> Chunk:
+    return Chunk(
+        repo="r",
+        path=path,
+        lang="yaml",
+        kind=Kind.CONFIG,
+        symbol=None,
+        node_type=None,
+        start_line=line,
+        end_line=line,
+        text=text,
+    )
+
+
+def test_a_config_declares_its_keys_and_not_only_its_ports() -> None:
+    # The hole this closes: `_declarations` matched ports and nothing
+    # else, so `max_retries: 3` produced no link and 8% of a workspace's
+    # config keys were known to the store — 10 of 120 sampled on
+    # caddyserver. Ports were never the interesting half, only the half
+    # a regular expression could reach.
+    from wsindex.ingest.link_extract import links_for
+
+    found = links_for([config("server:\n  max_retries: 3\n  port: 8000\n")])
+
+    assert {(link.kind, link.name) for link in found} == {
+        (LinkKind.DECLARES, "server"),
+        (LinkKind.DECLARES, "max_retries"),
+        (LinkKind.DECLARES, "port"),
+        (LinkKind.DECLARES, "8000"),
+    }
+
+
+def test_a_short_key_is_a_setting_even_though_a_short_symbol_is_not() -> None:
+    # Code needs a length guard because `get` and `run` are not names
+    # worth an edge. A config key is a name by grammar, and `ssl`, `env`
+    # and `dsn` are settings people ask about.
+    from wsindex.ingest.link_extract import links_for
+
+    assert {link.name for link in links_for([config("ssl: true\nenv: prod\n")])} == {"ssl", "env"}
+
+
+def test_a_setting_is_found_under_the_other_half_s_spelling(links: LinkStore) -> None:
+    # The one thing `refs` can do that `grep` cannot: `rg -w max_retries`
+    # misses `MaxRetries`, and `rg -i` misses it too, because they differ
+    # by more than case. Asking someone to guess which half of their own
+    # system spells it which way is asking them to know the answer first.
+    from wsindex.ingest.link_extract import links_for
+
+    links.add_links(links_for([config("max_retries: 3")]), repo="r", path="app.yaml")
+    links.add_links(links_for([code("if attempt < cfg.MaxRetries {")]), repo="r", path="retry.go")
+
+    found = {(edge.kind, edge.name) for edge in links.by_name("max_retries")}
+    assert found == {(LinkKind.DECLARES, "max_retries"), (LinkKind.MENTIONS, "MaxRetries")}
+
+
+def test_the_spelling_that_was_asked_for_comes_first(links: LinkStore) -> None:
+    # A variant arriving above an exact hit reads as the exact answer,
+    # and the reader has no way to tell without checking the file.
+    from wsindex.ingest.link_extract import links_for
+
+    links.add_links(links_for([code("x := MaxRetries")]), repo="r", path="a.go")
+    links.add_links(links_for([code("y := max_retries")]), repo="r", path="b.go")
+
+    assert [edge.name for edge in links.by_name("max_retries")] == ["max_retries", "MaxRetries"]
+
+
+def test_a_database_from_before_normalisation_is_still_searchable(tmp_path: Path) -> None:
+    # `norm` is NULL in rows written by an older wsindex, and a query
+    # that only asked `norm = ?` would answer "no links named that" for
+    # an index full of them. Silence is the worst failure here: it reads
+    # as a fact about the code.
+    store = LinkStore(tmp_path / "idx")
+    store.add_links([link("c1", LinkKind.DECLARES, "max_retries")], repo="r", path="app.yaml")
+    store._db.execute("UPDATE links SET norm = NULL")
+    store._db.commit()
+
+    assert [edge.name for edge in store.by_name("max_retries")] == ["max_retries"]
+    store.close()
 
 
 # --- the name pair -------------------------------------------------------

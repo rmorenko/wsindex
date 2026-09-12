@@ -18,6 +18,7 @@ would fill with references from code that no longer exists.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ _COLUMNS = {
     "dst_chunk_id": "TEXT",
     "url": "TEXT",
     "via": "TEXT",
+    "norm": "TEXT",
     "repo": "TEXT NOT NULL",
     "path": "TEXT NOT NULL",
 }
@@ -47,8 +49,7 @@ database is missing. Kept beside the CREATE rather than parsed out of it:
 two spellings of the same truth, but the alternative is parsing SQL."""
 
 
-_SCHEMA = (
-    """
+_TABLE = """
     CREATE TABLE IF NOT EXISTS links (
         src_chunk_id TEXT NOT NULL,
         kind         TEXT NOT NULL,
@@ -57,11 +58,19 @@ _SCHEMA = (
         dst_chunk_id TEXT,
         url          TEXT,
         via          TEXT,
+        norm         TEXT,
         repo         TEXT NOT NULL,
         path         TEXT NOT NULL,
         PRIMARY KEY (src_chunk_id, kind, name, line)
     )
-    """,
+    """
+"""The table. Separate from its indexes because a migration runs between
+them: an index over a column `_migrate` is about to add fails on any
+database written before that column, with `no such column`. Found by the
+test that exists for exactly this, when `norm` arrived."""
+
+
+_INDEXES = (
     # Three queries, three indexes. All equality lookups, which is the
     # whole argument for keeping links in SQL rather than beside the
     # vectors: `dangling` is an anti-join, which a vector store's filter
@@ -78,12 +87,46 @@ _SCHEMA = (
     "CREATE INDEX IF NOT EXISTS links_by_name ON links (kind, name)",
     "CREATE INDEX IF NOT EXISTS links_by_bare_name ON links (name)",
     "CREATE INDEX IF NOT EXISTS links_by_src ON links (src_chunk_id)",
+    # `by_name` asks for both spellings at once, so both columns have to
+    # be searchable or the query degrades to a scan on half of itself.
+    "CREATE INDEX IF NOT EXISTS links_by_norm ON links (norm)",
 )
-"""Every statement that builds the store, in order.
+"""Every index over the table, built after the migration.
 
 Separate statements rather than one script: `executescript` is SQLite's
 and takes no parameters, and everything here is plain SQL both backends
 accept."""
+
+
+_SEPARATORS = re.compile(r"[_.\-]")
+"""What separates the words of a name when a name has words. Which of
+them a project uses is a house style, and the two ends of the same
+setting rarely share one."""
+
+
+def normalised(name: str) -> str:
+    """One spelling for every way the same name gets written.
+
+    A setting is `max_retries` in the yaml and `MaxRetries` in the code
+    that reads it, and those are different strings, so a store keyed by
+    name joins neither to the other. This is the key they meet under.
+
+    It is the one place `refs` can beat `grep`, which is why it is worth
+    a column: `rg -w max_retries` misses `MaxRetries` and `rg -i` misses
+    it too, because they differ by more than case.
+
+    The cost, stated plainly: `Listen` and `listen` also collapse, and in
+    Go those are a different symbol — exported and not. For "where is
+    this named" that is noise a reader can see through, which is why
+    `by_name` reports the exact spelling first and labels the rest.
+
+    Args:
+        name: A name as some file spells it.
+
+    Returns:
+        Separators removed, lowercased.
+    """
+    return _SEPARATORS.sub("", name).lower()
 
 
 class LinkKind(StrEnum):
@@ -412,11 +455,18 @@ class LinkStore:
         return query if self.dialect.placeholder == "?" else query.replace("?", "%s")
 
     def _create(self) -> None:
-        """The table and its indexes; runs on every open, creates once."""
-        for statement in _SCHEMA:
-            self._db.execute(statement)
+        """The table, then the migration, then the indexes.
+
+        That order is load-bearing and was learned by breaking it: an
+        index over a column the migration is about to add does not exist
+        yet on an older database, and `CREATE INDEX` says `no such
+        column` rather than skipping.
+        """
+        self._db.execute(_TABLE)
         self._db.commit()
         self._migrate()
+        for statement in _INDEXES:
+            self._db.execute(statement)
         self._db.commit()
 
     def _migrate(self) -> None:
@@ -484,8 +534,8 @@ class LinkStore:
         cursor.executemany(
             self._sql(
                 f"{self.dialect.insert_prefix} links "
-                "(src_chunk_id, kind, name, line, dst_chunk_id, url, via, repo, path) "
-                f"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?){self.dialect.insert_suffix}"
+                "(src_chunk_id, kind, name, line, dst_chunk_id, url, via, norm, repo, path) "
+                f"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?){self.dialect.insert_suffix}"
             ),
             [
                 (
@@ -496,6 +546,10 @@ class LinkStore:
                     link.dst_chunk_id,
                     link.url,
                     link.via.value if link.via else None,
+                    # Derived here rather than taken from the caller, so
+                    # no extractor can spell it differently and quietly
+                    # put a name where nothing will find it.
+                    normalised(link.name),
                     repo,
                     path,
                 )
@@ -533,12 +587,12 @@ class LinkStore:
         row = self._db.execute("SELECT COUNT(*) FROM links").fetchone()
         return int(row[0])
 
-    def _rows(self, where: str, params: tuple[object, ...]) -> list[Edge]:
+    def _rows(self, where: str, params: tuple[object, ...], *, order: str = "") -> list[Edge]:
         """Read edges matching a WHERE clause, ordered for reading."""
         rows = self._db.execute(
             self._sql(
                 "SELECT kind, name, line, src_chunk_id, dst_chunk_id, url, via, repo, path "
-                f"FROM links WHERE {where} ORDER BY repo, path, line"
+                f"FROM links WHERE {where} ORDER BY {order}repo, path, line"
             ),
             params,
         ).fetchall()
@@ -563,17 +617,36 @@ class LinkStore:
         """Every link that names this thing — the inverted index.
 
         The query the whole store exists to answer: given a port, a
-        ticket or a sha, who mentions it. Equality on an indexed column,
-        which is why links live in SQLite and not beside the vectors.
+        ticket, a sha or a setting, who mentions it. Equality on an
+        indexed column, which is why links live in SQLite and not beside
+        the vectors.
+
+        Spelling is not required to match. A setting is `max_retries` in
+        the config and `MaxRetries` in the code that reads it, and asking
+        a person to guess which half of their own system spells it which
+        way is asking them to already know the answer. Both are found
+        (see `normalised`), and the spelling that was asked for is
+        reported first, so a variant is visible as a variant rather than
+        arriving disguised as an exact hit.
+
+        The `OR name = ?` is for databases written before `norm` existed:
+        their rows have NULL there and would otherwise become
+        unfindable, which is a silent wrong answer rather than an
+        obvious failure.
 
         Args:
-            name: Exactly as it was recorded — `8080`, `PROJ-412`,
-                `3964bb7`.
+            name: As some file spells it — `8080`, `PROJ-412`,
+                `3964bb7`, `max_retries`.
 
         Returns:
-            Every edge with that name, ordered by file then line.
+            Every edge naming it, exact spellings first, then by file
+            and line.
         """
-        return self._rows("name = ?", (name,))
+        return self._rows(
+            "(norm = ? OR name = ?)",
+            (normalised(name), name, name),
+            order="CASE WHEN name = ? THEN 0 ELSE 1 END, ",
+        )
 
     def out_of(self, chunk_ids: Sequence[str], *, kind: LinkKind | None = None) -> list[Edge]:
         """Links found inside the given chunks.

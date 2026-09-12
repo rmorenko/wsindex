@@ -173,6 +173,7 @@ def _refs(engine: Pipeline, name: str) -> dict[str, Any]:
         edges,
         key=lambda edge: (
             order.index(edge.kind),
+            edge.name != name,
             OCCURRENCE_ORDER[edge.via] if edge.via else 0,
         ),
     )
@@ -183,6 +184,11 @@ def _refs(engine: Pipeline, name: str) -> dict[str, Any]:
             "path": edge.path,
             "line": edge.line,
             "url": edge.url,
+            # The spelling actually found, which is not always the one
+            # asked for: `max_retries` in a config is `MaxRetries` in the
+            # code. An agent told only the line number would report the
+            # match as if the two files agreed.
+            "name": edge.name,
             # None for every relation but "named in". Present regardless
             # so the shape does not change under an agent mid-list.
             "via": edge.via.value if edge.via else None,
