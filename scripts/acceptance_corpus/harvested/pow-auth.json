@@ -1,0 +1,604 @@
+{
+  "org": "pow-auth",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "assent-193",
+      "text": "\u201cEdDSA\u201d algorithm not working",
+      "truth": "assent/lib/assent/jwt_adapter/assent_jwt.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/assent/issues/193",
+        "pull": "https://github.com/pow-auth/assent/pull/200",
+        "merged_at": "2026-06-08T00:27:19Z"
+      }
+    },
+    {
+      "id": "assent-156",
+      "text": "Subject in userinfo claims should be of type string",
+      "truth": "assent/lib/assent/strategy.ex",
+      "also_valid": [
+        "assent/lib/assent.ex",
+        "assent/lib/assent/strategies/auth0.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/assent/issues/156",
+        "pull": "https://github.com/pow-auth/assent/pull/167",
+        "merged_at": "2025-01-06T22:40:01Z"
+      }
+    },
+    {
+      "id": "assent-1",
+      "text": "Add connection pool to Mint HTTP adapter (turn it into a GenServer)",
+      "truth": "assent/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/assent/issues/1",
+        "pull": "https://github.com/pow-auth/assent/pull/124",
+        "merged_at": "2023-08-26T22:23:47Z"
+      }
+    },
+    {
+      "id": "assent-79",
+      "text": "OTP 24 :crypto.hmac/3 doesn't exist anymore",
+      "truth": "assent/lib/assent/strategies/oauth.ex",
+      "also_valid": [
+        "assent/lib/assent/strategies/facebook.ex",
+        "assent/lib/assent/jwt_adapter/assent_jwt.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/assent/issues/79",
+        "pull": "https://github.com/pow-auth/assent/pull/80",
+        "merged_at": "2021-03-01T21:03:54Z"
+      }
+    },
+    {
+      "id": "assent-6",
+      "text": "Log warning for requests without SSL cert verification",
+      "truth": "assent/lib/assent/http_adapter/httpc.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/assent/issues/6",
+        "pull": "https://github.com/pow-auth/assent/pull/9",
+        "merged_at": "2019-09-30T16:01:09Z"
+      }
+    },
+    {
+      "id": "pow-734",
+      "text": "Elixir 1.18 deprecated Module.eval_quoted/2",
+      "truth": "pow/lib/pow/extension/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/734",
+        "pull": "https://github.com/pow-auth/pow/pull/735",
+        "merged_at": "2025-01-09T19:56:06Z"
+      }
+    },
+    {
+      "id": "pow-725",
+      "text": "`mix pow.install` throws error",
+      "truth": "pow/lib/pow/phoenix/template.ex",
+      "also_valid": [
+        "pow/config/test.exs"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/725",
+        "pull": "https://github.com/pow-auth/pow/pull/726",
+        "merged_at": "2024-03-03T23:29:35Z"
+      }
+    },
+    {
+      "id": "pow-704",
+      "text": "Upgrading POW from 1.6 to 1.7",
+      "truth": "pow/lib/pow/phoenix/controllers/controller.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/704",
+        "pull": "https://github.com/pow-auth/pow/pull/709",
+        "merged_at": "2023-08-30T13:44:48Z"
+      }
+    },
+    {
+      "id": "pow-630",
+      "text": "Usage of Conn in 'before_process'",
+      "truth": "pow/lib/pow/phoenix/controllers/controller.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/630",
+        "pull": "https://github.com/pow-auth/pow/pull/632",
+        "merged_at": "2021-09-26T14:55:09Z"
+      }
+    },
+    {
+      "id": "pow-648",
+      "text": "Phoenix 1.6 support?",
+      "truth": "pow/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/648",
+        "pull": "https://github.com/pow-auth/pow/pull/649",
+        "merged_at": "2021-09-26T14:31:24Z"
+      }
+    },
+    {
+      "id": "pow-475",
+      "text": "Warn about insecure TTL",
+      "truth": "pow/lib/pow/store/credentials_cache.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/475",
+        "pull": "https://github.com/pow-auth/pow/pull/619",
+        "merged_at": "2021-04-05T00:59:12Z"
+      }
+    },
+    {
+      "id": "pow-601",
+      "text": "Switch to :crypto.mac/4 from :crypto.hmac/3",
+      "truth": "pow/lib/pow/ecto/schema/password/pbkdf2.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/601",
+        "pull": "https://github.com/pow-auth/pow/pull/602",
+        "merged_at": "2021-02-21T21:21:18Z"
+      }
+    },
+    {
+      "id": "pow-560",
+      "text": "Improve email validation",
+      "truth": "pow/lib/pow/ecto/schema/changeset.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/560",
+        "pull": "https://github.com/pow-auth/pow/pull/565",
+        "merged_at": "2020-09-13T22:41:24Z"
+      }
+    },
+    {
+      "id": "pow-486",
+      "text": "No migration file generated for PowResetPassword",
+      "truth": "pow/lib/mix/tasks/extension/phoenix/pow.extension.phoenix.mailer.gen.templates.ex",
+      "also_valid": [
+        "pow/lib/mix/tasks/extension/phoenix/pow.extension.phoenix.gen.templates.ex",
+        "pow/lib/mix/tasks/extension/ecto/pow.extension.ecto.gen.migrations.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/486",
+        "pull": "https://github.com/pow-auth/pow/pull/487",
+        "merged_at": "2020-04-10T20:45:32Z"
+      }
+    },
+    {
+      "id": "pow-470",
+      "text": "Unexpected warnings during tests",
+      "truth": "pow/lib/pow/store/base.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/470",
+        "pull": "https://github.com/pow-auth/pow/pull/473",
+        "merged_at": "2020-03-28T22:12:43Z"
+      }
+    },
+    {
+      "id": "pow-460",
+      "text": "Dynamic template generation lookup",
+      "truth": "pow/lib/mix/tasks/extension/phoenix/pow.extension.phoenix.gen.templates.ex",
+      "also_valid": [
+        "pow/lib/extensions/reset_password/reset_password.ex",
+        "pow/lib/extensions/invitation/invitation.ex",
+        "pow/lib/pow/extension/base.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/460",
+        "pull": "https://github.com/pow-auth/pow/pull/461",
+        "merged_at": "2020-03-22T06:05:09Z"
+      }
+    },
+    {
+      "id": "pow-445",
+      "text": "Use Cloak with Pow to encrypt user emails",
+      "truth": "pow/lib/pow/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/445",
+        "pull": "https://github.com/pow-auth/pow/pull/455",
+        "merged_at": "2020-03-13T18:49:37Z"
+      }
+    },
+    {
+      "id": "pow-419",
+      "text": "Can sign in even though email has not been confirmed",
+      "truth": "pow/lib/pow/plug/session.ex",
+      "also_valid": [
+        "pow/lib/extensions/persistent_session/plug/cookie.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/419",
+        "pull": "https://github.com/pow-auth/pow/pull/420",
+        "merged_at": "2020-02-15T04:41:00Z"
+      }
+    },
+    {
+      "id": "pow-320",
+      "text": "\"password_hash can't be blank\" error when trying to register email with invalid format",
+      "truth": "pow/lib/pow/ecto/schema/changeset.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/320",
+        "pull": "https://github.com/pow-auth/pow/pull/391",
+        "merged_at": "2020-01-22T03:38:42Z"
+      }
+    },
+    {
+      "id": "pow-358",
+      "text": "nil user_id causes app failure",
+      "truth": "pow/lib/pow/ecto/schema/changeset.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/358",
+        "pull": "https://github.com/pow-auth/pow/pull/364",
+        "merged_at": "2019-12-29T21:42:44Z"
+      }
+    },
+    {
+      "id": "pow-326",
+      "text": "pow_extension_routes still defines show for Invitation route though overridden.",
+      "truth": "pow/lib/pow/phoenix/router.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/326",
+        "pull": "https://github.com/pow-auth/pow/pull/328",
+        "merged_at": "2019-11-16T02:14:34Z"
+      }
+    },
+    {
+      "id": "pow-302",
+      "text": "Unhandled pattern matching in `delete_from_session_list/4`",
+      "truth": "pow/lib/pow/store/backend/mnesia_cache.ex",
+      "also_valid": [
+        "pow/lib/pow/store/base.ex",
+        "pow/lib/pow/store/credentials_cache.ex",
+        "pow/lib/pow/store/backend/ets_cache.ex",
+        "pow/lib/pow/store/backend/base.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/302",
+        "pull": "https://github.com/pow-auth/pow/pull/304",
+        "merged_at": "2019-10-19T21:03:46Z"
+      }
+    },
+    {
+      "id": "pow-291",
+      "text": "Keeping scope in generated routes",
+      "truth": "pow/lib/pow/phoenix/router.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/291",
+        "pull": "https://github.com/pow-auth/pow/pull/292",
+        "merged_at": "2019-10-09T14:11:49Z"
+      }
+    },
+    {
+      "id": "pow-284",
+      "text": "Limit login attempts",
+      "truth": "pow/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/284",
+        "pull": "https://github.com/pow-auth/pow/pull/290",
+        "merged_at": "2019-10-07T22:15:37Z"
+      }
+    },
+    {
+      "id": "pow-253",
+      "text": "E-mail validation doesn't accept addresses with unicode (RFC 6531)",
+      "truth": "pow/lib/pow/ecto/schema/changeset.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/253",
+        "pull": "https://github.com/pow-auth/pow/pull/257",
+        "merged_at": "2019-08-25T18:54:00Z"
+      }
+    },
+    {
+      "id": "pow-176",
+      "text": "API integration guide",
+      "truth": "pow/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/176",
+        "pull": "https://github.com/pow-auth/pow/pull/247",
+        "merged_at": "2019-08-11T00:02:31Z"
+      }
+    },
+    {
+      "id": "pow-223",
+      "text": "Password reset edit route note found when submitting form",
+      "truth": "pow/lib/pow/phoenix/router.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/223",
+        "pull": "https://github.com/pow-auth/pow/pull/224",
+        "merged_at": "2019-06-14T00:57:56Z"
+      }
+    },
+    {
+      "id": "pow-209",
+      "text": "Broken Hex.pm docs (links)",
+      "truth": "pow/mix.exs",
+      "also_valid": [
+        "pow/lib/ex_doc/markdown.ex",
+        "pow/lib/pow/extension/ecto/schema.ex",
+        "pow/lib/pow/config.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/209",
+        "pull": "https://github.com/pow-auth/pow/pull/211",
+        "merged_at": "2019-06-06T18:41:44Z"
+      }
+    },
+    {
+      "id": "pow-200",
+      "text": "Unable to use 'Pow.Plug.authenticate_user(conn, params)' method for my API request.",
+      "truth": "pow/lib/pow/ecto/context.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/200",
+        "pull": "https://github.com/pow-auth/pow/pull/201",
+        "merged_at": "2019-05-26T15:16:03Z"
+      }
+    },
+    {
+      "id": "pow-157",
+      "text": "Users can change their e-mail to one that's already taken",
+      "truth": "pow/lib/extensions/email_confirmation/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/157",
+        "pull": "https://github.com/pow-auth/pow/pull/161",
+        "merged_at": "2019-04-15T16:37:59Z"
+      }
+    },
+    {
+      "id": "pow-133",
+      "text": "Suppress instructions if config value has been set",
+      "truth": "pow/lib/mix/tasks/phoenix/pow.phoenix.install.ex",
+      "also_valid": [
+        "pow/lib/mix/tasks/phoenix/pow.phoenix.gen.templates.ex",
+        "pow/lib/mix/tasks/extension/phoenix/pow.extension.phoenix.mailer.gen.templates.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/133",
+        "pull": "https://github.com/pow-auth/pow/pull/135",
+        "merged_at": "2019-03-12T19:40:24Z"
+      }
+    },
+    {
+      "id": "pow-117",
+      "text": "POW custom routes don't seem to work?",
+      "truth": "pow/lib/extensions/email_confirmation/phoenix/controllers/controller_callbacks.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/117",
+        "pull": "https://github.com/pow-auth/pow/pull/119",
+        "merged_at": "2019-03-08T14:56:14Z"
+      }
+    },
+    {
+      "id": "pow-86",
+      "text": "Make confirm_password optional?",
+      "truth": "pow/lib/pow/ecto/schema/changeset.ex",
+      "also_valid": [
+        "pow/lib/pow/ecto/schema.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/86",
+        "pull": "https://github.com/pow-auth/pow/pull/91",
+        "merged_at": "2019-02-16T01:07:39Z"
+      }
+    },
+    {
+      "id": "pow-87",
+      "text": "Pow.Store.Backend.EtsCache not being started automatically?",
+      "truth": "pow/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/87",
+        "pull": "https://github.com/pow-auth/pow/pull/88",
+        "merged_at": "2019-02-15T14:43:11Z"
+      }
+    },
+    {
+      "id": "pow-67",
+      "text": "Disable registration routes",
+      "truth": "pow/lib/pow/phoenix/router.ex",
+      "also_valid": [
+        "pow/mix.exs"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/67",
+        "pull": "https://github.com/pow-auth/pow/pull/71",
+        "merged_at": "2019-01-23T15:51:45Z"
+      }
+    },
+    {
+      "id": "pow-62",
+      "text": "Consider trimming user_id_field_value",
+      "truth": "pow/lib/pow/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/62",
+        "pull": "https://github.com/pow-auth/pow/pull/64",
+        "merged_at": "2019-01-06T21:41:53Z"
+      }
+    },
+    {
+      "id": "pow-38",
+      "text": "Getting current active users.",
+      "truth": "pow/lib/pow/store/backend/mnesia_cache.ex",
+      "also_valid": [
+        "pow/lib/pow/store/backend/ets_cache.ex",
+        "pow/lib/pow/store/credentials_cache.ex",
+        "pow/lib/pow/store/base.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/38",
+        "pull": "https://github.com/pow-auth/pow/pull/44",
+        "merged_at": "2018-10-19T14:49:00Z"
+      }
+    },
+    {
+      "id": "pow-20",
+      "text": "allow mapping password_hash to another field?",
+      "truth": "pow/lib/pow/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow/issues/20",
+        "pull": "https://github.com/pow-auth/pow/pull/21",
+        "merged_at": "2018-09-09T16:57:20Z"
+      }
+    },
+    {
+      "id": "pow_assent-237",
+      "text": "Attempt to integrate with ORCID's OIDC",
+      "truth": "pow_assent/lib/pow_assent/phoenix/controllers/authorization_controller.ex",
+      "also_valid": [
+        "pow_assent/lib/pow_assent/phoenix/controllers/reauthorization_plug_handler.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/237",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/239",
+        "merged_at": "2023-03-28T19:37:41Z"
+      }
+    },
+    {
+      "id": "pow_assent-163",
+      "text": "Warning from dialyzer : Invalid type specification for function",
+      "truth": "pow_assent/lib/pow_assent/phoenix/messages.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/163",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/180",
+        "merged_at": "2020-05-18T01:36:31Z"
+      }
+    },
+    {
+      "id": "pow_assent-169",
+      "text": "Handle User Rejecting Permissions",
+      "truth": "pow_assent/lib/pow_assent/phoenix/controllers/authorization_controller.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/169",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/179",
+        "merged_at": "2020-05-18T00:02:15Z"
+      }
+    },
+    {
+      "id": "pow_assent-116",
+      "text": "Add persistent session handling",
+      "truth": "pow_assent/lib/pow_assent/plug/reauthorization.ex",
+      "also_valid": [
+        "pow_assent/lib/pow_assent/phoenix/controllers/reauthorization_plug_handler.ex",
+        "pow_assent/lib/pow_assent/plug.ex",
+        "pow_assent/config/test.exs"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/116",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/178",
+        "merged_at": "2020-05-17T22:33:19Z"
+      }
+    },
+    {
+      "id": "pow_assent-106",
+      "text": "PowAssent for Phoenix API and SPA / mobile app",
+      "truth": "pow_assent/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/106",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/143",
+        "merged_at": "2020-02-05T03:30:24Z"
+      }
+    },
+    {
+      "id": "pow_assent-113",
+      "text": "Switching OAuth provider when the user_id field isn't in the response.",
+      "truth": "pow_assent/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/113",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/129",
+        "merged_at": "2020-01-29T01:35:33Z"
+      }
+    },
+    {
+      "id": "pow_assent-109",
+      "text": "Redirect to original request path after auth",
+      "truth": "pow_assent/lib/pow_assent/phoenix/controllers/authorization_controller.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/109",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/110",
+        "merged_at": "2019-11-29T16:04:01Z"
+      }
+    },
+    {
+      "id": "pow_assent-103",
+      "text": "Installation error as dependency resolution failed",
+      "truth": "pow_assent/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/103",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/104",
+        "merged_at": "2019-11-15T20:20:00Z"
+      }
+    },
+    {
+      "id": "pow_assent-91",
+      "text": "Separate strategy logic into individual library",
+      "truth": "pow_assent/lib/pow_assent.ex",
+      "also_valid": [
+        "pow_assent/lib/pow_assent/plug.ex",
+        "pow_assent/mix.exs",
+        "pow_assent/lib/pow_assent/config.ex",
+        "pow_assent/lib/pow_assent/ecto/schema.ex"
+      ],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/91",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/95",
+        "merged_at": "2019-10-06T15:12:13Z"
+      }
+    },
+    {
+      "id": "pow_assent-71",
+      "text": "`:httpc` missing in default elixir 1.9 mix release",
+      "truth": "pow_assent/mix.exs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/71",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/73",
+        "merged_at": "2019-06-04T22:14:46Z"
+      }
+    },
+    {
+      "id": "pow_assent-44",
+      "text": "Error in user changeset",
+      "truth": "pow_assent/lib/pow_assent/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/44",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/50",
+        "merged_at": "2019-03-25T14:25:20Z"
+      }
+    },
+    {
+      "id": "pow_assent-17",
+      "text": "set_confirmed_at fails with :utc_datetime expects microseconds to be empty",
+      "truth": "pow_assent/lib/pow_assent/ecto/schema.ex",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/pow-auth/pow_assent/issues/17",
+        "pull": "https://github.com/pow-auth/pow_assent/pull/19",
+        "merged_at": "2018-11-19T16:02:38Z"
+      }
+    }
+  ]
+}

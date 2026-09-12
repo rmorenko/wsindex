@@ -1,0 +1,158 @@
+{
+  "org": "dbeaver",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "dbeaver-41909",
+      "text": "MariaDB named CHECK constraints are not shown in the Constraints tab",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ext.mysql/src/org/jkiss/dbeaver/ext/mysql/model/MySQLCatalog.java",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/41909",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41947",
+        "merged_at": "2026-09-03T07:34:42Z"
+      }
+    },
+    {
+      "id": "dbeaver-41669",
+      "text": "GBase 8s: Load CLOB/TEXT data issue in data-editor",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ext.gbase8s/src/org/jkiss/dbeaver/ext/gbase8s/model/GBase8sDataSource.java",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/41669",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41722",
+        "merged_at": "2026-09-04T07:09:13Z"
+      }
+    },
+    {
+      "id": "dbeaver-40894",
+      "text": "RECORD mode: GRID vs TEXT view does not match",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/controls/resultset/plaintext/PlainTextPresentation.java",
+      "also_valid": [
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/controls/resultset/plaintext/PlainTextFormatter.java"
+      ],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/40894",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/40897",
+        "merged_at": "2026-05-05T08:30:27Z"
+      }
+    },
+    {
+      "id": "dbeaver-40881",
+      "text": "When Export / Dump window resized, object list isn't resized along with it.",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ext.postgresql.ui/src/org/jkiss/dbeaver/ext/postgresql/tools/PostgreBackupWizardPageObjects.java",
+      "also_valid": [
+        "dbeaver/plugins/org.jkiss.dbeaver.ext.postgresql.ui/src/org/jkiss/dbeaver/ext/postgresql/tools/PostgreBackupAllWizardPageObjects.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ext.mysql.ui/src/org/jkiss/dbeaver/ext/mysql/tools/MySQLExportWizardPageObjects.java"
+      ],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/40881",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/40888",
+        "merged_at": "2026-04-24T13:19:43Z"
+      }
+    },
+    {
+      "id": "dbeaver-41759",
+      "text": "Result Set Order/Filter Settings column ordering is broken",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.navigator/src/org/jkiss/dbeaver/ui/controls/ViewerColumnController.java",
+      "also_valid": [
+        "dbeaver/plugins/org.jkiss.dbeaver.tasks.ui.view/src/org/jkiss/dbeaver/tasks/ui/view/DatabaseTasksTree.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.navigator/src/org/jkiss/dbeaver/ui/navigator/itemlist/ObjectListControl.java"
+      ],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/41759",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41831",
+        "merged_at": "2026-08-21T20:03:45Z"
+      }
+    },
+    {
+      "id": "dbeaver-41587",
+      "text": "ERD diagram can't fix diagram line",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.erd/src/org/jkiss/dbeaver/ui/editors/erd/router/shortpath/ShortPathRouting.java",
+      "also_valid": [
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.erd/src/org/jkiss/dbeaver/ui/editors/erd/policy/AssociationBendEditPolicy.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.erd/src/org/jkiss/dbeaver/ui/editors/erd/model/DiagramLoader.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.erd/src/org/jkiss/dbeaver/ui/editors/erd/editor/ERDEditorPart.java"
+      ],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/41587",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41779",
+        "merged_at": "2026-08-19T10:03:25Z"
+      }
+    },
+    {
+      "id": "dbeaver-41566",
+      "text": "Find in Value window no longer working",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/controls/resultset/handler/ResultSetHandlerMain.java",
+      "also_valid": [
+        "dbeaver/plugins/org.jkiss.dbeaver.ui/src/org/jkiss/dbeaver/ui/ActionUtils.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.base/src/org/jkiss/dbeaver/ui/editors/text/BaseTextEditor.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/controls/resultset/panel/valueviewer/ValueViewerPanel.java"
+      ],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/41566",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41632",
+        "merged_at": "2026-07-28T16:10:00Z"
+      }
+    },
+    {
+      "id": "dbeaver-36898",
+      "text": "Support for HTML in content viewer",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/data/managers/stream/HtmlPanelEditor.java",
+      "also_valid": [
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/data/managers/stream/HtmlEditorPart.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/data/managers/stream/HtmlStreamValueManager.java",
+        "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.data/src/org/jkiss/dbeaver/ui/data/editors/EditorMessages.java"
+      ],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/36898",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41543",
+        "merged_at": "2026-08-11T11:20:44Z"
+      }
+    },
+    {
+      "id": "dbeaver-36721",
+      "text": "Remove Delete context menu item in simple connection view mode",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.navigator/src/org/jkiss/dbeaver/ui/actions/ObjectPropertyTester.java",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/36721",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/40919",
+        "merged_at": "2026-08-08T18:52:54Z"
+      }
+    },
+    {
+      "id": "dbeaver-38531",
+      "text": "Issue with lost focuys on main window during data export and active popup being obfuscated by expoprt window",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui/src/org/jkiss/dbeaver/ui/dialogs/exec/ExecutionQueueErrorJob.java",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/38531",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41565",
+        "merged_at": "2026-08-05T12:06:05Z"
+      }
+    },
+    {
+      "id": "dbeaver-40082",
+      "text": "\"Pin tab\" shortcut logic should always pin or unpin the currently active tab, not some other",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ui.editors.sql/src/org/jkiss/dbeaver/ui/editors/sql/SQLEditor.java",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/40082",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41396",
+        "merged_at": "2026-08-04T09:58:15Z"
+      }
+    },
+    {
+      "id": "dbeaver-41653",
+      "text": "PostgresSQL Select function returns composite values instead of records",
+      "truth": "dbeaver/plugins/org.jkiss.dbeaver.ext.postgresql/src/org/jkiss/dbeaver/ext/postgresql/model/PostgreDialect.java",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/dbeaver/dbeaver/issues/41653",
+        "pull": "https://github.com/dbeaver/dbeaver/pull/41654",
+        "merged_at": "2026-08-04T09:39:02Z"
+      }
+    }
+  ]
+}

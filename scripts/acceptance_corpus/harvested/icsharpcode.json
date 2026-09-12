@@ -1,0 +1,1853 @@
+{
+  "org": "icsharpcode",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "AvalonEdit-322",
+      "text": "Fix Unit Test for .NET Core 3.1 & .NET 6.0",
+      "truth": "AvalonEdit/ICSharpCode.AvalonEdit.Tests/WeakReferenceTests.cs",
+      "also_valid": [
+        "AvalonEdit/ICSharpCode.AvalonEdit.Tests/Editing/ChangeDocumentTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/AvalonEdit/issues/322",
+        "pull": "https://github.com/icsharpcode/AvalonEdit/pull/323",
+        "merged_at": "2021-12-15T10:45:57Z"
+      }
+    },
+    {
+      "id": "AvalonEdit-12",
+      "text": "Behavior of 'end' key is incorrect if 'show spaces' is not enabled",
+      "truth": "AvalonEdit/ICSharpCode.AvalonEdit/Editing/CaretNavigationCommandHandler.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/AvalonEdit/issues/12",
+        "pull": "https://github.com/icsharpcode/AvalonEdit/pull/140",
+        "merged_at": "2019-09-01T08:19:17Z"
+      }
+    },
+    {
+      "id": "AvalonEdit-40",
+      "text": "cursor left should not go to previous line in virtual space",
+      "truth": "AvalonEdit/ICSharpCode.AvalonEdit/Editing/CaretNavigationCommandHandler.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/AvalonEdit/issues/40",
+        "pull": "https://github.com/icsharpcode/AvalonEdit/pull/41",
+        "merged_at": "2015-12-13T11:36:59Z"
+      }
+    },
+    {
+      "id": "AvalonEdit-37",
+      "text": "Double click on word should move caret to end of selection",
+      "truth": "AvalonEdit/ICSharpCode.AvalonEdit/Editing/SelectionMouseHandler.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/AvalonEdit/issues/37",
+        "pull": "https://github.com/icsharpcode/AvalonEdit/pull/42",
+        "merged_at": "2015-05-03T15:46:08Z"
+      }
+    },
+    {
+      "id": "CodeConverter-892",
+      "text": "VB -> C#: wrong result for empty char comparisation",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/StringExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/VisualBasicEqualityComparison.cs",
+        "CodeConverter/CodeConverter/CSharp/BinaryExpressionConverter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/892",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1256",
+        "merged_at": "2026-04-19T14:20:26Z"
+      }
+    },
+    {
+      "id": "CodeConverter-803",
+      "text": "VB -> C#: Use pattern in switch cases to reduce unnecessary code",
+      "truth": "CodeConverter/Tests/CSharp/StatementTests/MethodStatementTests.cs",
+      "also_valid": [
+        "CodeConverter/Tests/VB/StatementTests.cs",
+        "CodeConverter/CodeConverter/VB/NodesVisitor.cs",
+        "CodeConverter/CodeConverter/CSharp/MethodBodyExecutableStatementVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/803",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1251",
+        "merged_at": "2026-04-18T20:56:05Z"
+      }
+    },
+    {
+      "id": "CodeConverter-827",
+      "text": "Rare MyClass case converts incorrectly",
+      "truth": "CodeConverter/Tests/CSharp/MemberTests/PropertyMemberTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs",
+        "CodeConverter/CodeConverter/CSharp/CommonConversions.cs",
+        "CodeConverter/Tests/TestRunners/TestFileRewriter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/827",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1252",
+        "merged_at": "2026-04-18T20:58:57Z"
+      }
+    },
+    {
+      "id": "CodeConverter-780",
+      "text": "VB -> C#: Select Case involving a range needs cast",
+      "truth": "CodeConverter/Tests/CSharp/StatementTests/MethodStatementTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/MethodBodyExecutableStatementVisitor.cs",
+        "CodeConverter/Tests/Vsix/VsixAssemblyCompatibilityTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/780",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1257",
+        "merged_at": "2026-04-18T14:28:43Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1012",
+      "text": "VB -> C#: Conversion of lambda block ends up on single line",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/LambdaTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/LambdaConverter.cs",
+        "CodeConverter/Tests/Vsix/VsixAssemblyCompatibilityTests.cs",
+        "CodeConverter/Tests/CSharp/StatementTests/MethodStatementTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1012",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1254",
+        "merged_at": "2026-04-18T14:28:10Z"
+      }
+    },
+    {
+      "id": "CodeConverter-886",
+      "text": "VB -> C#: wrong conversion of optional struct or decimal ref parameter",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ByRefTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ArgumentConverter.cs",
+        "CodeConverter/Tests/Vsix/VsixAssemblyCompatibilityTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/886",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1253",
+        "merged_at": "2026-04-18T14:27:44Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1225",
+      "text": "VB -> C#: #error Cannot convert InvocationExpressionSyntax with seemingly very basic code",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ByRefTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/CommonConversions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1225",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1249",
+        "merged_at": "2026-04-13T22:24:43Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1091",
+      "text": "VB -> C#: `someInterface.Value` becomes `someInterface` if the interface has the `DefaultMember(\"Value\")` attribute",
+      "truth": "CodeConverter/Tests/CSharp/MemberTests/DefaultMemberAttributeTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1091",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1250",
+        "merged_at": "2026-04-13T22:08:51Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1013",
+      "text": "VB -> C#: Converting Parallel loop moves all comments outside of loop",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/LambdaConverter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1013",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1235",
+        "merged_at": "2026-03-15T16:05:13Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1080",
+      "text": "VB -> C#: Object initializers referencing each other cause conversion error",
+      "truth": "CodeConverter/Tests/VB/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/NameExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1080",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1233",
+        "merged_at": "2026-03-14T12:58:21Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1157",
+      "text": "VB -> C#: Assignment operators of parameterized properties are not resolved",
+      "truth": "CodeConverter/Tests/CSharp/StatementTests/MethodStatementTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/MethodBodyExecutableStatementVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1157",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1229",
+        "merged_at": "2026-03-11T22:18:52Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1158",
+      "text": "VB -> C#: Properties not handled correctly for ref extension methods",
+      "truth": "CodeConverter/Tests/VB/ExtensionMethodRefPropertyTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/NameExpressionNodeVisitor.cs",
+        "CodeConverter/CodeConverter/CSharp/SemanticModelExtensions.cs",
+        "CodeConverter/CodeConverter/CSharp/ArgumentConverter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1158",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1227",
+        "merged_at": "2026-03-11T00:48:55Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1160",
+      "text": "VB -> C#: VB float division (/) is converted as an integer division",
+      "truth": "CodeConverter/CodeConverter/CSharp/TypeConversionAnalyzer.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/ExpressionTests/BinaryExpressionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1160",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1161",
+        "merged_at": "2025-01-05T17:11:18Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1109",
+      "text": "VB -> C#: Default visibility on `Declare`d members isn't adjusted",
+      "truth": "CodeConverter/Tests/CSharp/MemberTests/MemberTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1109",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1114",
+        "merged_at": "2024-07-18T22:42:45Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1062",
+      "text": "VB -> C#: explicit interface implementation looses parameter optionality",
+      "truth": "CodeConverter/Tests/CSharp/MemberTests/MemberTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs",
+        "CodeConverter/Tests/CSharp/MemberTests/PropertyMemberTests.cs",
+        "CodeConverter/Tests/CSharp/ExpressionTests/ByRefTests.cs",
+        "CodeConverter/CodeConverter/CSharp/OperationExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1062",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1069",
+        "merged_at": "2023-12-21T23:57:41Z"
+      }
+    },
+    {
+      "id": "CodeConverter-786",
+      "text": "VB -> C#: Object/dynamic Function breaks",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/StandaloneStatementTests.cs",
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/786",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1068",
+        "merged_at": "2023-12-21T00:14:38Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1030",
+      "text": "VB -> C#: own `Chr` method invocations are lost with terrible consequences",
+      "truth": "CodeConverter/Tests/CSharp/SpecialConversionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1030",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1031",
+        "merged_at": "2023-09-20T11:35:08Z"
+      }
+    },
+    {
+      "id": "CodeConverter-1002",
+      "text": "VB -> C#: With and NameOf not working together (causes MemberAccessExpressionSyntax error)",
+      "truth": "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+        "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs",
+        "CodeConverter/Tests/CSharp/TriviaTests.cs",
+        "CodeConverter/CodeConverter/CSharp/PerScopeState.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/1002",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/1005",
+        "merged_at": "2023-04-18T11:12:09Z"
+      }
+    },
+    {
+      "id": "CodeConverter-967",
+      "text": "VB -> C#: Event handler assignments are placed above InitializeComponent",
+      "truth": "CodeConverter/CodeConverter/CSharp/HandledEventsAnalysis.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/MemberTests/EventMemberTests.cs",
+        "CodeConverter/CodeConverter/Util/GeneratedCodeAnalysisExtensions.cs",
+        "CodeConverter/CodeConverter/CSharp/AdditionalInitializers.cs",
+        "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/967",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/968",
+        "merged_at": "2022-12-18T23:52:14Z"
+      }
+    },
+    {
+      "id": "CodeConverter-754",
+      "text": "VB -> C#: wrong conversation of hex constants",
+      "truth": "CodeConverter/CodeConverter/CSharp/LiteralConversions.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/SpecialConversionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/754",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/767",
+        "merged_at": "2021-09-26T15:36:23Z"
+      }
+    },
+    {
+      "id": "CodeConverter-924",
+      "text": "VB -> C#: Call to Strings.ChrW is not converted",
+      "truth": "CodeConverter/Tests/CSharp/SpecialConversionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/924",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/925",
+        "merged_at": "2022-07-26T19:05:03Z"
+      }
+    },
+    {
+      "id": "CodeConverter-918",
+      "text": "VB -> C#: Invalid cast from string to System.Enum",
+      "truth": "CodeConverter/Tests/CSharp/TypeCastTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/918",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/920",
+        "merged_at": "2022-07-15T14:38:08Z"
+      }
+    },
+    {
+      "id": "CodeConverter-917",
+      "text": "VB -> C#: Mapping trivia from source can override any #error trivia added by Converter",
+      "truth": "CodeConverter/Tests/CSharp/TriviaTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/Util/SyntaxNodeExtensions.cs",
+        "CodeConverter/CodeConverter/Common/LineTriviaMapper.cs",
+        "CodeConverter/CodeConverter/Common/ProjectConversion.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/917",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/919",
+        "merged_at": "2022-07-09T15:52:19Z"
+      }
+    },
+    {
+      "id": "CodeConverter-911",
+      "text": "VB -> C#: Variable declaration incorrectly pulled before the loop when it's initialized explicitly with default value",
+      "truth": "CodeConverter/Tests/CSharp/StatementTests/LoopStatementTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/MethodBodyExecutableStatementVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/911",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/912",
+        "merged_at": "2022-07-01T08:37:20Z"
+      }
+    },
+    {
+      "id": "CodeConverter-906",
+      "text": "VB -> C#:  Converting Omitted/Optional parameters can result in wrong method overload being called.",
+      "truth": "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/ExpressionTests/ParameterTests.cs",
+        "CodeConverter/CodeConverter/Util/SymbolExtensions.cs",
+        "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/906",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/907",
+        "merged_at": "2022-06-27T18:02:51Z"
+      }
+    },
+    {
+      "id": "CodeConverter-904",
+      "text": "VB -> C#: Casting Object to Nullable<> shouldn't use Conversions.To()",
+      "truth": "CodeConverter/Tests/CSharp/TypeCastTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/TypeConversionAnalyzer.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/904",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/905",
+        "merged_at": "2022-06-17T12:35:12Z"
+      }
+    },
+    {
+      "id": "CodeConverter-888",
+      "text": "VB -> C#: Converter should inject a conversion to integer when converting an object to an enum",
+      "truth": "CodeConverter/Tests/CSharp/TypeCastTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/TypeConversionAnalyzer.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/888",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/889",
+        "merged_at": "2022-05-11T15:54:10Z"
+      }
+    },
+    {
+      "id": "CodeConverter-882",
+      "text": "VB -> C#: wrong modifier for optional out parameter",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ByRefTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/CommonConversions.cs",
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs",
+        "CodeConverter/CodeConverter/Util/ITypeSymbolExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/882",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/883",
+        "merged_at": "2022-04-27T23:59:19Z"
+      }
+    },
+    {
+      "id": "CodeConverter-881",
+      "text": "VB -> C#: wrong conversion of shared property containing static variable",
+      "truth": "CodeConverter/CodeConverter/CSharp/MethodBodyExecutableStatementVisitor.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/MemberTests/MemberTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/881",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/884",
+        "merged_at": "2022-04-27T10:10:22Z"
+      }
+    },
+    {
+      "id": "CodeConverter-874",
+      "text": "VB -> C#: Use string.IsNullOrEmpty when comparing string to string.Empty",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/VisualBasicEqualityComparison.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/874",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/875",
+        "merged_at": "2022-04-12T22:10:54Z"
+      }
+    },
+    {
+      "id": "CodeConverter-853",
+      "text": "VB -> C#: Comma in FromClause of Query Syntax is not correctly identified as alternate syntax for another FromClause",
+      "truth": "CodeConverter/CodeConverter/CSharp/QueryConverter.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/ExpressionTests/LinqExpressionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/853",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/858",
+        "merged_at": "2022-04-02T19:34:05Z"
+      }
+    },
+    {
+      "id": "CodeConverter-843",
+      "text": "VB -> C#: Passing read-only property value by reference to a method",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ByRefTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/843",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/844",
+        "merged_at": "2022-03-02T18:41:22Z"
+      }
+    },
+    {
+      "id": "CodeConverter-831",
+      "text": "VB -> C#: Ref instead of Out parameter is generated for implementations of external methods",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/CommonConversions.cs",
+        "CodeConverter/CodeConverter/Util/ISymbolExtensions.cs",
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/831",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/832",
+        "merged_at": "2022-02-16T01:03:33Z"
+      }
+    },
+    {
+      "id": "CodeConverter-833",
+      "text": "VB -> C#: Invalid method arguments when calling parametrized property with named arguments",
+      "truth": "CodeConverter/Tests/CSharp/MemberTests/PropertyMemberTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs",
+        "CodeConverter/Tests/CSharp/MemberTests/MemberTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/833",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/834",
+        "merged_at": "2022-02-15T10:21:30Z"
+      }
+    },
+    {
+      "id": "CodeConverter-432",
+      "text": "VB -> C#: Switch statement generates unreachable code",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/MethodBodyExecutableStatementVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/432",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/829",
+        "merged_at": "2022-02-11T09:02:13Z"
+      }
+    },
+    {
+      "id": "CodeConverter-174",
+      "text": "vb.net -> C#: Replace Visual Basic library calls with equivalent things from the .NET framework",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ReplacementTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/Replacements/SimpleMethodReplacement.cs",
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs",
+        "CodeConverter/Tests/CSharp/MissingSemanticModelInfo/ExpressionTests.cs",
+        "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/174",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/814",
+        "merged_at": "2022-02-06T14:10:44Z"
+      }
+    },
+    {
+      "id": "CodeConverter-819",
+      "text": "VB -> C#: Invalid access modifiers added to explicit interface implementation when VB method/property is non-public.",
+      "truth": "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/MemberTests/MemberTests.cs",
+        "CodeConverter/CodeConverter/Util/SyntaxTokenExtensions.cs",
+        "CodeConverter/Tests/CSharp/ExpressionTests/ByRefTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/819",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/820",
+        "merged_at": "2022-01-27T14:43:58Z"
+      }
+    },
+    {
+      "id": "CodeConverter-253",
+      "text": "VB -> C#: XmlElement conversion not implemented for non-literals",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/XmlExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/253",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/815",
+        "merged_at": "2022-01-26T01:02:38Z"
+      }
+    },
+    {
+      "id": "CodeConverter-811",
+      "text": "VB -> C#: Null coalescing operator misses parenthesis when left or right side is lambda",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/811",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/812",
+        "merged_at": "2022-01-12T21:57:03Z"
+      }
+    },
+    {
+      "id": "CodeConverter-752",
+      "text": "VB -> C#: incorrect ordering range variables around equals in join clause",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/LinqExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/QueryConverter.cs",
+        "CodeConverter/CodeConverter/VB/NodesVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/752",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/753",
+        "merged_at": "2022-01-08T13:33:17Z"
+      }
+    },
+    {
+      "id": "CodeConverter-808",
+      "text": "VB -> C#: Omitted argument followed by a named argument is incorrectly named",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/808",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/809",
+        "merged_at": "2022-01-07T18:53:08Z"
+      }
+    },
+    {
+      "id": "CodeConverter-806",
+      "text": "VB -> C#: DateTime should be explicitly converted to string within concatenation",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/StringExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/Util/FromRoslyn/ITypeSymbolExtensions.cs",
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/806",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/807",
+        "merged_at": "2022-01-07T09:02:24Z"
+      }
+    },
+    {
+      "id": "CodeConverter-701",
+      "text": "VB -> C#: Multi-line WinForms 'Handles' syntax silently drops events",
+      "truth": "CodeConverter/Tests/CSharp/MemberTests/EventMemberTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/DeclarationNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/701",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/702",
+        "merged_at": "2021-02-07T14:49:44Z"
+      }
+    },
+    {
+      "id": "CodeConverter-657",
+      "text": "VB -> C#: Async Function doesn't translate to async lambda",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/LambdaConverter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/657",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/693",
+        "merged_at": "2021-01-23T15:41:26Z"
+      }
+    },
+    {
+      "id": "CodeConverter-689",
+      "text": "VB -> C#: wrong conversation of string comparision with Nothing",
+      "truth": "CodeConverter/CodeConverter/CSharp/VisualBasicEqualityComparison.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/ExpressionTests/StringExpressionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/689",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/694",
+        "merged_at": "2021-01-23T15:42:54Z"
+      }
+    },
+    {
+      "id": "CodeConverter-659",
+      "text": "C# -> VB: Converting public static explicit operator failed",
+      "truth": "CodeConverter/Tests/VB/MemberTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/VB/NodesVisitor.cs",
+        "CodeConverter/CodeConverter/VB/SyntaxKindExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/659",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/667",
+        "merged_at": "2020-10-28T08:33:33Z"
+      }
+    },
+    {
+      "id": "CodeConverter-641",
+      "text": "VB -> C#: XML output path needs output path prepending",
+      "truth": "CodeConverter/CodeConverter/CSharp/VBToCSConversion.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/VB/CSToVBConversion.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/641",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/662",
+        "merged_at": "2020-10-28T08:31:51Z"
+      }
+    },
+    {
+      "id": "CodeConverter-626",
+      "text": "VB -> C#: Null coalesce missing brackets",
+      "truth": "CodeConverter/Tests/CSharp/ExpressionTests/ExpressionTests.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/ExpressionNodeVisitor.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/626",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/628",
+        "merged_at": "2020-09-13T21:09:46Z"
+      }
+    },
+    {
+      "id": "CodeConverter-540",
+      "text": "Resources not converted VB -> C#",
+      "truth": "CodeConverter/CodeConverter/CSharp/VBToCSProjectContentsConverter.cs",
+      "also_valid": [
+        "CodeConverter/CodeConverter/CSharp/VBToCSConversion.cs",
+        "CodeConverter/CodeConverter/VB/CSToVBProjectContentsConverter.cs",
+        "CodeConverter/CodeConverter/CSharp/ProjectMergedDeclarationExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/540",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/545",
+        "merged_at": "2020-03-19T11:11:58Z"
+      }
+    },
+    {
+      "id": "CodeConverter-528",
+      "text": "VB -> C#: _There were no events while converting the design file.",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/528",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/530",
+        "merged_at": "2020-02-29T22:34:38Z"
+      }
+    },
+    {
+      "id": "CodeConverter-421",
+      "text": "VB -> C#: Namespaces with different cases merged",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [
+        "CodeConverter/Tests/CSharp/RootNamespaceTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/421",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/424",
+        "merged_at": "2019-11-19T13:30:09Z"
+      }
+    },
+    {
+      "id": "CodeConverter-332",
+      "text": "VB -> C#: Ambiguous reference for names in automatic imports",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/332",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/414",
+        "merged_at": "2019-11-14T15:41:19Z"
+      }
+    },
+    {
+      "id": "CodeConverter-169",
+      "text": "VB -> C#: Inline 'My' name space - special VB winforms generated code",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/169",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/387",
+        "merged_at": "2019-10-08T21:54:01Z"
+      }
+    },
+    {
+      "id": "CodeConverter-180",
+      "text": "VB -> C# Enum implicit cast",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/180",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/306",
+        "merged_at": "2019-05-07T07:59:06Z"
+      }
+    },
+    {
+      "id": "CodeConverter-268",
+      "text": "VB -> C#: CDate() conversion for strings",
+      "truth": "CodeConverter/Tests/CSharp/TypeCastTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/268",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/287",
+        "merged_at": "2019-04-19T12:19:55Z"
+      }
+    },
+    {
+      "id": "CodeConverter-260",
+      "text": "VB -> C#: Error converting shared/static variable",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/260",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/273",
+        "merged_at": "2019-04-19T08:28:14Z"
+      }
+    },
+    {
+      "id": "CodeConverter-271",
+      "text": "VB -> C#: New constraint in wrong position",
+      "truth": "CodeConverter/Tests/CSharp/NamespaceLevelTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/271",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/274",
+        "merged_at": "2019-04-08T16:13:50Z"
+      }
+    },
+    {
+      "id": "CodeConverter-220",
+      "text": "C# -> VB: RaiseEvent is not being used to invoke an event",
+      "truth": "CodeConverter/Tests/VB/SpecialConversionTests.cs",
+      "also_valid": [
+        "CodeConverter/Tests/TestRunners/ConverterTestBase.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/220",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/254",
+        "merged_at": "2019-03-17T19:58:55Z"
+      }
+    },
+    {
+      "id": "CodeConverter-241",
+      "text": "Errors in individual members should not prevent rest of file from being converted",
+      "truth": "CodeConverter/Tests/VB/MemberTests.cs",
+      "also_valid": [
+        "CodeConverter/Tests/TestRunners/ConverterTestBase.cs",
+        "CodeConverter/Tests/VB/StatementTests.cs",
+        "CodeConverter/Tests/CSharp/MissingSemanticModelInfo/ExpressionTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/CodeConverter/issues/241",
+        "pull": "https://github.com/icsharpcode/CodeConverter/pull/244",
+        "merged_at": "2019-02-19T10:09:04Z"
+      }
+    },
+    {
+      "id": "ILSpy-3568",
+      "text": "Record type isn't decompiled well if a field is declared before a property",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/RecordDecompiler.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Records.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3568",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4111",
+        "merged_at": "2026-09-08T04:42:28Z"
+      }
+    },
+    {
+      "id": "ILSpy-2093",
+      "text": "VS AddIn: \"Reference Assembly\" warning for System.Runtime.dll",
+      "truth": "ILSpy/ILSpy.Tests/AssemblyTree/NavigateToReferenceAssemblyTests.cs",
+      "also_valid": [
+        "ILSpy/ILSpy.Tests/Commands/CommandLineArgumentsTests.cs",
+        "ILSpy/ILSpy/AssemblyTree/AssemblyTreeModel.cs",
+        "ILSpy/ILSpy/Properties/Resources.Designer.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2093",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4116",
+        "merged_at": "2026-09-07T19:51:27Z"
+      }
+    },
+    {
+      "id": "ILSpy-2919",
+      "text": "Assembly List destroyed - data loss",
+      "truth": "ILSpy/ILSpy.Tests/Settings/MalformedSettingsFileTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.ILSpyX/Settings/ILSpySettings.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2919",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4109",
+        "merged_at": "2026-09-05T07:42:59Z"
+      }
+    },
+    {
+      "id": "ILSpy-3968",
+      "text": "Null-conditional LINQ chain over a value type is emitted as invalid query syntax (CS1936)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/QueryExpressions.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/IntroduceQueryExpressions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3968",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3969",
+        "merged_at": "2026-08-10T18:14:30Z"
+      }
+    },
+    {
+      "id": "ILSpy-2080",
+      "text": "System.IO.Compression assembly not resolved",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/UniversalAssemblyResolverTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/Metadata/UniversalAssemblyResolver.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2080",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4105",
+        "merged_at": "2026-09-04T07:29:17Z"
+      }
+    },
+    {
+      "id": "ILSpy-3315",
+      "text": "WPF Project BAML Resource  path include Space . save project error.",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/ProjectDecompiler/WholeProjectDecompilerTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ProjectDecompiler/WholeProjectDecompiler.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/ProjectDecompiler/ProjectFileWriterSdkStyleTests.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ProjectDecompiler/ProjectFileWriterSdkStyle.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3315",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4102",
+        "merged_at": "2026-09-03T17:27:24Z"
+      }
+    },
+    {
+      "id": "ILSpy-3714",
+      "text": "Local function issue",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/LocalFunctions.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/LocalFunctionDecompiler.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3714",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4080",
+        "merged_at": "2026-08-30T10:20:42Z"
+      }
+    },
+    {
+      "id": "ILSpy-3683",
+      "text": "Casts not being applied to switch expression case bodies when type is ambiguous",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/SwitchExpressions.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/StatementBuilder.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3683",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4065",
+        "merged_at": "2026-08-28T17:03:54Z"
+      }
+    },
+    {
+      "id": "ILSpy-3275",
+      "text": "ILSpy crashes when it parses deconstruction constructs",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/DeconstructionTests.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3275",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4060",
+        "merged_at": "2026-08-26T20:04:04Z"
+      }
+    },
+    {
+      "id": "ILSpy-4054",
+      "text": "Drag & Drop from Non-Explorer Windows no longer works",
+      "truth": "ILSpy/ILSpy/TreeNodes/AssemblyListTreeNode.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/4054",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4056",
+        "merged_at": "2026-08-26T18:19:05Z"
+      }
+    },
+    {
+      "id": "ILSpy-1459",
+      "text": "RFE: Fraction decompilation - more weight to common divisors?",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/Syntax/TypeSystemAstBuilder.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/WellKnownConstants.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/1459",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4022",
+        "merged_at": "2026-08-18T07:48:20Z"
+      }
+    },
+    {
+      "id": "ILSpy-3352",
+      "text": "Tuple name doesn't exist",
+      "truth": "ILSpy/ICSharpCode.Decompiler/Semantics/LambdaResolveResult.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/QueryExpressions.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/OutputVisitor/CSharpOutputVisitor.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/IntroduceQueryExpressions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3352",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4024",
+        "merged_at": "2026-08-18T03:21:21Z"
+      }
+    },
+    {
+      "id": "ILSpy-3993",
+      "text": "Some hotkeys not working in 11.0.0.9375",
+      "truth": "ILSpy/ILSpy.Tests/Editor/DocumentationRendererThemeTests.cs",
+      "also_valid": [
+        "ILSpy/ILSpy.Tests/MainWindow/MainMenuTests.cs",
+        "ILSpy/ILSpy/Views/MainMenu.axaml.cs",
+        "ILSpy/ILSpy/TextView/DocumentationRenderer.cs",
+        "ILSpy/ILSpy.Tests/Editor/DocumentationLinkTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3993",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3997",
+        "merged_at": "2026-08-16T09:59:27Z"
+      }
+    },
+    {
+      "id": "ILSpy-3894",
+      "text": "Lambda with an anonymous parameter type gets mixed parameter typing (CS0748)",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/AnonymousTypes.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3894",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3897",
+        "merged_at": "2026-08-16T07:08:09Z"
+      }
+    },
+    {
+      "id": "ILSpy-3729",
+      "text": "Decompilation error for Struct constructors defined in missing libraries",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/ILPretty/Issue3729.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/ILReader.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/ILPrettyTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3729",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/4000",
+        "merged_at": "2026-08-15T06:33:14Z"
+      }
+    },
+    {
+      "id": "ILSpy-3208",
+      "text": "Deconstruction pattern with custom structs produces invalid C# code",
+      "truth": "ILSpy/ICSharpCode.Decompiler/IL/Transforms/DeconstructionTransform.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/DeconstructionTests.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/EarlyExpressionTransforms.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Records.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3208",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3973",
+        "merged_at": "2026-08-13T07:56:25Z"
+      }
+    },
+    {
+      "id": "ILSpy-3979",
+      "text": "Primary-constructor conversion creates an invalid field initializer (CS0236)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/ConstructorInitializers.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/TransformFieldAndConstructorInitializers.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3979",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3980",
+        "merged_at": "2026-08-12T07:54:24Z"
+      }
+    },
+    {
+      "id": "ILSpy-3966",
+      "text": "Ref-returning switch is emitted as an invalid switch expression (CS1525)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/RefLocalsAndReturns.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/ExpressionTransforms.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3966",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3967",
+        "merged_at": "2026-08-08T12:59:58Z"
+      }
+    },
+    {
+      "id": "ILSpy-3797",
+      "text": "System.InvalidOperationException: Could not find type definition, but for types that do exist",
+      "truth": "ILSpy/ICSharpCode.ILSpyCmd/IlspyCmdProgram.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3797",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3801",
+        "merged_at": "2026-06-22T17:42:15Z"
+      }
+    },
+    {
+      "id": "ILSpy-3230",
+      "text": "Unexpected Interface in Class base list",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/InterfaceTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Syntax/TypeSystemAstBuilder.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3230",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3947",
+        "merged_at": "2026-08-02T12:48:33Z"
+      }
+    },
+    {
+      "id": "ILSpy-3803",
+      "text": "System.ArgumentOutOfRangeException: Index was out of range. (nested deconstruction causing crashes)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Correctness/DeconstructionTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/DeconstructionTransform.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/DeconstructionTests.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3803",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3949",
+        "merged_at": "2026-08-02T13:54:28Z"
+      }
+    },
+    {
+      "id": "ILSpy-2032",
+      "text": "Follow up on #1981 - TDCU copy propagation correctness",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Ugly/AggressiveScalarReplacementOfAggregates.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Ugly/AggressiveScalarReplacementOfAggregates.Expected.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/TransformDisplayClassUsage.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2032",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3929",
+        "merged_at": "2026-07-31T11:52:19Z"
+      }
+    },
+    {
+      "id": "ILSpy-3938",
+      "text": "`System.Xml.XPath.XDocumentExtensions+XDocumentNavigable.CreateNavigator` fails to decompile.",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/IsolatedMethodDecompilationTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/IsolatedDecompilation/ExtensionContainerNestedType.cs",
+        "ILSpy/ICSharpCode.Decompiler/TypeSystem/TypeSystemExtensions.cs",
+        "ILSpy/ICSharpCode.Decompiler/TypeSystem/Implementation/MetadataTypeDefinition.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/CSharpDecompiler.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3938",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3942",
+        "merged_at": "2026-07-31T11:50:01Z"
+      }
+    },
+    {
+      "id": "ILSpy-2879",
+      "text": "`TypeDefinition`s with no fields/methods show a zero `FieldList`/`MethodList` value.",
+      "truth": "ILSpy/ILSpy.Tests/Metadata/TypeDefMemberListColumnTests.cs",
+      "also_valid": [
+        "ILSpy/ILSpy/Metadata/CorTables/TypeDefTableTreeNode.cs",
+        "ILSpy/ILSpy/Metadata/CorTables/MethodTableTreeNode.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2879",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3927",
+        "merged_at": "2026-07-28T19:43:34Z"
+      }
+    },
+    {
+      "id": "ILSpy-3909",
+      "text": "Generic override loses where T : default and does not recompile",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Issue3909.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Syntax/TypeSystemAstBuilder.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3909",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3910",
+        "merged_at": "2026-07-27T16:26:02Z"
+      }
+    },
+    {
+      "id": "ILSpy-633",
+      "text": "Feature Request: Add an \"overrides\" analysis",
+      "truth": "ILSpy/ILSpy.Tests/Analyzers/Library/MemberOverridesAnalyzerTests.cs",
+      "also_valid": [
+        "ILSpy/ILSpy.Tests/TextView/KeywordReferenceTests.cs",
+        "ILSpy/ICSharpCode.ILSpyX/Analyzers/Builtin/MemberOverridesAnalyzer.cs",
+        "ILSpy/ICSharpCode.Decompiler/Output/TextTokenWriter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/633",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3918",
+        "merged_at": "2026-07-27T15:11:12Z"
+      }
+    },
+    {
+      "id": "ILSpy-1603",
+      "text": "foreach expected but while used instead",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/StatementBuilder.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Loops.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/1603",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3916",
+        "merged_at": "2026-07-27T05:38:23Z"
+      }
+    },
+    {
+      "id": "ILSpy-1924",
+      "text": "Incorrectly decompiling a bitwise or to a logical or",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/ShortCircuit.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Switch.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/1924",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3899",
+        "merged_at": "2026-07-23T16:51:52Z"
+      }
+    },
+    {
+      "id": "ILSpy-3908",
+      "text": "Constrained generic async iterator yield is emitted as object (CS0266)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/AsyncStreams.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/StatementBuilder.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3908",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3911",
+        "merged_at": "2026-07-25T06:24:38Z"
+      }
+    },
+    {
+      "id": "ILSpy-3895",
+      "text": "String concatenation drops Span<char>.ToString() and does not recompile (CS0019)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/StringConcatenation.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/ReplaceMethodCallsWithOperators.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3895",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3896",
+        "merged_at": "2026-07-23T15:03:47Z"
+      }
+    },
+    {
+      "id": "ILSpy-1638",
+      "text": "Yield return FSM problem (FSM not identified)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/ILPretty/Issue1638.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/ILPrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/ControlFlow/YieldReturnDecompiler.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/1638",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3905",
+        "merged_at": "2026-07-22T19:30:53Z"
+      }
+    },
+    {
+      "id": "ILSpy-3892",
+      "text": "Field initializer calling a pointer-parameter constructor loses unsafe (CS0214)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/UnsafeCode.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/IntroduceUnsafeModifier.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3892",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3893",
+        "merged_at": "2026-07-20T17:57:45Z"
+      }
+    },
+    {
+      "id": "ILSpy-3475",
+      "text": "`null` of anonymous type",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/CallBuilder.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/AnonymousTypes.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3475",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3866",
+        "merged_at": "2026-07-11T11:24:38Z"
+      }
+    },
+    {
+      "id": "ILSpy-3860",
+      "text": "Decompiled out variables fail to recompile when the same local is passed as multiple out arguments",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/DeclareVariables.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/OutVariables.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3860",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3864",
+        "merged_at": "2026-07-11T11:24:18Z"
+      }
+    },
+    {
+      "id": "ILSpy-3877",
+      "text": "Negative length can make switch on string with dictionary transformation throw an exception",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Issue3877.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/SwitchOnStringTransform.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3877",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3878",
+        "merged_at": "2026-07-12T18:15:42Z"
+      }
+    },
+    {
+      "id": "ILSpy-2078",
+      "text": "Generic local functions not highlighted properly",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/Output/TextTokenWriterTests.cs",
+      "also_valid": [
+        "ILSpy/ILSpy.Tests/Editor/LocalReferenceHighlightTests.cs",
+        "ILSpy/ICSharpCode.Decompiler/Output/TextTokenWriter.cs",
+        "ILSpy/ICSharpCode.Decompiler/TypeSystem/Implementation/LocalFunctionMethod.cs",
+        "ILSpy/ILSpy/TextView/DecompilerTextView.axaml.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2078",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3857",
+        "merged_at": "2026-07-05T06:30:40Z"
+      }
+    },
+    {
+      "id": "ILSpy-3824",
+      "text": "Chained constructor call emitted as illegal in-body this..ctor(...) when a null-check is hoisted before it",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/ConstructorInitializers.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/NullCoalescingTransform.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/TransformFieldAndConstructorInitializers.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3824",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3852",
+        "merged_at": "2026-07-05T08:14:43Z"
+      }
+    },
+    {
+      "id": "ILSpy-3804",
+      "text": "Decompiling foreach over an inline array emits invalid '<PrivateImplementationDetails>.InlineArrayElementRef'",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/PatternStatementTransform.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/InlineArrayTests.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3804",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3837",
+        "merged_at": "2026-07-05T18:43:51Z"
+      }
+    },
+    {
+      "id": "ILSpy-3826",
+      "text": "Inlined hash accumulator becomes a constant overflow (CS0220) in decompiled GetHashCode",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Correctness/UncheckedConstants.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/CorrectnessTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3826",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3828",
+        "merged_at": "2026-07-06T05:14:32Z"
+      }
+    },
+    {
+      "id": "ILSpy-3825",
+      "text": "async IAsyncEnumerable with [EnumeratorCancellation] and await in finally decompiles to a raw state machine",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/AsyncStreams.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/ControlFlow/AsyncAwaitDecompiler.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3825",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3831",
+        "merged_at": "2026-07-05T18:03:27Z"
+      }
+    },
+    {
+      "id": "ILSpy-3827",
+      "text": "Ref local used after a loop is emitted as an uninitialized 'ref T x;' (CS8174)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/RefLocalsAndReturns.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/HighLevelLoopTransform.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/Transforms/PatternStatementTransform.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3827",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3830",
+        "merged_at": "2026-07-05T12:24:09Z"
+      }
+    },
+    {
+      "id": "ILSpy-3754",
+      "text": "NullReferenceException generating portable PDB for runtime-async methods (.NET 11)",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/PdbGenerationTestRunner.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/PdbGen/RuntimeAsync.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/Helpers/Tester.cs",
+        "ILSpy/ICSharpCode.Decompiler/DebugInfo/PortablePdbWriter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3754",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3832",
+        "merged_at": "2026-06-27T16:40:25Z"
+      }
+    },
+    {
+      "id": "ILSpy-3817",
+      "text": "Display tail call option",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/ILPretty/TailCall.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/CSharp/CallBuilder.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/ILPrettyTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3817",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3818",
+        "merged_at": "2026-06-24T19:39:16Z"
+      }
+    },
+    {
+      "id": "ILSpy-3777",
+      "text": "Decompiling runtime async should not be gated on C# 15.",
+      "truth": "ILSpy/ICSharpCode.Decompiler/DecompilerSettings.cs",
+      "also_valid": [
+        "ILSpy/ILSpy/Properties/Resources.Designer.cs",
+        "ILSpy/ICSharpCode.Decompiler/TypeSystem/DecompilerTypeSystem.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/EarlyExpressionTransforms.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/ControlFlow/AsyncAwaitDecompiler.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3777",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3791",
+        "merged_at": "2026-06-17T21:34:54Z"
+      }
+    },
+    {
+      "id": "ILSpy-3799",
+      "text": "System.ArgumentException: given Block is invalid!",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/CS73_StackAllocInitializers.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/ILInlining.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/TransformArrayInitializers.cs",
+        "ILSpy/ICSharpCode.Decompiler/CSharp/ExpressionBuilder.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3799",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3802",
+        "merged_at": "2026-06-23T06:37:10Z"
+      }
+    },
+    {
+      "id": "ILSpy-2035",
+      "text": "\"override\" keyword should be a hyperlink",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/Output/TextTokenWriterTests.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/Output/TextTokenWriter.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2035",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3769",
+        "merged_at": "2026-06-11T11:02:10Z"
+      }
+    },
+    {
+      "id": "ILSpy-3751",
+      "text": "Decompilation of anonymous-type returning lambda with early return emits `<>f__AnonymousTypeN`",
+      "truth": "ILSpy/ICSharpCode.Decompiler/CSharp/StatementBuilder.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Issue3751.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3751",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3752",
+        "merged_at": "2026-06-10T18:07:31Z"
+      }
+    },
+    {
+      "id": "ILSpy-3749",
+      "text": "Add a option to sort switch cases",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/ILPretty/SortSwitchSections.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/ControlFlow/SwitchDetection.cs",
+        "ILSpy/ICSharpCode.Decompiler/DecompilerSettings.cs",
+        "ILSpy/ILSpy/Properties/Resources.Designer.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/ILPrettyTestRunner.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3749",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3750",
+        "merged_at": "2026-06-10T18:08:52Z"
+      }
+    },
+    {
+      "id": "ILSpy-3718",
+      "text": "Incorrect current line, when click on ResolutionScope link in 01 TypeRef table.",
+      "truth": "ILSpy/ICSharpCode.Decompiler/Properties/DecompilerVersionInfo.template.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3718",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3725",
+        "merged_at": "2026-04-26T08:04:10Z"
+      }
+    },
+    {
+      "id": "ILSpy-3705",
+      "text": "Code window is empty when select a .baml and refresh",
+      "truth": "ILSpy/ILSpy/AssemblyTree/AssemblyTreeModel.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3705",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3726",
+        "merged_at": "2026-05-11T09:42:09Z"
+      }
+    },
+    {
+      "id": "ILSpy-3677",
+      "text": "ILSpy does not use object initializers for class/structs with init-only properties",
+      "truth": "ILSpy/ICSharpCode.Decompiler/IL/Transforms/TransformCollectionAndObjectInitializers.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3677",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3678",
+        "merged_at": "2026-03-18T06:16:45Z"
+      }
+    },
+    {
+      "id": "ILSpy-3673",
+      "text": "SHA1 Concurrency Exception (AssemblyReference.GetPublicKeyToken)",
+      "truth": "ILSpy/ICSharpCode.Decompiler/Metadata/AssemblyReferences.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/Metadata/MetadataExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3673",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3679",
+        "merged_at": "2026-03-19T20:35:58Z"
+      }
+    },
+    {
+      "id": "ILSpy-2932",
+      "text": "Add \"x\" icon overlay to not loaded reference library",
+      "truth": "ILSpy/ILSpy/TreeNodes/AssemblyReferenceTreeNode.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/2932",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3013",
+        "merged_at": "2025-12-15T07:32:16Z"
+      }
+    },
+    {
+      "id": "ILSpy-3584",
+      "text": "Ref locals from generic array access",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Issue3584.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler/IL/Instructions.cs",
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/ILTypeExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3584",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3587",
+        "merged_at": "2025-11-15T16:39:45Z"
+      }
+    },
+    {
+      "id": "ILSpy-3562",
+      "text": "Put assembly list name first in the window title",
+      "truth": "ILSpy/ILSpy/AssemblyTree/AssemblyTreeModel.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3562",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3589",
+        "merged_at": "2025-10-11T05:10:36Z"
+      }
+    },
+    {
+      "id": "ILSpy-3576",
+      "text": "`InvalidCastException` decompiling `UnityEngine.Rendering.HighDefinition.ProbeCameraCache.GetOrCreate`",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Issue3576.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/TransformCollectionAndObjectInitializers.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3576",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3579",
+        "merged_at": "2025-10-05T07:52:50Z"
+      }
+    },
+    {
+      "id": "ILSpy-3541",
+      "text": "Regression with optional arguments in local function closure",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/Pretty/Issue3541.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/PrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/LocalFunctionDecompiler.cs",
+        "ILSpy/ICSharpCode.Decompiler/TypeSystem/TypeSystemExtensions.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3541",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3560",
+        "merged_at": "2025-09-14T12:44:28Z"
+      }
+    },
+    {
+      "id": "ILSpy-3552",
+      "text": "`dup` instruction interferes with collection initialization for value types",
+      "truth": "ILSpy/ICSharpCode.Decompiler.Tests/TestCases/ILPretty/Issue3552.cs",
+      "also_valid": [
+        "ILSpy/ICSharpCode.Decompiler.Tests/ILPrettyTestRunner.cs",
+        "ILSpy/ICSharpCode.Decompiler/IL/Transforms/TransformCollectionAndObjectInitializers.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ILSpy/issues/3552",
+        "pull": "https://github.com/icsharpcode/ILSpy/pull/3554",
+        "merged_at": "2025-09-10T06:18:17Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-807",
+      "text": "Undesirable Console log while reading",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipInputStream.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/807",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/809",
+        "merged_at": "2022-12-15T15:10:24Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-782",
+      "text": "Exception thrown (rarely) in TarHeader with empty array",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Tar/TarBuffer.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/782",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/789",
+        "merged_at": "2022-10-20T09:40:41Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-383",
+      "text": "\"Item with the same key has already been added\" extracting tar with duplicate headers",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Tar/TarExtendedHeaderReader.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/383",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/675",
+        "merged_at": "2022-08-14T08:39:42Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-731",
+      "text": "Unable to stream Zip File in controller's Response.Body",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipOutputStream.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/731",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/754",
+        "merged_at": "2022-05-24T14:51:12Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-744",
+      "text": "Different binary produced when producing ZIP to Azure Blob Stream",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFormat.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/744",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/750",
+        "merged_at": "2022-04-28T12:20:36Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-735",
+      "text": "Problem reading archives containg Zip64 files",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipConstants.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/735",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/736",
+        "merged_at": "2022-03-23T12:44:02Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-552",
+      "text": "AES encrypted Zips not matching specification",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipOutputStream.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs",
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipHelperStream.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/552",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/554",
+        "merged_at": "2021-02-06T07:08:07Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-56",
+      "text": "Bug in DropPathRoot - IndexOutOfBoundsException",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Core/PathUtils.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/56",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/593",
+        "merged_at": "2021-04-27T19:13:30Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-536",
+      "text": "Random() is not secure because it provides insufficient entropy. CWE ID 331.",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipOutputStream.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs",
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Encryption/PkzipClassic.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/536",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/538",
+        "merged_at": "2020-11-21T11:33:16Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-537",
+      "text": "Avoid Path.GetTempFileName() due to CWE 377.",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Core/PathUtils.cs",
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipNameTransform.cs",
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/WindowsNameTransform.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/537",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/539",
+        "merged_at": "2020-11-21T11:30:07Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-82",
+      "text": "Can not delete directory from zip archive bug",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/82",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/402",
+        "merged_at": "2020-08-07T14:52:00Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-334",
+      "text": "Tar truncates the first character of filename when using CreateEntryFromFile",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Tar/TarArchive.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/334",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/336",
+        "merged_at": "2019-06-15T16:56:11Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-310",
+      "text": "Zip64 cannot be delete when it has more than one file",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/ZipFile.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/310",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/314",
+        "merged_at": "2019-02-03T19:01:32Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-232",
+      "text": "SECURITY: vulnerable to zip-slip (possible remote code execution/file overwrite)",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Core/InvalidNameException.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/WindowsNameTransform.cs",
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Zip/FastZip.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/232",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/235",
+        "merged_at": "2018-07-01T20:49:56Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-213",
+      "text": "Tar does not read the same number of blocks as it wrote - causes potential socket issues",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Tar/TarInputStream.cs",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/213",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/245",
+        "merged_at": "2018-07-13T16:13:28Z"
+      }
+    },
+    {
+      "id": "SharpZipLib-121",
+      "text": "TAR in ustar format with long file names: TarEntry name is incomplete",
+      "truth": "SharpZipLib/src/ICSharpCode.SharpZipLib/Tar/TarExtendedHeaderReader.cs",
+      "also_valid": [
+        "SharpZipLib/src/ICSharpCode.SharpZipLib/Tar/TarInputStream.cs"
+      ],
+      "source": {
+        "issue": "https://github.com/icsharpcode/SharpZipLib/issues/121",
+        "pull": "https://github.com/icsharpcode/SharpZipLib/pull/240",
+        "merged_at": "2018-07-12T12:14:07Z"
+      }
+    },
+    {
+      "id": "ilspy-vscode-680",
+      "text": "Enhancement: Tree view icon colors a la the outliner",
+      "truth": "ilspy-vscode/vscode-extension/src/icons.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ilspy-vscode/issues/680",
+        "pull": "https://github.com/icsharpcode/ilspy-vscode/pull/684",
+        "merged_at": "2026-06-09T18:14:04Z"
+      }
+    },
+    {
+      "id": "ilspy-vscode-679",
+      "text": "Bug: Cannot refocus a selected node via tree view",
+      "truth": "ilspy-vscode/vscode-extension/src/commands/decompileNodeCommand.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/icsharpcode/ilspy-vscode/issues/679",
+        "pull": "https://github.com/icsharpcode/ilspy-vscode/pull/683",
+        "merged_at": "2026-06-08T22:35:37Z"
+      }
+    }
+  ]
+}

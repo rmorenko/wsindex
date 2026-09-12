@@ -1,0 +1,19 @@
+{
+  "org": "orbitinghail",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "splinter-rs-83",
+      "text": "Encode/decode roundtrip corrupts dense Splinter at 7936 boundary",
+      "truth": "splinter-rs/src/codec.rs",
+      "also_valid": [
+        "splinter-rs/src/codec/tree_ref.rs"
+      ],
+      "source": {
+        "issue": "https://github.com/orbitinghail/splinter-rs/issues/83",
+        "pull": "https://github.com/orbitinghail/splinter-rs/pull/84",
+        "merged_at": "2026-03-06T09:09:00Z"
+      }
+    }
+  ]
+}

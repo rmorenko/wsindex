@@ -1,0 +1,932 @@
+{
+  "org": "caddyserver",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "caddy-8004",
+      "text": "Caddy validate with acme_server shows database opening error when already running.",
+      "truth": "caddy/modules/caddypki/acmeserver/acmeserver.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/8004",
+        "pull": "https://github.com/caddyserver/caddy/pull/8007",
+        "merged_at": "2026-09-11T04:49:32Z"
+      }
+    },
+    {
+      "id": "caddy-7021",
+      "text": "Backticks do not correctly escape brackets",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/healthchecks.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7021",
+        "pull": "https://github.com/caddyserver/caddy/pull/8003",
+        "merged_at": "2026-09-09T14:48:08Z"
+      }
+    },
+    {
+      "id": "caddy-7985",
+      "text": "file_server browse file_limit accepts non-integer values",
+      "truth": "caddy/modules/caddyhttp/fileserver/caddyfile.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7985",
+        "pull": "https://github.com/caddyserver/caddy/pull/7988",
+        "merged_at": "2026-09-04T06:37:02Z"
+      }
+    },
+    {
+      "id": "caddy-7994",
+      "text": "Concurrent caddyfile adaptation can corrupt global directive ordering",
+      "truth": "caddy/caddyconfig/httpcaddyfile/directives.go",
+      "also_valid": [
+        "caddy/caddyconfig/httpcaddyfile/httptype.go",
+        "caddy/caddyconfig/httpcaddyfile/options.go",
+        "caddy/caddyconfig/httpcaddyfile/builtins.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7994",
+        "pull": "https://github.com/caddyserver/caddy/pull/7995",
+        "merged_at": "2026-09-06T13:20:45Z"
+      }
+    },
+    {
+      "id": "caddy-7938",
+      "text": "Access log writes status code 200 on timeout even though no response is returned",
+      "truth": "caddy/modules/caddyhttp/server.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7938",
+        "pull": "https://github.com/caddyserver/caddy/pull/7945",
+        "merged_at": "2026-09-04T20:56:08Z"
+      }
+    },
+    {
+      "id": "caddy-7893",
+      "text": "skip_install_trust ignored by internal issuers when auto_https is off",
+      "truth": "caddy/caddyconfig/httpcaddyfile/pkiapp.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7893",
+        "pull": "https://github.com/caddyserver/caddy/pull/7894",
+        "merged_at": "2026-08-25T04:19:33Z"
+      }
+    },
+    {
+      "id": "caddy-7860",
+      "text": "mTLS on wildcard also enables mTLS on specific subdomain",
+      "truth": "caddy/caddyconfig/httpcaddyfile/httptype.go",
+      "also_valid": [
+        "caddy/modules/caddyhttp/server.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7860",
+        "pull": "https://github.com/caddyserver/caddy/pull/7920",
+        "merged_at": "2026-08-12T05:09:59Z"
+      }
+    },
+    {
+      "id": "caddy-7870",
+      "text": "reverse_proxy: different active health checks (health_uri/health_headers) against the same upstream address collapse into one shared health state",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/hosts.go",
+      "also_valid": [
+        "caddy/modules/caddyhttp/reverseproxy/healthchecks.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7870",
+        "pull": "https://github.com/caddyserver/caddy/pull/7916",
+        "merged_at": "2026-08-12T05:20:16Z"
+      }
+    },
+    {
+      "id": "caddy-7923",
+      "text": "net/http handler panics are logged at DEBUG level",
+      "truth": "caddy/modules/caddyhttp/app.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7923",
+        "pull": "https://github.com/caddyserver/caddy/pull/7924",
+        "merged_at": "2026-08-10T06:18:17Z"
+      }
+    },
+    {
+      "id": "caddy-6435",
+      "text": "Nested named route invocation undetected",
+      "truth": "caddy/caddyconfig/httpcaddyfile/httptype.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/6435",
+        "pull": "https://github.com/caddyserver/caddy/pull/7898",
+        "merged_at": "2026-07-30T10:55:50Z"
+      }
+    },
+    {
+      "id": "caddy-6293",
+      "text": "Problems with reverse proxied server sent events and compression",
+      "truth": "caddy/modules/caddyhttp/encode/encode.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/6293",
+        "pull": "https://github.com/caddyserver/caddy/pull/7905",
+        "merged_at": "2026-07-31T14:27:29Z"
+      }
+    },
+    {
+      "id": "caddy-6578",
+      "text": "Caddy 2.8.4: uri replace does not work for %29",
+      "truth": "caddy/modules/caddyhttp/rewrite/rewrite.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/6578",
+        "pull": "https://github.com/caddyserver/caddy/pull/7907",
+        "merged_at": "2026-07-25T22:49:44Z"
+      }
+    },
+    {
+      "id": "caddy-7883",
+      "text": "QueryFilter hash action hashes an empty value instead of the query parameter value",
+      "truth": "caddy/modules/logging/filters.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7883",
+        "pull": "https://github.com/caddyserver/caddy/pull/7884",
+        "merged_at": "2026-07-15T16:38:58Z"
+      }
+    },
+    {
+      "id": "caddy-5357",
+      "text": "Allow multiline strings syntax",
+      "truth": "caddy/caddyconfig/caddyfile/lexer.go",
+      "also_valid": [
+        "caddy/caddyconfig/caddyfile/dispenser.go",
+        "caddy/modules/caddyhttp/reverseproxy/fastcgi/caddyfile.go",
+        "caddy/modules/caddyhttp/reverseproxy/forwardauth/caddyfile.go",
+        "caddy/modules/caddyhttp/celmatcher.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/5357",
+        "pull": "https://github.com/caddyserver/caddy/pull/5385",
+        "merged_at": "2023-02-26T00:34:28Z"
+      }
+    },
+    {
+      "id": "caddy-6529",
+      "text": "Including matcher in 'handle_response' line has confusing error",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/caddyfile.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/6529",
+        "pull": "https://github.com/caddyserver/caddy/pull/7869",
+        "merged_at": "2026-07-10T05:40:24Z"
+      }
+    },
+    {
+      "id": "caddy-6267",
+      "text": "Custom conditions for retrying proxy requests",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/reverseproxy.go",
+      "also_valid": [
+        "caddy/replacer.go",
+        "caddy/modules/caddyhttp/matchers.go",
+        "caddy/modules/caddyhttp/reverseproxy/caddyfile.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/6267",
+        "pull": "https://github.com/caddyserver/caddy/pull/7569",
+        "merged_at": "2026-04-21T18:59:32Z"
+      }
+    },
+    {
+      "id": "caddy-7734",
+      "text": "http.request.proto is wonky for HTTP/2 and HTTP/3 (there\u2019s no such thing as \u201cHTTP/2.0\u201d or \u201cHTTP/3.0\u201d)",
+      "truth": "caddy/modules/caddyhttp/replacer.go",
+      "also_valid": [
+        "caddy/modules/caddyhttp/app.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7734",
+        "pull": "https://github.com/caddyserver/caddy/pull/7782",
+        "merged_at": "2026-06-04T15:03:20Z"
+      }
+    },
+    {
+      "id": "caddy-7735",
+      "text": "Dynamic http3 upstreams recieve untemplated sni",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/httptransport.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7735",
+        "pull": "https://github.com/caddyserver/caddy/pull/7737",
+        "merged_at": "2026-06-03T03:49:01Z"
+      }
+    },
+    {
+      "id": "caddy-7774",
+      "text": "Incorrect error message on duplicate request matchers",
+      "truth": "caddy/caddyconfig/httpcaddyfile/httptype.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7774",
+        "pull": "https://github.com/caddyserver/caddy/pull/7780",
+        "merged_at": "2026-05-29T21:05:41Z"
+      }
+    },
+    {
+      "id": "caddy-6179",
+      "text": "Caddy seems to prefer Accept-Encodings left-to-right (prefers gzip over zstd)",
+      "truth": "caddy/modules/caddyhttp/encode/encode.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/6179",
+        "pull": "https://github.com/caddyserver/caddy/pull/7772",
+        "merged_at": "2026-05-28T19:26:20Z"
+      }
+    },
+    {
+      "id": "caddy-7729",
+      "text": "Caddy client_auth works for punycode but not IDN hostnames",
+      "truth": "caddy/modules/caddytls/matchers.go",
+      "also_valid": [
+        "caddy/modules/caddytls/connpolicy.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7729",
+        "pull": "https://github.com/caddyserver/caddy/pull/7742",
+        "merged_at": "2026-05-20T17:52:28Z"
+      }
+    },
+    {
+      "id": "caddy-7738",
+      "text": "Breaking change in 2.11.3?",
+      "truth": "caddy/caddyconfig/httpcaddyfile/tlsapp.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7738",
+        "pull": "https://github.com/caddyserver/caddy/pull/7743",
+        "merged_at": "2026-05-20T16:48:37Z"
+      }
+    },
+    {
+      "id": "caddy-7741",
+      "text": "caddy start does not work on ipv6-only hosts",
+      "truth": "caddy/cmd/commandfuncs.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7741",
+        "pull": "https://github.com/caddyserver/caddy/pull/7744",
+        "merged_at": "2026-05-20T14:17:35Z"
+      }
+    },
+    {
+      "id": "caddy-7684",
+      "text": "Set `http.auth.user` variables even on unsuccessful authentication",
+      "truth": "caddy/modules/caddyhttp/caddyauth/caddyauth.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7684",
+        "pull": "https://github.com/caddyserver/caddy/pull/7698",
+        "merged_at": "2026-05-20T13:51:55Z"
+      }
+    },
+    {
+      "id": "caddy-7724",
+      "text": "Client TLS not working on v2.11.3",
+      "truth": "caddy/modules/caddytls/connpolicy.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7724",
+        "pull": "https://github.com/caddyserver/caddy/pull/7727",
+        "merged_at": "2026-05-14T16:05:57Z"
+      }
+    },
+    {
+      "id": "caddy-7713",
+      "text": "\"invalid Read on closed Body\" when using reverse_proxy and error handler",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/reverseproxy.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7713",
+        "pull": "https://github.com/caddyserver/caddy/pull/7715",
+        "merged_at": "2026-05-12T18:05:50Z"
+      }
+    },
+    {
+      "id": "caddy-7612",
+      "text": "TLS_ALPN challenge doesn't get disabled by Caddyfile directive",
+      "truth": "caddy/caddyconfig/httpcaddyfile/tlsapp.go",
+      "also_valid": [
+        "caddy/caddyconfig/httpcaddyfile/builtins.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7612",
+        "pull": "https://github.com/caddyserver/caddy/pull/7617",
+        "merged_at": "2026-04-26T13:39:57Z"
+      }
+    },
+    {
+      "id": "caddy-7667",
+      "text": "Managed ECH HTTPS records omit ALPN, causing clients to prefer h2 over h3",
+      "truth": "caddy/listeners.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7667",
+        "pull": "https://github.com/caddyserver/caddy/pull/7670",
+        "merged_at": "2026-04-23T19:33:41Z"
+      }
+    },
+    {
+      "id": "caddy-4529",
+      "text": "Auto HTTPS redirects to the wrong entry",
+      "truth": "caddy/modules/caddyhttp/autohttps.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/4529",
+        "pull": "https://github.com/caddyserver/caddy/pull/7666",
+        "merged_at": "2026-04-23T07:29:04Z"
+      }
+    },
+    {
+      "id": "caddy-7476",
+      "text": "wrong symlink path using `reveal_symlinks`  for file_server browse",
+      "truth": "caddy/modules/caddyhttp/fileserver/browsetplcontext.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7476",
+        "pull": "https://github.com/caddyserver/caddy/pull/7579",
+        "merged_at": "2026-04-14T18:49:30Z"
+      }
+    },
+    {
+      "id": "caddy-7624",
+      "text": "Make websocket copy buffer size configurable",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/streaming.go",
+      "also_valid": [
+        "caddy/modules/caddyhttp/reverseproxy/reverseproxy.go",
+        "caddy/modules/caddyhttp/reverseproxy/caddyfile.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7624",
+        "pull": "https://github.com/caddyserver/caddy/pull/7627",
+        "merged_at": "2026-04-10T20:49:32Z"
+      }
+    },
+    {
+      "id": "caddy-7596",
+      "text": "Unexpected behaviour when renaming the query field - field gone",
+      "truth": "caddy/modules/caddyhttp/rewrite/rewrite.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7596",
+        "pull": "https://github.com/caddyserver/caddy/pull/7599",
+        "merged_at": "2026-03-28T17:10:34Z"
+      }
+    },
+    {
+      "id": "caddy-7559",
+      "text": "Regression for wildcard `tls get_certificate http` in v2.11",
+      "truth": "caddy/caddyconfig/httpcaddyfile/tlsapp.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7559",
+        "pull": "https://github.com/caddyserver/caddy/pull/7567",
+        "merged_at": "2026-03-26T20:41:35Z"
+      }
+    },
+    {
+      "id": "caddy-7562",
+      "text": "Tailscale TLS behavior changed",
+      "truth": "caddy/modules/caddytls/automation.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7562",
+        "pull": "https://github.com/caddyserver/caddy/pull/7577",
+        "merged_at": "2026-03-20T15:36:03Z"
+      }
+    },
+    {
+      "id": "caddy-7546",
+      "text": "reverse_proxy LoadBalancing Dial Timeout results in \"http: invalid Read on closed Body\"",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/reverseproxy.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7546",
+        "pull": "https://github.com/caddyserver/caddy/pull/7547",
+        "merged_at": "2026-03-04T20:17:02Z"
+      }
+    },
+    {
+      "id": "caddy-7518",
+      "text": "Index out of range error when using {block}",
+      "truth": "caddy/caddyconfig/caddyfile/parse.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7518",
+        "pull": "https://github.com/caddyserver/caddy/pull/7543",
+        "merged_at": "2026-03-03T18:16:21Z"
+      }
+    },
+    {
+      "id": "caddy-7529",
+      "text": "Caddy 2.11.1: `proxy_protocol` and `h2c` breaks",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/reverseproxy.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7529",
+        "pull": "https://github.com/caddyserver/caddy/pull/7537",
+        "merged_at": "2026-03-02T07:04:06Z"
+      }
+    },
+    {
+      "id": "caddy-7192",
+      "text": "Allow global DNS `resolvers` directive",
+      "truth": "caddy/modules/caddypki/acmeserver/acmeserver.go",
+      "also_valid": [
+        "caddy/caddyconfig/httpcaddyfile/tlsapp.go",
+        "caddy/caddyconfig/httpcaddyfile/options.go",
+        "caddy/modules/caddytls/tls.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7192",
+        "pull": "https://github.com/caddyserver/caddy/pull/7297",
+        "merged_at": "2026-03-01T20:32:05Z"
+      }
+    },
+    {
+      "id": "caddy-7530",
+      "text": "tls_client_subject set to literal `{http.request.tls.client.subject}` without client cert",
+      "truth": "caddy/modules/caddyhttp/replacer.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7530",
+        "pull": "https://github.com/caddyserver/caddy/pull/7534",
+        "merged_at": "2026-03-01T05:03:18Z"
+      }
+    },
+    {
+      "id": "caddy-7528",
+      "text": "Caddy 2.11 HTTP 403 error via docker exec caddy reload",
+      "truth": "caddy/cmd/commandfuncs.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7528",
+        "pull": "https://github.com/caddyserver/caddy/pull/7532",
+        "merged_at": "2026-02-27T22:24:05Z"
+      }
+    },
+    {
+      "id": "caddy-7520",
+      "text": "Caddy 2.11.1 panics when network_proxy none is used in reverse_proxy transport",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/httptransport.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7520",
+        "pull": "https://github.com/caddyserver/caddy/pull/7521",
+        "merged_at": "2026-02-25T09:08:41Z"
+      }
+    },
+    {
+      "id": "caddy-7314",
+      "text": "log _subdirectory_ permissions",
+      "truth": "caddy/modules/logging/filewriter.go",
+      "also_valid": [
+        "caddy/modules/logging/filewriter_test_windows.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7314",
+        "pull": "https://github.com/caddyserver/caddy/pull/7335",
+        "merged_at": "2026-02-23T07:27:27Z"
+      }
+    },
+    {
+      "id": "caddy-7390",
+      "text": "Unexpected automatic redirection",
+      "truth": "caddy/modules/caddyhttp/autohttps.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7390",
+        "pull": "https://github.com/caddyserver/caddy/pull/7502",
+        "merged_at": "2026-02-22T02:42:40Z"
+      }
+    },
+    {
+      "id": "caddy-7325",
+      "text": "Cannot get `default_sni` to work",
+      "truth": "caddy/caddyconfig/httpcaddyfile/httptype.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7325",
+        "pull": "https://github.com/caddyserver/caddy/pull/7507",
+        "merged_at": "2026-02-22T02:42:04Z"
+      }
+    },
+    {
+      "id": "caddy-7481",
+      "text": "Feature request: configuration option to disable HTTP/3 0-RTT (Early Data)",
+      "truth": "caddy/caddyconfig/httpcaddyfile/serveroptions.go",
+      "also_valid": [
+        "caddy/modules/caddyhttp/server.go",
+        "caddy/listeners.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7481",
+        "pull": "https://github.com/caddyserver/caddy/pull/7485",
+        "merged_at": "2026-02-16T17:20:48Z"
+      }
+    },
+    {
+      "id": "caddy-7475",
+      "text": "pki: make maintenance interval and renewal window ratio configurable?",
+      "truth": "caddy/caddyconfig/httpcaddyfile/pkiapp.go",
+      "also_valid": [
+        "caddy/modules/caddypki/maintain.go",
+        "caddy/modules/caddypki/ca.go",
+        "caddy/modules/caddypki/pki.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7475",
+        "pull": "https://github.com/caddyserver/caddy/pull/7479",
+        "merged_at": "2026-02-15T14:10:13Z"
+      }
+    },
+    {
+      "id": "caddy-7294",
+      "text": "Global `dns` option discrepancy between docs and behaviour",
+      "truth": "caddy/caddyconfig/httpcaddyfile/tlsapp.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7294",
+        "pull": "https://github.com/caddyserver/caddy/pull/7458",
+        "merged_at": "2026-02-15T09:05:00Z"
+      }
+    },
+    {
+      "id": "caddy-7467",
+      "text": "Integrated the renewal_window_ratio parameter into the Caddyfile syntax",
+      "truth": "caddy/caddyconfig/httpcaddyfile/builtins.go",
+      "also_valid": [
+        "caddy/caddyconfig/httpcaddyfile/options.go",
+        "caddy/caddyconfig/httpcaddyfile/tlsapp.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7467",
+        "pull": "https://github.com/caddyserver/caddy/pull/7473",
+        "merged_at": "2026-02-13T21:47:02Z"
+      }
+    },
+    {
+      "id": "caddy-5086",
+      "text": "http/3 support in reverse_proxy module",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/httptransport.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/5086",
+        "pull": "https://github.com/caddyserver/caddy/pull/6312",
+        "merged_at": "2024-05-20T19:06:43Z"
+      }
+    },
+    {
+      "id": "caddy-7263",
+      "text": "Option to enable trusted_proxies for unix socket files",
+      "truth": "caddy/modules/caddyhttp/server.go",
+      "also_valid": [
+        "caddy/caddyconfig/httpcaddyfile/serveroptions.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7263",
+        "pull": "https://github.com/caddyserver/caddy/pull/7265",
+        "merged_at": "2025-10-16T02:47:32Z"
+      }
+    },
+    {
+      "id": "caddy-5660",
+      "text": "Automatic HTTPS redirects inconsistent in combination with bindings",
+      "truth": "caddy/modules/caddyhttp/autohttps.go",
+      "also_valid": [
+        "caddy/modules/caddyhttp/server.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/5660",
+        "pull": "https://github.com/caddyserver/caddy/pull/7435",
+        "merged_at": "2026-01-16T15:51:23Z"
+      }
+    },
+    {
+      "id": "caddy-7425",
+      "text": "caddy fmt does not format multi-line strings properly",
+      "truth": "caddy/caddyconfig/caddyfile/formatter.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7425",
+        "pull": "https://github.com/caddyserver/caddy/pull/7433",
+        "merged_at": "2026-01-13T20:22:24Z"
+      }
+    },
+    {
+      "id": "caddy-7418",
+      "text": "Deferred \"on close\" Log Not Triggered When stream_timeout Expires in Reverse Proxy WebSocket Scenario",
+      "truth": "caddy/modules/caddyhttp/reverseproxy/streaming.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7418",
+        "pull": "https://github.com/caddyserver/caddy/pull/7419",
+        "merged_at": "2026-01-06T09:55:48Z"
+      }
+    },
+    {
+      "id": "caddy-7408",
+      "text": "Feature request: Add flag for json output",
+      "truth": "caddy/cmd/commandfuncs.go",
+      "also_valid": [
+        "caddy/cmd/commands.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7408",
+        "pull": "https://github.com/caddyserver/caddy/pull/7409",
+        "merged_at": "2025-12-26T17:32:03Z"
+      }
+    },
+    {
+      "id": "caddy-7008",
+      "text": "500 Internal Server Error for URL Containing Null Byte (%00)",
+      "truth": "caddy/modules/caddyhttp/fileserver/staticfiles.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/caddy/issues/7008",
+        "pull": "https://github.com/caddyserver/caddy/pull/7017",
+        "merged_at": "2025-05-13T13:43:27Z"
+      }
+    },
+    {
+      "id": "certmagic-313",
+      "text": "Decouple cleanup context from obtaining context",
+      "truth": "certmagic/solvers.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/certmagic/issues/313",
+        "pull": "https://github.com/caddyserver/certmagic/pull/404",
+        "merged_at": "2026-09-04T17:52:39Z"
+      }
+    },
+    {
+      "id": "certmagic-381",
+      "text": "Preserve DNS provider metadata for DNS-01 cleanup",
+      "truth": "certmagic/solvers.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/certmagic/issues/381",
+        "pull": "https://github.com/caddyserver/certmagic/pull/382",
+        "merged_at": "2026-05-12T21:54:14Z"
+      }
+    },
+    {
+      "id": "certmagic-335",
+      "text": "ManageAsync is seemingly blocking",
+      "truth": "certmagic/config.go",
+      "also_valid": [
+        "certmagic/ocsp.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/certmagic/issues/335",
+        "pull": "https://github.com/caddyserver/certmagic/pull/374",
+        "merged_at": "2026-03-19T21:31:03Z"
+      }
+    },
+    {
+      "id": "forwardproxy-116",
+      "text": "insecure schemes are only allowed to localhost upstreams",
+      "truth": "forwardproxy/caddyfile.go",
+      "also_valid": [
+        "forwardproxy/forwardproxy.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/forwardproxy/issues/116",
+        "pull": "https://github.com/caddyserver/forwardproxy/pull/149",
+        "merged_at": "2025-01-16T16:47:58Z"
+      }
+    },
+    {
+      "id": "forwardproxy-62",
+      "text": "Caddy's import path has changed",
+      "truth": "forwardproxy/forwardproxy.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/forwardproxy/issues/62",
+        "pull": "https://github.com/caddyserver/forwardproxy/pull/63",
+        "merged_at": "2019-07-07T02:35:39Z"
+      }
+    },
+    {
+      "id": "forwardproxy-52",
+      "text": "Add realm=\"some-realm\" in Proxy-Authenticate Header",
+      "truth": "forwardproxy/forwardproxy.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/forwardproxy/issues/52",
+        "pull": "https://github.com/caddyserver/forwardproxy/pull/53",
+        "merged_at": "2019-02-04T00:23:16Z"
+      }
+    },
+    {
+      "id": "forwardproxy-33",
+      "text": "High amount of unclosed abandoned connections",
+      "truth": "forwardproxy/forwardproxy.go",
+      "also_valid": [
+        "forwardproxy/httpclient/httpclient.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/forwardproxy/issues/33",
+        "pull": "https://github.com/caddyserver/forwardproxy/pull/47",
+        "merged_at": "2018-08-17T21:01:53Z"
+      }
+    },
+    {
+      "id": "ingress-93",
+      "text": "Add trusted_proxies annotation",
+      "truth": "ingress/internal/caddy/ingress/reverseproxy.go",
+      "also_valid": [
+        "ingress/internal/caddy/ingress/annotations.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/ingress/issues/93",
+        "pull": "https://github.com/caddyserver/ingress/pull/249",
+        "merged_at": "2024-09-10T12:29:42Z"
+      }
+    },
+    {
+      "id": "ingress-121",
+      "text": "onDemandAsk Not Being Used",
+      "truth": "ingress/pkg/store/configmap_parser.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/ingress/issues/121",
+        "pull": "https://github.com/caddyserver/ingress/pull/124",
+        "merged_at": "2023-03-19T15:43:41Z"
+      }
+    },
+    {
+      "id": "ingress-11",
+      "text": "Handle https redirects",
+      "truth": "ingress/internal/controller/controller.go",
+      "also_valid": [
+        "ingress/cmd/caddy/flag.go",
+        "ingress/cmd/caddy/main.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/ingress/issues/11",
+        "pull": "https://github.com/caddyserver/ingress/pull/30",
+        "merged_at": "2020-11-09T09:06:15Z"
+      }
+    },
+    {
+      "id": "xcaddy-231",
+      "text": "Error: unknown flag: --config on `xcaddy run`",
+      "truth": "xcaddy/cmd/cobra.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/231",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/281",
+        "merged_at": "2026-08-08T16:02:55Z"
+      }
+    },
+    {
+      "id": "xcaddy-286",
+      "text": "Built binaries do not contain tzdata",
+      "truth": "xcaddy/environment.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/286",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/287",
+        "merged_at": "2026-08-04T03:24:10Z"
+      }
+    },
+    {
+      "id": "xcaddy-212",
+      "text": "Error with compiling custom Caddy with version 0.4.3",
+      "truth": "xcaddy/builder.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/212",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/213",
+        "merged_at": "2024-11-05T22:41:22Z"
+      }
+    },
+    {
+      "id": "xcaddy-221",
+      "text": "xcaddy does not download newly published module versions, even when specified",
+      "truth": "xcaddy/environment.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/221",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/238",
+        "merged_at": "2025-05-05T16:53:03Z"
+      }
+    },
+    {
+      "id": "xcaddy-181",
+      "text": "xcaddy v0.3.5 vs v0.4.0 = 15mb increase in filesize on windows",
+      "truth": "xcaddy/environment.go",
+      "also_valid": [
+        "xcaddy/builder.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/181",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/182",
+        "merged_at": "2024-05-06T16:12:23Z"
+      }
+    },
+    {
+      "id": "xcaddy-130",
+      "text": "Support for embedding static files at build-time",
+      "truth": "xcaddy/environment.go",
+      "also_valid": [
+        "xcaddy/io.go",
+        "xcaddy/cmd/main.go",
+        "xcaddy/builder.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/130",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/160",
+        "merged_at": "2023-12-18T20:22:47Z"
+      }
+    },
+    {
+      "id": "xcaddy-128",
+      "text": "Setcap immediately after building",
+      "truth": "xcaddy/cmd/main.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/128",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/129",
+        "merged_at": "2023-02-06T18:26:33Z"
+      }
+    },
+    {
+      "id": "xcaddy-116",
+      "text": "xcaddy run with go 19 does not work",
+      "truth": "xcaddy/cmd/main.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/116",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/117",
+        "merged_at": "2022-09-12T19:41:27Z"
+      }
+    },
+    {
+      "id": "xcaddy-102",
+      "text": "Unable to clean modules installed by xcaddy build",
+      "truth": "xcaddy/builder.go",
+      "also_valid": [
+        "xcaddy/environment.go",
+        "xcaddy/cmd/main.go"
+      ],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/102",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/104",
+        "merged_at": "2022-06-20T19:20:06Z"
+      }
+    },
+    {
+      "id": "xcaddy-54",
+      "text": "xcaddy doesn't build specified version",
+      "truth": "xcaddy/environment.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/54",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/93",
+        "merged_at": "2022-04-07T23:07:11Z"
+      }
+    },
+    {
+      "id": "xcaddy-68",
+      "text": "xcaddy development mode fails if 'go.mod' includes 'replace' directive",
+      "truth": "xcaddy/cmd/main.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/68",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/69",
+        "merged_at": "2021-09-01T18:30:45Z"
+      }
+    },
+    {
+      "id": "xcaddy-50",
+      "text": "Can't do module replacement with github forks",
+      "truth": "xcaddy/cmd/xcaddy/main.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/50",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/51",
+        "merged_at": "2021-02-26T22:49:50Z"
+      }
+    },
+    {
+      "id": "xcaddy-46",
+      "text": "Build fails under go1.16",
+      "truth": "xcaddy/builder.go",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/caddyserver/xcaddy/issues/46",
+        "pull": "https://github.com/caddyserver/xcaddy/pull/47",
+        "merged_at": "2021-02-05T17:49:17Z"
+      }
+    }
+  ]
+}

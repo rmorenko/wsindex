@@ -1,0 +1,901 @@
+{
+  "org": "0no-co",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "GraphQLSP-426",
+      "text": "Unnecessary writes to tadaOutputLocation put devserver into loop",
+      "truth": "GraphQLSP/packages/graphqlsp/src/graphql/getSchema.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/426",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/427",
+        "merged_at": "2026-08-21T12:17:02Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-390",
+      "text": "`unrollTadaFragments` drops fragments referenced via nested property access (`Component.fragments.<name>`)",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/index.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/390",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/389",
+        "merged_at": "2026-06-12T15:27:08Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-332",
+      "text": "Schema name is not computed when using multiple schemas",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/checks.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/ast/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/332",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/333",
+        "merged_at": "2024-06-11T13:10:07Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-321",
+      "text": "Unknown fragment error when the fragment is defined as an object field",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/index.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/321",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/322",
+        "merged_at": "2024-05-27T09:29:28Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-316",
+      "text": "Unused co-located fragment definition(s) false-negatives?",
+      "truth": "GraphQLSP/packages/example-tada/src/index.tsx",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/index.ts",
+        "GraphQLSP/packages/graphqlsp/src/ast/resolve.ts",
+        "GraphQLSP/packages/graphqlsp/src/ast/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/316",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/319",
+        "merged_at": "2024-05-13T17:22:05Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-261",
+      "text": "Suggestions for inline fragments",
+      "truth": "GraphQLSP/packages/graphqlsp/src/autoComplete.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/ast/token.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/261",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/262",
+        "merged_at": "2024-03-12T14:02:10Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-190",
+      "text": "Autocomplete broken for certain formatting",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/token.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/190",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/209",
+        "merged_at": "2024-01-26T14:07:01Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-228",
+      "text": "Only mark exported fragments for co-location",
+      "truth": "GraphQLSP/packages/graphqlsp/src/checkImports.ts",
+      "also_valid": [
+        "GraphQLSP/packages/example-tada/src/index.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/228",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/230",
+        "merged_at": "2024-02-23T14:27:47Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-229",
+      "text": "Build support for tanstack-query in unused-fields",
+      "truth": "GraphQLSP/packages/graphqlsp/src/fieldUsage.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/229",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/235",
+        "merged_at": "2024-02-23T14:26:01Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-216",
+      "text": "Offset is wrong when using a syntax-highlighting hint",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/ast/token.ts",
+        "GraphQLSP/packages/example-tada/src/Pokemon.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/216",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/217",
+        "merged_at": "2024-02-11T09:36:46Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-201",
+      "text": "Fragment cannot be found if the reference is a property of an object",
+      "truth": "GraphQLSP/packages/example-tada/src/Pokemon.tsx",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/ast/index.ts",
+        "GraphQLSP/packages/example-tada/src/index.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/201",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/202",
+        "merged_at": "2024-01-23T08:52:57Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-178",
+      "text": "Support providing more built-in keys for `field-usage`",
+      "truth": "GraphQLSP/packages/graphqlsp/src/fieldUsage.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/178",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/195",
+        "merged_at": "2024-01-21T12:47:27Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-181",
+      "text": "Add bail logic to the introspection-polling",
+      "truth": "GraphQLSP/packages/graphqlsp/src/graphql/getSchema.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/181",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/193",
+        "merged_at": "2024-01-20T13:00:01Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-147",
+      "text": "Retire automatic type-generation",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/index.ts",
+        "GraphQLSP/packages/graphqlsp/src/graphql/getSchema.ts",
+        "GraphQLSP/packages/graphqlsp/src/ast/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/147",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/148",
+        "merged_at": "2024-01-12T13:07:56Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-156",
+      "text": "Error on sql template literal : Syntax Error: Unexpected single quote character ('), did you mean to use a double quote (\")?ts(52001)",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/index.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/checkImports.ts",
+        "GraphQLSP/packages/graphqlsp/src/diagnostics.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/156",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/157",
+        "merged_at": "2024-01-07T06:29:07Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-153",
+      "text": "Ensure fragment-suggestions work with client-preset",
+      "truth": "GraphQLSP/packages/graphqlsp/src/checkImports.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+        "GraphQLSP/packages/graphqlsp/src/autoComplete.ts",
+        "GraphQLSP/packages/graphqlsp/src/ast/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/153",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/152",
+        "merged_at": "2024-01-04T13:04:27Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-124",
+      "text": "GraphQL field descriptions in IntelliSense have broken syntax highlighting",
+      "truth": "GraphQLSP/packages/graphqlsp/src/quickInfo.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/124",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/126",
+        "merged_at": "2023-12-21T16:32:25Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-143",
+      "text": "Warn about unused fields",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [
+        "GraphQLSP/packages/example-external-generator/src/gql/graphql.ts",
+        "GraphQLSP/packages/example-external-generator/src/index.tsx",
+        "GraphQLSP/packages/example-external-generator/src/gql/gql.ts",
+        "GraphQLSP/packages/example-external-generator/src/Pokemon.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/143",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/146",
+        "merged_at": "2023-12-21T16:25:46Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-142",
+      "text": "Support client-only directives",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [
+        "GraphQLSP/packages/example-external-generator/src/index.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/142",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/144",
+        "merged_at": "2023-12-18T12:18:25Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-111",
+      "text": "Port the existing field-suggestion algorithm to the client-preset suggestions",
+      "truth": "GraphQLSP/packages/graphqlsp/src/autoComplete.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/quickInfo.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/111",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/132",
+        "merged_at": "2023-12-10T10:54:11Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-118",
+      "text": "Throw for incorrect variable names",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/118",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/119",
+        "merged_at": "2023-11-30T18:56:03Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-102",
+      "text": "Support parsed DocumentNode interpolations",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/resolve.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/102",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/105",
+        "merged_at": "2023-10-29T04:45:42Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-85",
+      "text": "Support additional headers for introspection",
+      "truth": "GraphQLSP/packages/graphqlsp/src/graphql/getSchema.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/85",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/87",
+        "merged_at": "2023-06-27T13:49:35Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-79",
+      "text": "Investigate bug where fragment-renaming gets wrong name",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/79",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/82",
+        "merged_at": "2023-06-22T19:19:26Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-75",
+      "text": "Account for offset in `getSuggestions`",
+      "truth": "GraphQLSP/packages/graphqlsp/src/autoComplete.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/75",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/81",
+        "merged_at": "2023-06-22T18:53:21Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-72",
+      "text": "Support nested-fragment resolution errors",
+      "truth": "GraphQLSP/packages/graphqlsp/src/ast/resolve.ts",
+      "also_valid": [
+        "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+        "GraphQLSP/packages/graphqlsp/src/quickInfo.ts",
+        "GraphQLSP/packages/graphqlsp/src/autoComplete.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/72",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/73",
+        "merged_at": "2023-06-22T10:47:46Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-66",
+      "text": "Missbehaving type-generation",
+      "truth": "GraphQLSP/packages/graphqlsp/src/diagnostics.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/66",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/69",
+        "merged_at": "2023-06-09T15:22:47Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-3",
+      "text": "Add component fragment spread diagnostic",
+      "truth": "GraphQLSP/packages/graphqlsp/src/index.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/3",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/42",
+        "merged_at": "2023-04-20T11:18:27Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-13",
+      "text": "Hoist the `typescript` types",
+      "truth": "GraphQLSP/packages/graphqlsp/src/index.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/13",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/39",
+        "merged_at": "2023-04-18T15:30:21Z"
+      }
+    },
+    {
+      "id": "GraphQLSP-17",
+      "text": "When updating the operationName it appends a new `asType` in the AST",
+      "truth": "GraphQLSP/packages/graphqlsp/src/index.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/GraphQLSP/issues/17",
+        "pull": "https://github.com/0no-co/GraphQLSP/pull/40",
+        "merged_at": "2023-04-18T06:52:29Z"
+      }
+    },
+    {
+      "id": "gql.tada-577",
+      "text": "generate output exits with code 130 on EOF/Ctrl-D from non-interactive stdin (breaks under Turborepo/CI)",
+      "truth": "gql.tada/packages/cli-utils/src/term/__tests__/tty.test.ts",
+      "also_valid": [
+        "gql.tada/packages/cli-utils/src/term/tty.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/577",
+        "pull": "https://github.com/0no-co/gql.tada/pull/578",
+        "merged_at": "2026-07-15T06:20:59Z"
+      }
+    },
+    {
+      "id": "gql.tada-484",
+      "text": "bug: large set of unions not working",
+      "truth": "gql.tada/src/tokenizer.ts",
+      "also_valid": [
+        "gql.tada/src/__tests__/parser.test.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/484",
+        "pull": "https://github.com/0no-co/gql.tada/pull/551",
+        "merged_at": "2026-06-13T17:40:29Z"
+      }
+    },
+    {
+      "id": "gql.tada-503",
+      "text": "`gql-tada turbo` silently fails when running out of memory",
+      "truth": "gql.tada/packages/cli-utils/src/threads/__tests__/index.test.ts",
+      "also_valid": [
+        "gql.tada/packages/cli-utils/src/threads/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/503",
+        "pull": "https://github.com/0no-co/gql.tada/pull/529",
+        "merged_at": "2026-06-12T05:57:55Z"
+      }
+    },
+    {
+      "id": "gql.tada-510",
+      "text": "tada warns when using subpath imports",
+      "truth": "gql.tada/packages/cli-utils/src/ts/__tests__/factory.test.ts",
+      "also_valid": [
+        "gql.tada/packages/cli-utils/src/ts/factory.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/510",
+        "pull": "https://github.com/0no-co/gql.tada/pull/516",
+        "merged_at": "2026-06-01T06:41:27Z"
+      }
+    },
+    {
+      "id": "gql.tada-123",
+      "text": "RFC: `graphql.frag` helper",
+      "truth": "gql.tada/src/api.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/123",
+        "pull": "https://github.com/0no-co/gql.tada/pull/511",
+        "merged_at": "2026-03-24T16:45:26Z"
+      }
+    },
+    {
+      "id": "gql.tada-480",
+      "text": "graphql-cache.d.ts has invalid imports when using moduleResolution nodenext",
+      "truth": "gql.tada/packages/cli-utils/src/commands/turbo/thread.ts",
+      "also_valid": [
+        "gql.tada/packages/cli-utils/src/ts/factory.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/480",
+        "pull": "https://github.com/0no-co/gql.tada/pull/481",
+        "merged_at": "2025-08-06T06:09:51Z"
+      }
+    },
+    {
+      "id": "gql.tada-448",
+      "text": "The parser hangs indefinitely when a GraphQL query string ends with a comment.",
+      "truth": "gql.tada/src/__tests__/tokenizer.test-d.ts",
+      "also_valid": [
+        "gql.tada/src/tokenizer.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/448",
+        "pull": "https://github.com/0no-co/gql.tada/pull/449",
+        "merged_at": "2025-03-27T21:33:48Z"
+      }
+    },
+    {
+      "id": "gql.tada-406",
+      "text": "gql.tada turbo does not regenerate cache file when a scalar changes",
+      "truth": "gql.tada/packages/cli-utils/src/ts/factory.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/406",
+        "pull": "https://github.com/0no-co/gql.tada/pull/409",
+        "merged_at": "2024-10-04T15:21:49Z"
+      }
+    },
+    {
+      "id": "gql.tada-398",
+      "text": "Incompatibility with urql since v1.8.8",
+      "truth": "gql.tada/src/api.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/398",
+        "pull": "https://github.com/0no-co/gql.tada/pull/400",
+        "merged_at": "2024-09-20T12:16:01Z"
+      }
+    },
+    {
+      "id": "gql.tada-376",
+      "text": "Issue: Explicit type annotation is needed when initialising graphQL tada",
+      "truth": "gql.tada/src/api.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/376",
+        "pull": "https://github.com/0no-co/gql.tada/pull/377",
+        "merged_at": "2024-08-22T15:34:01Z"
+      }
+    },
+    {
+      "id": "gql.tada-365",
+      "text": "Incorrect fragment type using interfaces",
+      "truth": "gql.tada/src/__tests__/api.test-d.ts",
+      "also_valid": [
+        "gql.tada/src/selection.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/365",
+        "pull": "https://github.com/0no-co/gql.tada/pull/368",
+        "merged_at": "2024-08-18T16:00:43Z"
+      }
+    },
+    {
+      "id": "gql.tada-339",
+      "text": "`gql.tada` not updating types on `schema.graphql` changes",
+      "truth": "gql.tada/packages/internal/src/loaders/sdl.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/339",
+        "pull": "https://github.com/0no-co/gql.tada/pull/340",
+        "merged_at": "2024-07-09T13:31:47Z"
+      }
+    },
+    {
+      "id": "gql.tada-348",
+      "text": "Unexported types cause TS7056",
+      "truth": "gql.tada/packages/internal/src/introspection/output.ts",
+      "also_valid": [
+        "gql.tada/packages/internal/src/introspection/preprocess.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/348",
+        "pull": "https://github.com/0no-co/gql.tada/pull/350",
+        "merged_at": "2024-07-29T10:46:14Z"
+      }
+    },
+    {
+      "id": "gql.tada-326",
+      "text": "`gql.tada check` returns exit code 0 with errors",
+      "truth": "gql.tada/packages/cli-utils/src/term/write.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/326",
+        "pull": "https://github.com/0no-co/gql.tada/pull/329",
+        "merged_at": "2024-06-26T10:48:46Z"
+      }
+    },
+    {
+      "id": "gql.tada-316",
+      "text": "`generate` throw `Cannot query field 'isOneOf'`",
+      "truth": "gql.tada/packages/internal/src/loaders/introspection.ts",
+      "also_valid": [
+        "gql.tada/packages/internal/src/loaders/url.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/316",
+        "pull": "https://github.com/0no-co/gql.tada/pull/317",
+        "merged_at": "2024-06-12T09:45:10Z"
+      }
+    },
+    {
+      "id": "gql.tada-289",
+      "text": "`turbo` cache is not including fragments that are defined separately (like fragment colocation)",
+      "truth": "gql.tada/packages/cli-utils/src/ts/vendor/typescript-vfs.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/289",
+        "pull": "https://github.com/0no-co/gql.tada/pull/298",
+        "merged_at": "2024-05-14T11:02:10Z"
+      }
+    },
+    {
+      "id": "gql.tada-294",
+      "text": "Schema is missing a `schema` property",
+      "truth": "gql.tada/packages/internal/src/config.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/294",
+        "pull": "https://github.com/0no-co/gql.tada/pull/295",
+        "merged_at": "2024-05-13T15:51:17Z"
+      }
+    },
+    {
+      "id": "gql.tada-285",
+      "text": "`generate output` doesn't seem to work by default in CI",
+      "truth": "gql.tada/packages/cli-utils/src/term/tty.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/285",
+        "pull": "https://github.com/0no-co/gql.tada/pull/286",
+        "merged_at": "2024-05-03T13:02:36Z"
+      }
+    },
+    {
+      "id": "gql.tada-269",
+      "text": "tadaTurboLocation and tadaPersistedLocation are now required in 1.6.1 when using multiple schemas",
+      "truth": "gql.tada/packages/internal/src/config.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/269",
+        "pull": "https://github.com/0no-co/gql.tada/pull/270",
+        "merged_at": "2024-04-26T14:38:56Z"
+      }
+    },
+    {
+      "id": "gql.tada-221",
+      "text": "gql.tada doctor/check cannot handle headers in schema object",
+      "truth": "gql.tada/packages/internal/src/config.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/221",
+        "pull": "https://github.com/0no-co/gql.tada/pull/222",
+        "merged_at": "2024-04-16T16:47:46Z"
+      }
+    },
+    {
+      "id": "gql.tada-215",
+      "text": "readFragment leaks \"any\" when used without generic & explicit fragment.",
+      "truth": "gql.tada/src/api.ts",
+      "also_valid": [
+        "gql.tada/src/__tests__/api.test-d.ts",
+        "gql.tada/src/namespace.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/215",
+        "pull": "https://github.com/0no-co/gql.tada/pull/216",
+        "merged_at": "2024-04-16T10:47:01Z"
+      }
+    },
+    {
+      "id": "gql.tada-160",
+      "text": "RFC: Implement codegen command to use AOT-compiled, cached types (Turbo Mode)",
+      "truth": "gql.tada/src/api.ts",
+      "also_valid": [
+        "gql.tada/packages/cli-utils/src/index.ts",
+        "gql.tada/src/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/160",
+        "pull": "https://github.com/0no-co/gql.tada/pull/183",
+        "merged_at": "2024-04-10T16:47:41Z"
+      }
+    },
+    {
+      "id": "gql.tada-171",
+      "text": "Doesn't work with subscriptions",
+      "truth": "gql.tada/packages/internal/src/loaders/query.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/171",
+        "pull": "https://github.com/0no-co/gql.tada/pull/172",
+        "merged_at": "2024-04-04T20:00:17Z"
+      }
+    },
+    {
+      "id": "gql.tada-47",
+      "text": "Performance issue in getting enum with huge schema",
+      "truth": "gql.tada/src/introspection.ts",
+      "also_valid": [
+        "gql.tada/src/__tests__/introspection.test-d.ts",
+        "gql.tada/src/api.ts",
+        "gql.tada/src/__tests__/api.test-d.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/47",
+        "pull": "https://github.com/0no-co/gql.tada/pull/53",
+        "merged_at": "2024-02-03T11:32:22Z"
+      }
+    },
+    {
+      "id": "gql.tada-100",
+      "text": "`__typename` not properly disambiguating the union when it's included in a fragment",
+      "truth": "gql.tada/src/__tests__/api.test-d.ts",
+      "also_valid": [
+        "gql.tada/src/selection.ts",
+        "gql.tada/src/__tests__/selection.test-d.ts",
+        "gql.tada/src/__tests__/fixtures/simpleSchema.ts",
+        "gql.tada/src/__tests__/fixtures/simpleIntrospection.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/100",
+        "pull": "https://github.com/0no-co/gql.tada/pull/102",
+        "merged_at": "2024-03-02T22:59:18Z"
+      }
+    },
+    {
+      "id": "gql.tada-72",
+      "text": "maskFragments returns `never` for custom scalars with array fields",
+      "truth": "gql.tada/src/__tests__/api.test-d.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/72",
+        "pull": "https://github.com/0no-co/gql.tada/pull/129",
+        "merged_at": "2024-03-11T11:42:52Z"
+      }
+    },
+    {
+      "id": "gql.tada-110",
+      "text": "Masked Fragment inference with Remix/React Router `useLoaderData` pattern",
+      "truth": "gql.tada/src/namespace.ts",
+      "also_valid": [
+        "gql.tada/src/__tests__/api.test.ts",
+        "gql.tada/src/__tests__/api.test-d.ts",
+        "gql.tada/src/__tests__/namespace.test-d.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/110",
+        "pull": "https://github.com/0no-co/gql.tada/pull/126",
+        "merged_at": "2024-03-11T11:13:09Z"
+      }
+    },
+    {
+      "id": "gql.tada-44",
+      "text": "RFC: Add helper function to get types of enums and scalars",
+      "truth": "gql.tada/src/api.ts",
+      "also_valid": [
+        "gql.tada/src/__tests__/api.test-d.ts",
+        "gql.tada/src/__tests__/introspection.test-d.ts",
+        "gql.tada/src/introspection.ts",
+        "gql.tada/src/__tests__/fixtures/simpleSchema.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/44",
+        "pull": "https://github.com/0no-co/gql.tada/pull/45",
+        "merged_at": "2024-01-28T12:05:48Z"
+      }
+    },
+    {
+      "id": "gql.tada-38",
+      "text": "RFC: Add helper function to create Fragment data",
+      "truth": "gql.tada/src/__tests__/api.test-d.ts",
+      "also_valid": [
+        "gql.tada/src/api.ts",
+        "gql.tada/src/namespace.ts",
+        "gql.tada/src/index.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/38",
+        "pull": "https://github.com/0no-co/gql.tada/pull/43",
+        "merged_at": "2024-01-28T12:04:30Z"
+      }
+    },
+    {
+      "id": "gql.tada-30",
+      "text": "RFC: allow reacting to client-side directives",
+      "truth": "gql.tada/src/selection.ts",
+      "also_valid": [
+        "gql.tada/src/__tests__/selection.test-d.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/gql.tada/issues/30",
+        "pull": "https://github.com/0no-co/gql.tada/pull/32",
+        "merged_at": "2024-01-22T13:39:29Z"
+      }
+    },
+    {
+      "id": "hoofd-90",
+      "text": "useTitle not updating in React Concurrent Mode",
+      "truth": "hoofd/src/dispatcher/index.ts",
+      "also_valid": [
+        "hoofd/__tests__/useMeta.test.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/hoofd/issues/90",
+        "pull": "https://github.com/0no-co/hoofd/pull/95",
+        "merged_at": "2023-09-23T13:43:04Z"
+      }
+    },
+    {
+      "id": "hoofd-77",
+      "text": "Doesn't escape `content`",
+      "truth": "hoofd/src/dispatcher/index.ts",
+      "also_valid": [
+        "hoofd/__tests__/ssr.test.tsx"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/hoofd/issues/77",
+        "pull": "https://github.com/0no-co/hoofd/pull/78",
+        "merged_at": "2023-04-27T12:44:28Z"
+      }
+    },
+    {
+      "id": "hoofd-75",
+      "text": "Failure when trying to `removeChild` that doesn't exist",
+      "truth": "hoofd/src/dispatcher/index.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/hoofd/issues/75",
+        "pull": "https://github.com/0no-co/hoofd/pull/76",
+        "merged_at": "2023-04-21T07:54:04Z"
+      }
+    },
+    {
+      "id": "hoofd-58",
+      "text": "Feature Request: Export interfaces of typescript to allow wrappers",
+      "truth": "hoofd/src/dispatcher/index.ts",
+      "also_valid": [
+        "hoofd/src/index.ts",
+        "hoofd/src/hooks/useHead.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/hoofd/issues/58",
+        "pull": "https://github.com/0no-co/hoofd/pull/65",
+        "merged_at": "2022-06-28T16:30:11Z"
+      }
+    },
+    {
+      "id": "reghex-7",
+      "text": "Regexes that can match 0 characters aren't handled properly",
+      "truth": "reghex/src/core.js",
+      "also_valid": [
+        "reghex/src/core.test.js",
+        "reghex/src/codegen.js"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/reghex/issues/7",
+        "pull": "https://github.com/0no-co/reghex/pull/12",
+        "merged_at": "2021-01-09T01:45:59Z"
+      }
+    },
+    {
+      "id": "reghex-9",
+      "text": "Lookaheads shorthands",
+      "truth": "reghex/src/parser.test.js",
+      "also_valid": [
+        "reghex/src/core.test.js",
+        "reghex/src/parser.js",
+        "reghex/src/codegen.js"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/reghex/issues/9",
+        "pull": "https://github.com/0no-co/reghex/pull/13",
+        "merged_at": "2021-01-09T03:12:33Z"
+      }
+    },
+    {
+      "id": "reghex-8",
+      "text": "Support for string matchers",
+      "truth": "reghex/src/core.js",
+      "also_valid": [
+        "reghex/src/core.test.js",
+        "reghex/src/babel/transform.js",
+        "reghex/src/babel/plugin.test.js"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/reghex/issues/8",
+        "pull": "https://github.com/0no-co/reghex/pull/11",
+        "merged_at": "2021-01-09T01:39:46Z"
+      }
+    },
+    {
+      "id": "wonka-167",
+      "text": "Typescript errors in wonka 6.3.3",
+      "truth": "wonka/src/observable.ts",
+      "also_valid": [
+        "wonka/src/helpers.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/wonka/issues/167",
+        "pull": "https://github.com/0no-co/wonka/pull/168",
+        "merged_at": "2023-08-03T10:59:41Z"
+      }
+    },
+    {
+      "id": "wonka-158",
+      "text": "Top-level declarations in .d.ts files must start with either a 'declare' or 'export' modifier",
+      "truth": "wonka/src/types.d.ts",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/0no-co/wonka/issues/158",
+        "pull": "https://github.com/0no-co/wonka/pull/159",
+        "merged_at": "2023-03-28T16:51:35Z"
+      }
+    },
+    {
+      "id": "wonka-148",
+      "text": "Narrowing overload for `filter`",
+      "truth": "wonka/src/operators.ts",
+      "also_valid": [
+        "wonka/src/__tests__/operators.test.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/wonka/issues/148",
+        "pull": "https://github.com/0no-co/wonka/pull/149",
+        "merged_at": "2023-03-10T19:18:50Z"
+      }
+    },
+    {
+      "id": "wonka-140",
+      "text": "`dist/wonka.d.ts` failing typecheck on TS 4.9.3+",
+      "truth": "wonka/src/index.ts",
+      "also_valid": [
+        "wonka/src/observable.ts"
+      ],
+      "source": {
+        "issue": "https://github.com/0no-co/wonka/issues/140",
+        "pull": "https://github.com/0no-co/wonka/pull/141",
+        "merged_at": "2023-02-11T19:26:21Z"
+      }
+    }
+  ]
+}

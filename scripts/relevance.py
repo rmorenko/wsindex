@@ -20,6 +20,14 @@ in the answer file, checked as a substring. They are in
 `acceptance_corpus/` and are not to be edited to make a run pass — the
 same rule `acceptance.py` already lives by, and for the same reason.
 
+**And a second set nobody here wrote at all** (`--harvested`, built by
+`scripts/harvest.py`): 355 closed issues paired with the pull requests
+that closed them, so the question is a real person's words and the
+answer is the file a maintainer actually changed. Blind is a discipline;
+this removes the need to trust it. The authored set is better posed and
+the harvested set cannot be accused of having been written by the party
+being measured, so both are kept and neither replaces the other.
+
 **The corpus is pinned.** The truth is `file:line`, and repositories
 move. Every repo is checked out at the sha it had when its questions were
 written; a floating clone would rot the answers silently.
@@ -31,6 +39,9 @@ control this becomes another way of grading wsindex against itself.
 Usage:
     uv run poe relevance          # routine tier, 60 questions
     uv run poe relevance --full   # adds dbeaver and icsharpcode, 84
+    uv run poe relevance -- --harvested          # 204 real issue titles
+    uv run poe relevance -- --harvested --full   # all 355
+    uv run poe relevance -- --harvested --dump rows.json   # for a paired test
     uv run poe relevance -- --save scripts/relevance_baseline.json
     uv run poe relevance -- --check scripts/relevance_baseline.json
 
@@ -46,6 +57,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -53,6 +65,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from wsindex.config import Config, Repository
 from wsindex.embed import SentenceTransformerEmbedder
@@ -216,6 +229,82 @@ def control(root: Path, rg_query: str, truth: str) -> tuple[str, int]:
     return ("found" if len(files) <= DROWNED_AT else "drowned"), len(files)
 
 
+_STOP = {
+    "about",
+    "after",
+    "again",
+    "against",
+    "always",
+    "because",
+    "before",
+    "behaviour",
+    "behavior",
+    "between",
+    "cannot",
+    "could",
+    "doesn",
+    "during",
+    "error",
+    "should",
+    "support",
+    "there",
+    "using",
+    "version",
+    "issue",
+    "problem",
+    "returns",
+    "something",
+    "unexpected",
+    "without",
+    "working",
+    "works",
+    "would",
+}
+"""English a bug report is made of. Grepping `unexpected` measures the
+size of the repository, not whether ripgrep can find the answer."""
+
+_QUOTED = re.compile(r"[`\"']([^`\"']{3,60})[`\"']")
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def terms(question: str) -> list[str]:
+    """What a developer would plausibly grep, most specific first.
+
+    Backticked strings first — a bug report quotes the error it saw, and
+    that is the strongest thing anybody has to search with. Then
+    identifier-shaped words, then long words. English is dropped.
+
+    Frozen as a rule rather than chosen per question on purpose: a
+    control written by somebody who has seen the answer is not a control.
+    """
+    found: list[str] = [match.group(1).strip() for match in _QUOTED.finditer(question)]
+    words = [w for w in _WORD.findall(question) if w.lower() not in _STOP]
+    found += [w for w in words if "_" in w or re.search(r"[a-z][A-Z]", w)]
+    found += sorted((w for w in words if len(w) >= 6), key=len, reverse=True)
+    return list(dict.fromkeys(found))[:8]
+
+
+def best_control(root: Path, question: str, truth: str) -> tuple[str, int, str]:
+    """Ripgrep's best single query drawn from the question's own words.
+
+    Every candidate term is tried and the *friendliest* outcome to
+    ripgrep is reported — found beats drowned beats missed, fewer files
+    breaks a tie. That is deliberately generous. A harvested question has
+    no hand-written `rg_query`, and inventing a weak one would make
+    wsindex look good by beating a control nobody would have typed.
+
+    Returns:
+        Outcome, how many files that query returned, and the query.
+    """
+    rank = {"found": 0, "drowned": 1, "missed": 2}
+    best = ("missed", 0, "")
+    for term in terms(question):
+        outcome, count = control(root, f"rg -i -F {shlex.quote(term)}", truth)
+        if (rank[outcome], count) < (rank[best[0]], best[1] if best[2] else 10**9):
+            best = (outcome, count, term)
+    return best
+
+
 def rank_of(hits: list[Hit], truth: str) -> int | None:
     for index, hit in enumerate(hits, start=1):
         meta = hit.metadata
@@ -276,10 +365,25 @@ def build(org: str, repos: list[Repo], root: Path) -> Pipeline:
     return Pipeline(store=store, config=config, state_dir=state)
 
 
-def grade(org: str, repos: list[Repo]) -> Workspace:
-    """Index one workspace and put its frozen questions to both tools."""
+def grade(org: str, repos: list[Repo], *, harvested: bool = False) -> Workspace:
+    """Index one workspace and put its frozen questions to both tools.
+
+    Args:
+        org: Which workspace.
+        repos: Its pinned repositories.
+        harvested: Ask the questions real people asked — issue titles
+            paired with the files that closed them (`scripts/harvest.py`)
+            — instead of the ones written for this corpus. The reason to
+            have both: the authored set is better posed and the harvested
+            set is not vulnerable to having been written by the person
+            being measured, which is the objection that ends an argument
+            about the authored one.
+    """
     root = materialise(org, repos)
-    questions = json.loads((CORPUS / f"{org}.json").read_text(encoding="utf-8"))["questions"]
+    source = (CORPUS / "harvested" / f"{org}.json") if harvested else (CORPUS / f"{org}.json")
+    questions = json.loads(source.read_text(encoding="utf-8"))["questions"]
+    if harvested:
+        return _grade_harvested(org, repos, root, questions)
     pipeline = build(org, repos, root)
     started = time.perf_counter()
     report = pipeline.index()
@@ -317,6 +421,71 @@ def grade(org: str, repos: list[Repo]) -> Workspace:
     return space
 
 
+def _grade_harvested(
+    org: str, repos: list[Repo], root: Path, questions: list[dict[str, Any]]
+) -> Workspace:
+    """The same grading, for questions nobody here wrote.
+
+    Three things differ, and each is the honest handling rather than a
+    convenience:
+
+    - **The answer is a set.** A pull request that closes an issue often
+      touches two or three files and all of them are where to look, so a
+      hit is the best rank among them. The authored set has one file and
+      a line range; these have neither.
+    - **Reachability is per file.** Without line numbers, "did the
+      indexer read this at all" is the only reachability question that
+      can be asked, and it is still worth asking — a question about a
+      file no grammar covers is unanswerable for reasons that have
+      nothing to do with ranking.
+    - **The control is derived**, by `best_control`, since there is no
+      hand-written `rg_query` and writing one now would mean writing it
+      with the answer in view.
+    """
+    pipeline = build(org, repos, root)
+    started = time.perf_counter()
+    report = pipeline.index()
+    space = Workspace(
+        org=org,
+        files=report.files,
+        chunks=report.chunks,
+        seconds=round(time.perf_counter() - started, 1),
+    )
+    code_and_doc = SearchFilter(kind=(Kind.CODE, Kind.DOC))
+    indexed = {
+        f"{repo['id']}/{meta.path}"
+        for repo in repos
+        for meta in pipeline.store.metadata_of(
+            repo["id"], ids=sorted(pipeline.store.chunk_ids(repo["id"]))
+        ).values()
+    }
+    for item in questions:
+        answers = [item["truth"], *item.get("also_valid", [])]
+        hits = pipeline.search(item["text"], k=DEFAULT_K)
+        deep = pipeline.search(item["text"], k=DEEP_K, filters=code_and_doc)
+        ranks = [r for r in (rank_of(hits, a) for a in answers) if r is not None]
+        deep_ranks = [r for r in (rank_of(deep, a) for a in answers) if r is not None]
+        outcome, count, query = best_control(root, item["text"], item["truth"])
+        space.graded.append(
+            Graded(
+                id=item["id"],
+                klass="harvested",
+                text=item["text"],
+                truth=item["truth"],
+                reachable=any(a in indexed for a in answers),
+                rank=min(ranks) if ranks else None,
+                deep_rank=min(deep_ranks) if deep_ranks else None,
+                control=outcome,
+                control_files=count,
+                commits_in_top3=sum(
+                    1 for h in hits[:3] if str(h.metadata.get("path", "")).startswith("commits/")
+                ),
+            )
+        )
+        del query
+    return space
+
+
 def report_on(spaces: list[Workspace]) -> str:
     every = [g for space in spaces for g in space.graded]
     lines = ["# Relevance report", ""]
@@ -350,7 +519,12 @@ def report_on(spaces: list[Workspace]) -> str:
         "| Class | Questions | Reachable | hit@1 | hit@3 | hit@10 | deep | rg found |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for klass in ("literal", "descriptive", "cross-repo"):
+    # Whatever classes this run actually produced, in a fixed order, so a
+    # harvested run reports instead of reporting nothing. The first
+    # version listed the three authored classes by name and printed an
+    # empty table for 204 harvested questions.
+    order = {"literal": 0, "descriptive": 1, "cross-repo": 2, "harvested": 3}
+    for klass in sorted({g.klass for g in every}, key=lambda k: order.get(k, 9)):
         group = [g for g in every if g.klass == klass]
         if not group:
             continue
@@ -371,24 +545,38 @@ def report_on(spaces: list[Workspace]) -> str:
             "",
             *[f"- `{g.id}` {g.truth}" for g in unreachable],
         ]
-    said = [g for g in every if g.klass == "descriptive"]
+    # The class the gate is about: the authored questions grep cannot
+    # answer, or — in a harvested run, where every question came from an
+    # issue tracker and none was written here — all of them.
+    hard = "descriptive" if any(g.klass == "descriptive" for g in every) else "harvested"
+    said = [g for g in every if g.klass == hard]
     reachable = [g for g in said if g.reachable]
     if said and reachable:
         share = sum(g.hit10 for g in reachable) / len(reachable)
+        found = sum(g.control == "found" for g in said)
         lines += [
             "",
             "## The gate",
             "",
-            f"Descriptive questions are the ones ripgrep cannot answer: it found "
-            f"{sum(g.control == 'found' for g in said)} of {len(said)} here. The "
-            f"plan of 2026-09-11 set `hit@10 >= 0.5` on this class as the line "
+            f"`{hard}` questions: ripgrep found {found} of {len(said)}. The plan of "
+            f"2026-09-11 set `hit@10 >= 0.5` on the descriptive class as the line "
             f"between finishing the tool as promised and repositioning it.",
             "",
-            f"**hit@10 = {share:.2f}** on {len(said)} descriptive questions.",
+            f"**hit@10 = {share:.2f}** on {len(reachable)} reachable of {len(said)}.",
         ]
+        if hard == "harvested":
+            lines += [
+                "",
+                "These questions were not written here. Each is the title of a closed "
+                "issue, and the answer is the file the pull request that closed it "
+                "changed — so neither end was produced by anyone measuring this tool. "
+                "The control is derived from the question's own words by a frozen rule "
+                "(`terms`) and reports ripgrep's *best* attempt, because beating a "
+                "query nobody would have typed proves nothing.",
+            ]
     lines += ["", "## Misses worth reading", ""]
     for g in every:
-        if g.klass == "descriptive" and not g.hit10 and g.deep_rank:
+        if g.klass == hard and not g.hit10 and g.deep_rank:
             lines.append(
                 f"- `{g.id}` {g.truth} — missed at k={DEFAULT_K}, "
                 f"rank {g.deep_rank} in the deep list. _{g.text}_"
@@ -438,6 +626,16 @@ def main() -> int:
         action="store_true",
         help="add the two large workspaces (84 questions instead of 60)",
     )
+    parser.add_argument(
+        "--harvested",
+        action="store_true",
+        help="ask the questions real people asked (scripts/harvest.py) instead",
+    )
+    parser.add_argument(
+        "--dump",
+        type=Path,
+        help="Write one row per question, for a paired test the summary cannot support",
+    )
     parser.add_argument("--save", type=Path, help="Write these counts as a baseline")
     parser.add_argument(
         "--check",
@@ -453,10 +651,25 @@ def main() -> int:
     spaces = []
     for org, c in wanted.items():
         print(f"  {org}", flush=True)
-        spaces.append(grade(org, c["repos"]))
+        spaces.append(grade(org, c["repos"], harvested=args.harvested))
     text = report_on(spaces)
     Path("relevance_report.md").write_text(text, encoding="utf-8")
     print("\n" + text)
+
+    if args.dump:
+        # Per question, because every comparison worth making here is
+        # paired — the same question put to both tools — and a table of
+        # totals cannot tell "both found it" from "each found a
+        # different half", which is the only thing McNemar reads.
+        args.dump.write_text(
+            json.dumps(
+                [{"org": space.org, **g.__dict__} for space in spaces for g in space.graded],
+                indent=1,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"per-question rows written to {args.dump}")
 
     found = counted(spaces)
     if args.save:

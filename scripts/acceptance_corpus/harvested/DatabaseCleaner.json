@@ -1,0 +1,55 @@
+{
+  "org": "DatabaseCleaner",
+  "harvested": true,
+  "questions": [
+    {
+      "id": "database_cleaner-680",
+      "text": "Poor strategy class lookup",
+      "truth": "database_cleaner/lib/database_cleaner/cleaner.rb",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/DatabaseCleaner/database_cleaner/issues/680",
+        "pull": "https://github.com/DatabaseCleaner/database_cleaner/pull/681",
+        "merged_at": "2021-03-16T14:55:04Z"
+      }
+    },
+    {
+      "id": "database_cleaner-626",
+      "text": "Rename whitelist to allowlist",
+      "truth": "database_cleaner/lib/database_cleaner/safeguard.rb",
+      "also_valid": [
+        "database_cleaner/lib/database_cleaner/core.rb"
+      ],
+      "source": {
+        "issue": "https://github.com/DatabaseCleaner/database_cleaner/issues/626",
+        "pull": "https://github.com/DatabaseCleaner/database_cleaner/pull/658",
+        "merged_at": "2020-06-18T18:01:10Z"
+      }
+    },
+    {
+      "id": "database_cleaner-649",
+      "text": "`:connection` vs `#db` confusion. Let's pick one!",
+      "truth": "database_cleaner/lib/database_cleaner/cleaners.rb",
+      "also_valid": [
+        "database_cleaner/lib/database_cleaner/cleaner.rb",
+        "database_cleaner/lib/database_cleaner/null_strategy.rb"
+      ],
+      "source": {
+        "issue": "https://github.com/DatabaseCleaner/database_cleaner/issues/649",
+        "pull": "https://github.com/DatabaseCleaner/database_cleaner/pull/650",
+        "merged_at": "2020-05-30T15:36:23Z"
+      }
+    },
+    {
+      "id": "database_cleaner-active_record-106",
+      "text": "CI is not being executed against Rails 7.1 stable (and probably 7.1 compatibility is broken on main)",
+      "truth": "database_cleaner-active_record/lib/database_cleaner/active_record/base.rb",
+      "also_valid": [],
+      "source": {
+        "issue": "https://github.com/DatabaseCleaner/database_cleaner-active_record/issues/106",
+        "pull": "https://github.com/DatabaseCleaner/database_cleaner-active_record/pull/107",
+        "merged_at": "2024-07-12T02:38:20Z"
+      }
+    }
+  ]
+}
