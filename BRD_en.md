@@ -1,15 +1,15 @@
 # BRD — Business Requirements Document: WSIndex (Workspace Indexer)
 
-| Field | Value |
-|---|---|
-| Product | WSIndex (Workspace Indexer) — working title |
-| Document version | 1.1 |
-| Date | 2026-07-29 |
-| Status | Approved for MVP (Phase 1) |
-| Type | Business Requirements Document (BRD) |
-| Audience | Student author, future developer users, maintainers, AI-agent consumers |
+| Field            | Value                                                                   |
+| ---------------- | ----------------------------------------------------------------------- |
+| Product          | WSIndex (Workspace Indexer) — working title                             |
+| Document version | 1.1                                                                     |
+| Date             | 2026-07-29                                                              |
+| Status           | Approved for MVP (Phase 1)                                              |
+| Type             | Business Requirements Document (BRD)                                    |
+| Audience         | Student author, future developer users, maintainers, AI-agent consumers |
 
----
+______________________________________________________________________
 
 ## 1. Document purpose and scope
 
@@ -24,7 +24,7 @@ The document is proportionate to the project's **educational scale**: it is rigo
 
 Key principle for interpreting the requirements: priorities are assigned via **MoSCoW** (Must / Should / Could / Won't-now). **Must**-level requirements form the MVP boundary; anything above that is roadmap groundwork.
 
----
+______________________________________________________________________
 
 ## 2. Context and problem
 
@@ -42,20 +42,20 @@ Full-text search does not answer a question posed in **natural language** ("how 
 
 **Educational context.** The project simultaneously addresses a second objective — a **learning** one: to go through Retrieval-Augmented Generation (RAG) end to end, to master AST-chunking, vector databases, and the design of clean interfaces on a meaningful rather than a toy example.
 
----
+______________________________________________________________________
 
 ## 3. Stakeholders
 
-| Role | Who this is | Interest / what matters | How WSIndex addresses it |
-|---|---|---|---|
-| **Student author** | The project's developer | Go through RAG end-to-end, master AST-chunking, vector DBs, clean interfaces; produce a readable portfolio project | Simple, pedagogical architecture; linear pipeline; Embedder/Chunker/VectorStore interfaces |
-| **Future developer users** | Engineers working with multi-repo setups | Quickly find code/configs/docs by meaning, locally and offline | CLI commands `index`/`search`; multi-repo index; "repo/path:lines" output |
-| **AI-agent consumers** | LLM agents, MCP tools | Programmatic access to relevant fragments as context | Deterministic, machine-readable search output; local self-hosted stack |
-| **Maintainers** | Whoever extends the project after the MVP | Extensibility without rewrites; predictable reindexing | Interface abstractions; idempotency by `id`; two VectorStore backends |
+| Role                       | Who this is                               | Interest / what matters                                                                                            | How WSIndex addresses it                                                                   |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| **Student author**         | The project's developer                   | Go through RAG end-to-end, master AST-chunking, vector DBs, clean interfaces; produce a readable portfolio project | Simple, pedagogical architecture; linear pipeline; Embedder/Chunker/VectorStore interfaces |
+| **Future developer users** | Engineers working with multi-repo setups  | Quickly find code/configs/docs by meaning, locally and offline                                                     | CLI commands `index`/`search`; multi-repo index; "repo/path:lines" output                  |
+| **AI-agent consumers**     | LLM agents, MCP tools                     | Programmatic access to relevant fragments as context                                                               | Deterministic, machine-readable search output; local self-hosted stack                     |
+| **Maintainers**            | Whoever extends the project after the MVP | Extensibility without rewrites; predictable reindexing                                                             | Interface abstractions; idempotency by `id`; two VectorStore backends                      |
 
 Stakeholder priority in Phase 1 (MVP): the **student author** (educational goals) is primary, the **developer users** and **AI agents** are secondary (we lay in the value), and the **maintainers** are served through the extensibility requirements.
 
----
+______________________________________________________________________
 
 ## 4. Business goals and success metrics
 
@@ -63,26 +63,26 @@ The goals are deliberately split into **educational** (primary right now) and **
 
 ### 4.1 Educational goals (primary for the MVP)
 
-| ID | Goal | Success metric |
-|---|---|---|
-| BG-L1 | Go through the full RAG cycle end-to-end | The chain `repos → chunk → embed → store → search` works on the tensorus corpus without manual steps |
-| BG-L2 | Master AST-chunking | Code and configs are cut along AST nodes (functions/classes; tables/sections), not by lines; across 3+ languages (Python, Rust, TypeScript) |
-| BG-L3 | Master vector DBs | Embeddings are written as tensors into Tensorus v1 and found via HNSW/cosine; the semantics of the dataset and the metric are clear |
-| BG-L4 | Design clean interfaces | Two `VectorStore` backends (Tensorus and Local) are implemented behind a single interface; switching backends does not change the pipeline |
-| BG-L5 | Ensure reproducibility | Reindexing with no changes in the sources yields the same index (idempotency by `id`) |
+| ID    | Goal                                     | Success metric                                                                                                                              |
+| ----- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| BG-L1 | Go through the full RAG cycle end-to-end | The chain `repos → chunk → embed → store → search` works on the tensorus corpus without manual steps                                        |
+| BG-L2 | Master AST-chunking                      | Code and configs are cut along AST nodes (functions/classes; tables/sections), not by lines; across 3+ languages (Python, Rust, TypeScript) |
+| BG-L3 | Master vector DBs                        | Embeddings are written as tensors into Tensorus v1 and found via HNSW/cosine; the semantics of the dataset and the metric are clear         |
+| BG-L4 | Design clean interfaces                  | Two `VectorStore` backends (Tensorus and Local) are implemented behind a single interface; switching backends does not change the pipeline  |
+| BG-L5 | Ensure reproducibility                   | Reindexing with no changes in the sources yields the same index (idempotency by `id`)                                                       |
 
 ### 4.2 Product goals (laid in for the future)
 
-| ID | Goal | Indicator (for future phases) |
-|---|---|---|
+| ID    | Goal                            | Indicator (for future phases)                                                                       |
+| ----- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
 | BG-P1 | Usefulness of cross-repo search | The share of queries where the needed fragment lands in top-k grows as structural filters are added |
-| BG-P2 | Readiness for scale | The index performs adequately on tens of thousands of chunks; hot paths are moved to Rust (E5) |
-| BG-P3 | Value for AI agents | WSIndex is used as a context source for an agent/MCP |
-| BG-P4 | Ranking quality | Tensor re-rank (MaxSim / late interaction) improves the output order versus single-vector (E3) |
+| BG-P2 | Readiness for scale             | The index performs adequately on tens of thousands of chunks; hot paths are moved to Rust (E5)      |
+| BG-P3 | Value for AI agents             | WSIndex is used as a context source for an agent/MCP                                                |
+| BG-P4 | Ranking quality                 | Tensor re-rank (MaxSim / late interaction) improves the output order versus single-vector (E3)      |
 
 Product metrics are **not** MVP acceptance criteria; they orient the roadmap.
 
----
+______________________________________________________________________
 
 ## 5. Scope
 
@@ -111,7 +111,7 @@ Product metrics are **not** MVP acceptance criteria; they orient the roadmap.
 - Moving hot paths to Rust.
 - Filtering by arbitrary metadata on the server side via property-search (see Section 9 — property-search works only on the mathematical properties of the tensor).
 
----
+______________________________________________________________________
 
 ## 6. Functional requirements
 
@@ -119,75 +119,75 @@ ID scheme: **FR-1xx** — indexing/ingest; **FR-2xx** — search/retrieval; **FR
 
 ### 6.1 Indexing / ingest (FR-1xx)
 
-| ID | Requirement | Priority | Acceptance criterion |
-|---|---|---|---|
-| FR-101 | Index **several repositories** into one logical index | Must | After `index` over 3+ tensorus repositories, search returns hits from different repositories |
-| FR-102 | **Traversal** of the repository file tree with filters | Must | All files are traversed except those excluded by filters FR-106..FR-107 |
-| FR-103 | **AST-chunking of code** (tree-sitter): functions/classes/methods/blocks | Must | For a file `tensorus/*.py`, chunks correspond to functions/classes with correct `start_line`/`end_line` |
-| FR-104 | **AST-chunking of configs** (TOML/YAML/JSON/Dockerfile) along structural nodes | Must | For `pyproject.toml`/`Dockerfile`, chunks correspond to tables/sections/stages |
-| FR-105 | **Text-chunking of documentation** (Markdown/txt/rst, notebook text cells): by headings or a sliding window with overlap | Must | For `v1_docs/*.md`, chunks are cut by headings or by an overlapping window |
-| FR-106 | Respect **`.gitignore`** and skip standard build/service directories during traversal | Must | Paths from `.gitignore` and the directories `node_modules/`, `target/`, `__pycache__/`, `.git/` do not enter the index |
-| FR-107 | Cut off **binary files** and files over the **size limit** | Must | `.png`, `.bin`, and files > the limit are not indexed; the limit is configurable |
-| FR-108 | Assign each chunk a **deterministic `id`** (hash of content + path) | Must | Reindexing with no changes yields the same `id`s; a change in content changes the `id` |
-| FR-109 | Determine the chunk's **language and kind** (`lang`, `kind` = code/config/doc) | Must | `.rs` → code/rust; `.toml` → config/toml; `.md` → doc/markdown |
-| FR-110 | **Full indexing** of the workspace | Must | `index` from scratch builds the index over all added repositories |
-| FR-111 | **Incremental indexing**: skipping chunks by `id` match (reindex only what changed) | Should | A repeated `index` after editing one file updates only the affected chunks; unchanged chunks are skipped by `id`. Increment by git-diff — E2 |
-| FR-112 | Extract the **symbol name** (`symbol`) and the **node type** (`node_type`) from the AST | Should | For the function `search_similar`, the chunk contains `symbol="search_similar"`, `node_type="function_definition"` |
-| FR-113 | **Embed every chunk** with a pluggable local model (sentence-transformers), the same one used for the query | Must | Every chunk gets a vector of dimension `dim`; the model matches the query model (FR-201) |
+| ID     | Requirement                                                                                                              | Priority | Acceptance criterion                                                                                                                         |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-101 | Index **several repositories** into one logical index                                                                    | Must     | After `index` over 3+ tensorus repositories, search returns hits from different repositories                                                 |
+| FR-102 | **Traversal** of the repository file tree with filters                                                                   | Must     | All files are traversed except those excluded by filters FR-106..FR-107                                                                      |
+| FR-103 | **AST-chunking of code** (tree-sitter): functions/classes/methods/blocks                                                 | Must     | For a file `tensorus/*.py`, chunks correspond to functions/classes with correct `start_line`/`end_line`                                      |
+| FR-104 | **AST-chunking of configs** (TOML/YAML/JSON/Dockerfile) along structural nodes                                           | Must     | For `pyproject.toml`/`Dockerfile`, chunks correspond to tables/sections/stages                                                               |
+| FR-105 | **Text-chunking of documentation** (Markdown/txt/rst, notebook text cells): by headings or a sliding window with overlap | Must     | For `v1_docs/*.md`, chunks are cut by headings or by an overlapping window                                                                   |
+| FR-106 | Respect **`.gitignore`** and skip standard build/service directories during traversal                                    | Must     | Paths from `.gitignore` and the directories `node_modules/`, `target/`, `__pycache__/`, `.git/` do not enter the index                       |
+| FR-107 | Cut off **binary files** and files over the **size limit**                                                               | Must     | `.png`, `.bin`, and files > the limit are not indexed; the limit is configurable                                                             |
+| FR-108 | Assign each chunk a **deterministic `id`** (hash of content + path)                                                      | Must     | Reindexing with no changes yields the same `id`s; a change in content changes the `id`                                                       |
+| FR-109 | Determine the chunk's **language and kind** (`lang`, `kind` = code/config/doc)                                           | Must     | `.rs` → code/rust; `.toml` → config/toml; `.md` → doc/markdown                                                                               |
+| FR-110 | **Full indexing** of the workspace                                                                                       | Must     | `index` from scratch builds the index over all added repositories                                                                            |
+| FR-111 | **Incremental indexing**: skipping chunks by `id` match (reindex only what changed)                                      | Should   | A repeated `index` after editing one file updates only the affected chunks; unchanged chunks are skipped by `id`. Increment by git-diff — E2 |
+| FR-112 | Extract the **symbol name** (`symbol`) and the **node type** (`node_type`) from the AST                                  | Should   | For the function `search_similar`, the chunk contains `symbol="search_similar"`, `node_type="function_definition"`                           |
+| FR-113 | **Embed every chunk** with a pluggable local model (sentence-transformers), the same one used for the query              | Must     | Every chunk gets a vector of dimension `dim`; the model matches the query model (FR-201)                                                     |
 
 ### 6.2 Search / retrieval (FR-2xx)
 
-| ID | Requirement | Priority | Acceptance criterion |
-|---|---|---|---|
-| FR-201 | Embed the query with the same model as the chunks | Must | The query and the corpus are embedded with one model; dimensions match |
-| FR-202 | **Single-vector search** for the k nearest via Tensorus `/search/similar` | Must | `search "how to create a dataset"` returns ranked hits |
-| FR-203 | **Merge and rank** hits from several datasets/repositories | Must | Hits from different repos are merged into a single list sorted by score |
-| FR-204 | **Result output**: repo/path:lines, symbol, score, snippet | Must | Each hit shows `repo`, `path`, `start_line-end_line`, `symbol`, `score`, a text fragment |
-| FR-205 | Limit the output by the parameter **k** | Must | `search --k 5` returns no more than 5 hits |
-| FR-206 | **Client-side post-filter by metadata** (e.g., by `lang` or `repo`) | Should | `search --lang rust` keeps only Rust chunks |
-| FR-207 | Operate over **any** VectorStore backend without changing the search logic | Must | `search` gives comparable results on TensorusStore and LocalStore |
-| FR-208 | Tensor **re-rank (MaxSim / late interaction)** | Won't-now (E3) | Not implemented in the MVP; laid into the roadmap |
+| ID     | Requirement                                                                | Priority       | Acceptance criterion                                                                     |
+| ------ | -------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| FR-201 | Embed the query with the same model as the chunks                          | Must           | The query and the corpus are embedded with one model; dimensions match                   |
+| FR-202 | **Single-vector search** for the k nearest via Tensorus `/search/similar`  | Must           | `search "how to create a dataset"` returns ranked hits                                   |
+| FR-203 | **Merge and rank** hits from several datasets/repositories                 | Must           | Hits from different repos are merged into a single list sorted by score                  |
+| FR-204 | **Result output**: repo/path:lines, symbol, score, snippet                 | Must           | Each hit shows `repo`, `path`, `start_line-end_line`, `symbol`, `score`, a text fragment |
+| FR-205 | Limit the output by the parameter **k**                                    | Must           | `search --k 5` returns no more than 5 hits                                               |
+| FR-206 | **Client-side post-filter by metadata** (e.g., by `lang` or `repo`)        | Should         | `search --lang rust` keeps only Rust chunks                                              |
+| FR-207 | Operate over **any** VectorStore backend without changing the search logic | Must           | `search` gives comparable results on TensorusStore and LocalStore                        |
+| FR-208 | Tensor **re-rank (MaxSim / late interaction)**                             | Won't-now (E3) | Not implemented in the MVP; laid into the roadmap                                        |
 
 ### 6.3 CLI (FR-3xx)
 
-| ID | Requirement | Priority | Acceptance criterion |
-|---|---|---|---|
-| FR-301 | The **`init`** command — create the workspace config (TOML) | Must | `init` creates a valid workspace TOML config |
-| FR-302 | The **`add-repo`** command — add a repository to the workspace | Must | `add-repo <path/url>` registers the repository and its `repo_id` |
-| FR-303 | The **`index`** command — full and incremental indexing | Must | `index` builds the index; `index --incremental` updates what changed (increment depth — per FR-111, Should) |
-| FR-304 | The **`search`** command — semantic search with parameters (k, filters) | Must | `search "<query>"` returns output per FR-204 |
-| FR-305 | The **`status`** command — index state (repositories, chunk count, backend) | Must | `status` shows the list of repositories, the chunk count, and the active backend |
-| FR-306 | Meaningful return codes and error messages | Should | An error (no server, no model) gives a clear message and a non-zero code |
+| ID     | Requirement                                                                 | Priority | Acceptance criterion                                                                                        |
+| ------ | --------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| FR-301 | The **`init`** command — create the workspace config (TOML)                 | Must     | `init` creates a valid workspace TOML config                                                                |
+| FR-302 | The **`add-repo`** command — add a repository to the workspace              | Must     | `add-repo <path/url>` registers the repository and its `repo_id`                                            |
+| FR-303 | The **`index`** command — full and incremental indexing                     | Must     | `index` builds the index; `index --incremental` updates what changed (increment depth — per FR-111, Should) |
+| FR-304 | The **`search`** command — semantic search with parameters (k, filters)     | Must     | `search "<query>"` returns output per FR-204                                                                |
+| FR-305 | The **`status`** command — index state (repositories, chunk count, backend) | Must     | `status` shows the list of repositories, the chunk count, and the active backend                            |
+| FR-306 | Meaningful return codes and error messages                                  | Should   | An error (no server, no model) gives a clear message and a non-zero code                                    |
 
 ### 6.4 Storage and Tensorus integration (FR-4xx)
 
-| ID | Requirement | Priority | Acceptance criterion |
-|---|---|---|---|
-| FR-401 | A **`VectorStore`** abstraction with a `create / upsert / search` interface | Must | Both implementations plug in behind a single interface; `search` works over one dataset, merging happens in the pipeline |
-| FR-402 | **TensorusStore** — a REST client for Tensorus v1 (the primary backend) | Must | Tensors are written and searched via REST v1 |
-| FR-403 | **LocalStore** — numpy brute-force cosine, storage in local files (fallback) | Must | The full `index`/`search` cycle works **without** a running Rust server |
-| FR-404 | **A dataset per repository** for source isolation | Must | Each `repo_id` corresponds to a separate Tensorus dataset |
-| FR-405 | Creating a dataset with the **cosine** metric (idempotently) | Must | `POST /datasets {name, metric:"cosine"}` does not fail on repeat |
-| FR-406 | Writing an embedding as a **tensor of `shape [dim]`** with the chunk's `metadata` | Must | `POST /datasets/{ds}/tensors {data, shape:[dim], metadata}` returns a `tensor_id` |
-| FR-407 | **Deterministic reindexing**: idempotency is ensured by the deterministic `id` (FR-108); on full reindexing the dataset is recreated | Must | Reindexing with no changes yields the same `id`s; a full reindex does not accumulate duplicates (the dataset is recreated). The recreation mechanism is an open integration question (see R-10) |
-| FR-408 | Support for Tensorus **auth**: the `x-api-key` header from `TENSORUS_API_KEY` (or disabled in dev) | Should | When a key is set, requests go out with `x-api-key`; without a key, dev mode works |
-| FR-409 | Configurable Tensorus **base URL** (default `http://localhost:8080`) | Should | The URL is changed via config/environment variable |
+| ID     | Requirement                                                                                                                          | Priority | Acceptance criterion                                                                                                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-401 | A **`VectorStore`** abstraction with a `create / upsert / search` interface                                                          | Must     | Both implementations plug in behind a single interface; `search` works over one dataset, merging happens in the pipeline                                                                        |
+| FR-402 | **TensorusStore** — a REST client for Tensorus v1 (the primary backend)                                                              | Must     | Tensors are written and searched via REST v1                                                                                                                                                    |
+| FR-403 | **LocalStore** — numpy brute-force cosine, storage in local files (fallback)                                                         | Must     | The full `index`/`search` cycle works **without** a running Rust server                                                                                                                         |
+| FR-404 | **A dataset per repository** for source isolation                                                                                    | Must     | Each `repo_id` corresponds to a separate Tensorus dataset                                                                                                                                       |
+| FR-405 | Creating a dataset with the **cosine** metric (idempotently)                                                                         | Must     | `POST /datasets {name, metric:"cosine"}` does not fail on repeat                                                                                                                                |
+| FR-406 | Writing an embedding as a **tensor of `shape [dim]`** with the chunk's `metadata`                                                    | Must     | `POST /datasets/{ds}/tensors {data, shape:[dim], metadata}` returns a `tensor_id`                                                                                                               |
+| FR-407 | **Deterministic reindexing**: idempotency is ensured by the deterministic `id` (FR-108); on full reindexing the dataset is recreated | Must     | Reindexing with no changes yields the same `id`s; a full reindex does not accumulate duplicates (the dataset is recreated). The recreation mechanism is an open integration question (see R-10) |
+| FR-408 | Support for Tensorus **auth**: the `x-api-key` header from `TENSORUS_API_KEY` (or disabled in dev)                                   | Should   | When a key is set, requests go out with `x-api-key`; without a key, dev mode works                                                                                                              |
+| FR-409 | Configurable Tensorus **base URL** (default `http://localhost:8080`)                                                                 | Should   | The URL is changed via config/environment variable                                                                                                                                              |
 
----
+______________________________________________________________________
 
 ## 7. Non-functional requirements
 
-| ID | Category | Requirement |
-|---|---|---|
-| NFR-1 | **Simplicity and readability** | Readability and pedagogy matter more than performance; a linear pipeline, minimal "magic" |
-| NFR-2 | **Locality / offline** | Everything runs locally and self-hosted; the code never leaves the machine; embeddings are local |
-| NFR-3 | **Extensibility** | Extension points via the `Embedder`, `Chunker`, `VectorStore` interfaces; adding a language/model/backend does not break the pipeline |
-| NFR-4 | **Determinism** | Reindexing is deterministic; idempotency by `id`; the same input → the same index |
-| NFR-5 | **Reasonable scale** | Adequate operation on **tens of thousands of chunks**; millions are already a product (out of MVP) |
-| NFR-6 | **Environment portability** | Python 3.11+; installation via pip; the workspace config in TOML |
-| NFR-7 | **Resilience to a missing server** | Without a running Tensorus, the project remains operable via LocalStore |
+| ID    | Category                           | Requirement                                                                                                                           |
+| ----- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-1 | **Simplicity and readability**     | Readability and pedagogy matter more than performance; a linear pipeline, minimal "magic"                                             |
+| NFR-2 | **Locality / offline**             | Everything runs locally and self-hosted; the code never leaves the machine; embeddings are local                                      |
+| NFR-3 | **Extensibility**                  | Extension points via the `Embedder`, `Chunker`, `VectorStore` interfaces; adding a language/model/backend does not break the pipeline |
+| NFR-4 | **Determinism**                    | Reindexing is deterministic; idempotency by `id`; the same input → the same index                                                     |
+| NFR-5 | **Reasonable scale**               | Adequate operation on **tens of thousands of chunks**; millions are already a product (out of MVP)                                    |
+| NFR-6 | **Environment portability**        | Python 3.11+; installation via pip; the workspace config in TOML                                                                      |
+| NFR-7 | **Resilience to a missing server** | Without a running Tensorus, the project remains operable via LocalStore                                                               |
 
----
+______________________________________________________________________
 
 ## 8. Data requirements
 
@@ -195,18 +195,18 @@ ID scheme: **FR-1xx** — indexing/ingest; **FR-2xx** — search/retrieval; **FR
 
 The unit of the index is a **chunk**. Required fields:
 
-| Field | Type | Description | Example (tensorus corpus) |
-|---|---|---|---|
-| `id` | str | Hash of content + path (deterministic) | `sha256(...)` |
-| `repo` | str | Source identifier (`repo_id`) | `tensorus` |
-| `path` | str | Path to the file within the repository | `src/search.rs` |
-| `lang` | str | Language | `rust` |
-| `kind` | str | Allowed values: `code` \| `config` \| `doc` | `code` |
-| `symbol` | str? | Symbol name (if applicable) | `search_similar` |
-| `node_type` | str? | AST node type (the real tree-sitter node) | `function_definition` |
-| `start_line` | int | Start line | `42` |
-| `end_line` | int | End line | `88` |
-| `text` | str | The fragment text | `fn search_similar(...) { ... }` |
+| Field        | Type | Description                                 | Example (tensorus corpus)        |
+| ------------ | ---- | ------------------------------------------- | -------------------------------- |
+| `id`         | str  | Hash of content + path (deterministic)      | `sha256(...)`                    |
+| `repo`       | str  | Source identifier (`repo_id`)               | `tensorus`                       |
+| `path`       | str  | Path to the file within the repository      | `src/search.rs`                  |
+| `lang`       | str  | Language                                    | `rust`                           |
+| `kind`       | str  | Allowed values: `code` \| `config` \| `doc` | `code`                           |
+| `symbol`     | str? | Symbol name (if applicable)                 | `search_similar`                 |
+| `node_type`  | str? | AST node type (the real tree-sitter node)   | `function_definition`            |
+| `start_line` | int  | Start line                                  | `42`                             |
+| `end_line`   | int  | End line                                    | `88`                             |
+| `text`       | str  | The fragment text                           | `fn search_similar(...) { ... }` |
 
 ### 8.2 Storage model
 
@@ -217,7 +217,7 @@ The unit of the index is a **chunk**. Required fields:
 
 > An important consequence of the data model: `search/property` in Tensorus filters **by the tensor's mathematical properties** (norm, rank, symmetry), and **not** by our `metadata`. Therefore, isolation and filtering by repository and language are done via a **dataset-per-repository** and/or a **client-side post-filter** on `metadata` (FR-206).
 
----
+______________________________________________________________________
 
 ## 9. Integrations
 
@@ -227,11 +227,11 @@ Common facts: REST, base URL `http://localhost:8080`, `Content-Type: application
 
 Endpoints used in the MVP:
 
-| Endpoint | Method | Body / parameters | Purpose |
-|---|---|---|---|
-| `/datasets` | POST | `{name, metric:"cosine"}` | Create a dataset (idempotently); the metric `cosine\|l2\|dot` is fixed per dataset |
-| `/datasets/{ds}/tensors` | POST | `{data:[...], shape:[dim], metadata:{...}}` → `{tensor_id, descriptor}` | Write a chunk's embedding as a tensor with metadata |
-| `/datasets/{ds}/search/similar` | POST | `{vector:[...], k}` → hits `(tensor_id, score, ...)` | Nearest-neighbor search via HNSW |
+| Endpoint                        | Method | Body / parameters                                                       | Purpose                                                                            |
+| ------------------------------- | ------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `/datasets`                     | POST   | `{name, metric:"cosine"}`                                               | Create a dataset (idempotently); the metric `cosine\|l2\|dot` is fixed per dataset |
+| `/datasets/{ds}/tensors`        | POST   | `{data:[...], shape:[dim], metadata:{...}}` → `{tensor_id, descriptor}` | Write a chunk's embedding as a tensor with metadata                                |
+| `/datasets/{ds}/search/similar` | POST   | `{vector:[...], k}` → hits `(tensor_id, score, ...)`                    | Nearest-neighbor search via HNSW                                                   |
 
 Endpoints **not in the MVP** (growth groundwork):
 
@@ -274,7 +274,7 @@ The indexing pipeline is linear: `repos → walk(filters) → chunk → embed �
 
 > **Mapping "pipeline step ↔ implementation module"** (details — in ARCHITECTURE): the `walk` step → the `walker` module; `chunk` → `chunker` (the dispatcher) + `ast_chunker`/`text_chunker`; `embed` → `embedder`; `store` → a `VectorStore` implementation. These are the same nodes at different levels of description, not different entities.
 
----
+______________________________________________________________________
 
 ## 10. Constraints and assumptions
 
@@ -296,24 +296,24 @@ The indexing pipeline is linear: `repos → walk(filters) → chunk → embed �
 - All embeddings within one index have the same dimension `dim` (one model for the corpus and the queries).
 - A deduplication mechanism on the Tensorus side (upsert/DELETE) is not guaranteed by the MVP endpoint list; in the MVP we rely on the deterministic `id` and on recreating the dataset on full reindexing (see R-10).
 
----
+______________________________________________________________________
 
 ## 11. Risks
 
-| ID | Risk | Type | Prob./Impact | Mitigation |
-|---|---|---|---|---|
-| R-1 | The Tensorus server is unavailable/unstable, blocking development and tests | Technical | Med./High | **LocalStore** (numpy brute-force) as a fallback — the project works without the Rust server (FR-403) |
-| R-2 | Over-complicating the architecture at the expense of educational clarity | Educational | Med./Med. | Keep a linear pipeline and NFR-1 (simplicity > performance); do not pull in features from the roadmap |
-| R-3 | Scope creep toward a product | Educational | High/Med. | A hard MoSCoW boundary: MVP = Must only; the rest — E2-E5 |
-| R-4 | AST-chunking of configs/languages breaks on edge cases | Technical | Med./Med. | Start with a core set of grammars (python, rust, ts, toml, yaml, json, dockerfile, markdown); degrade to text-chunking on a parser failure |
-| R-5 | Mismatch of embedding dimensions/models between the index and the query | Technical | Low/High | One model per index; fix `dim`; check at `search` time |
-| R-6 | property-search is mistakenly taken for a filter by metadata | Technical | Med./Med. | Explicitly documented; filtering is via dataset-per-repo and a client-side post-filter (FR-206) |
-| R-7 | Non-deterministic reindexing (duplicates, a "floating" index) | Technical | Med./Med. | Deterministic `id` = hash(content+path); reindexing relies on `id` (FR-108, FR-407) |
-| R-8 | Incrementality is harder than expected | Educational/tech. | Med./Low | Incrementality is a **Should**, not a Must; the MVP is valid on full reindexing as well |
-| R-9 | Large/binary files bloat the index and the time | Technical | Med./Med. | Traversal filters: `.gitignore`, build directories, binary cutoff, size limit (FR-106, FR-107) |
-| R-10 | **Open integration question:** the MVP endpoints have no DELETE/upsert-by-id, so duplicate-freeness on full reindexing is not directly supported by the API | Technical/integration | Med./Med. | Confirm the presence of a DELETE endpoint in the Tensorus v1 contract; until confirmed — idempotency via the deterministic `id`, full reindexing = drop+recreate of the dataset (FR-407) |
+| ID   | Risk                                                                                                                                                        | Type                  | Prob./Impact | Mitigation                                                                                                                                                                               |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-1  | The Tensorus server is unavailable/unstable, blocking development and tests                                                                                 | Technical             | Med./High    | **LocalStore** (numpy brute-force) as a fallback — the project works without the Rust server (FR-403)                                                                                    |
+| R-2  | Over-complicating the architecture at the expense of educational clarity                                                                                    | Educational           | Med./Med.    | Keep a linear pipeline and NFR-1 (simplicity > performance); do not pull in features from the roadmap                                                                                    |
+| R-3  | Scope creep toward a product                                                                                                                                | Educational           | High/Med.    | A hard MoSCoW boundary: MVP = Must only; the rest — E2-E5                                                                                                                                |
+| R-4  | AST-chunking of configs/languages breaks on edge cases                                                                                                      | Technical             | Med./Med.    | Start with a core set of grammars (python, rust, ts, toml, yaml, json, dockerfile, markdown); degrade to text-chunking on a parser failure                                               |
+| R-5  | Mismatch of embedding dimensions/models between the index and the query                                                                                     | Technical             | Low/High     | One model per index; fix `dim`; check at `search` time                                                                                                                                   |
+| R-6  | property-search is mistakenly taken for a filter by metadata                                                                                                | Technical             | Med./Med.    | Explicitly documented; filtering is via dataset-per-repo and a client-side post-filter (FR-206)                                                                                          |
+| R-7  | Non-deterministic reindexing (duplicates, a "floating" index)                                                                                               | Technical             | Med./Med.    | Deterministic `id` = hash(content+path); reindexing relies on `id` (FR-108, FR-407)                                                                                                      |
+| R-8  | Incrementality is harder than expected                                                                                                                      | Educational/tech.     | Med./Low     | Incrementality is a **Should**, not a Must; the MVP is valid on full reindexing as well                                                                                                  |
+| R-9  | Large/binary files bloat the index and the time                                                                                                             | Technical             | Med./Med.    | Traversal filters: `.gitignore`, build directories, binary cutoff, size limit (FR-106, FR-107)                                                                                           |
+| R-10 | **Open integration question:** the MVP endpoints have no DELETE/upsert-by-id, so duplicate-freeness on full reindexing is not directly supported by the API | Technical/integration | Med./Med.    | Confirm the presence of a DELETE endpoint in the Tensorus v1 contract; until confirmed — idempotency via the deterministic `id`, full reindexing = drop+recreate of the dataset (FR-407) |
 
----
+______________________________________________________________________
 
 ## 12. Roadmap / phases
 
@@ -325,15 +325,15 @@ flowchart LR
     E4 --> E5[E5 · Performance<br/>move hot paths to Rust]
 ```
 
-| Phase | Content |
-|---|---|
-| **E1 — MVP** | Single-vector; AST for code/configs, text for docs; multi-repo; Tensorus + Local backend; CLI (`init`/`add-repo`/`index`/`search`/`status`). Increment — skipping by `id` match (FR-111) |
-| **E2** | Structural metadata from the AST (`node_type`, `pub`/`async`, decorators) as search filters; incremental reindexing by **git-diff** |
-| **E3** | **Tensor re-rank**: a custom MaxSim or using Tensorus `/search/contraction` |
-| **E4** | **Development space**: docs/ADR/issue/PR as sources; cross-repo links (a symbol graph). Target scenario: "where is the tensorus API called and what will break if the signature changes" (`mcp`/`samples` → `tensorus`) |
-| **E5** | Performance and scale: moving hot paths to **Rust** |
+| Phase        | Content                                                                                                                                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **E1 — MVP** | Single-vector; AST for code/configs, text for docs; multi-repo; Tensorus + Local backend; CLI (`init`/`add-repo`/`index`/`search`/`status`). Increment — skipping by `id` match (FR-111)                                |
+| **E2**       | Structural metadata from the AST (`node_type`, `pub`/`async`, decorators) as search filters; incremental reindexing by **git-diff**                                                                                     |
+| **E3**       | **Tensor re-rank**: a custom MaxSim or using Tensorus `/search/contraction`                                                                                                                                             |
+| **E4**       | **Development space**: docs/ADR/issue/PR as sources; cross-repo links (a symbol graph). Target scenario: "where is the tensorus API called and what will break if the signature changes" (`mcp`/`samples` → `tensorus`) |
+| **E5**       | Performance and scale: moving hot paths to **Rust**                                                                                                                                                                     |
 
----
+______________________________________________________________________
 
 ## 13. MVP acceptance criteria (checklist)
 
