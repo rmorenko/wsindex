@@ -69,7 +69,7 @@ def _config() -> Config:
         typer.echo("warning: no wsindex config found. Checked:", err=True)
         for line in searched_paths():
             typer.echo(f"  - {line}", err=True)
-        typer.echo("Showing built-in defaults instead.", err=True)
+        typer.echo("Showing built-in defaults instead.", err=True)  # TODO: Showing? Where?
     return config
 
 
@@ -167,6 +167,7 @@ def init(
     offline; the tensorus backend needs a running server (docker compose
     up) and TENSORUS_API_KEY in the env.
     """
+    # TODO: $XDG_CONFIG_HOME/.config/wsindex/config.toml 
     target = user_config_file() if user else workspace_config_path()
     if target.exists() and not force:
         typer.echo(

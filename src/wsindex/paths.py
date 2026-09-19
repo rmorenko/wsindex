@@ -72,7 +72,7 @@ def find_config(cwd: Path | None = None) -> ConfigLocation | None:
         The winning `ConfigLocation`, or None if no config exists.
     """
     override = os.environ.get(ENV_OVERRIDE)
-    if override:
+    if override:  # TODO: Explicitly defined config file should be simply loaded, no search is needed. Fail fast otherwise.
         candidate = Path(override)
         return ConfigLocation(path=candidate, mode=Mode.OVERRIDE) if candidate.is_file() else None
 
@@ -93,7 +93,7 @@ def find_config(cwd: Path | None = None) -> ConfigLocation | None:
     return None
 
 
-def searched_paths(cwd: Path | None = None) -> list[str]:
+def searched_paths(cwd: Path | None = None) -> list[str]:  # TODO: Rename according to semantics
     """Human-readable list of every path `find_config` would check.
 
     Used by the CLI to compose a helpful "no config found" message
@@ -102,7 +102,7 @@ def searched_paths(cwd: Path | None = None) -> list[str]:
     override = os.environ.get(ENV_OVERRIDE)
     start = cwd or Path.cwd()
     return [
-        f"$WSINDEX_CONFIG ({override or 'not set'})",
+        f"$WSINDEX_CONFIG ({override or 'not set'})",  # TODO: If the con
         f"workspace: {start} and its parents up to /",
         f"user: {user_config_path(APP_NAME) / USER_CONFIG_FILE}",
         f"system: {site_config_path(APP_NAME) / USER_CONFIG_FILE}",

@@ -265,7 +265,7 @@ class Config:
         return self._location.path if self._location is not None else None
 
     @property
-    def is_default(self) -> bool:
+    def is_default(self) -> bool:  # TODO: Rename according to semantics
         """True when no file was found and `DEFAULT` is what you are reading."""
         return self._location is None
 
