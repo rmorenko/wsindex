@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,30 +17,91 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ['3.11', '3.12', '3.13']
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
 
-      # Без extras (torch/tree-sitter): ставим только базовые зависимости
-      # и dev-группу, чтобы CI был лёгким и зелёным.
+      # The ast extra (tree-sitter) is small and gives mypy real Node types;
+      # the ml extra (torch) stays out to keep CI light — mypy ignores the
+      # missing sentence_transformers via an override in pyproject.toml.
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra ast
 
       - name: Lint (ruff)
         run: uv run ruff check .
 
-      - name: Format check (ruff)
-        run: uv run ruff format --check .
+      - name: Format check (ruff, mdformat, taplo, yamlfix)
+        run: uv run poe fmt-check
+
+      - name: Spelling (codespell)
+        run: uv run codespell
 
       - name: Type check (mypy)
         run: uv run mypy src
 
-      - name: Tests (pytest)
-        run: uv run pytest
+      - name: Tests + coverage (pytest-cov, fail under 90%)
+        run: uv run pytest --cov --cov-report=term-missing
+
+  # The README badge reads a shields.io endpoint JSON from the orphan
+  # `badges` branch; only pushes to main (or a manual run) refresh it.
+  coverage-badge:
+    name: coverage badge
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --extra ast
+
+      - name: Measure coverage
+        run: uv run pytest --cov --cov-report=json -q
+
+      - name: Compose the shields.io endpoint file
+        run: |
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pct = json.load(open("coverage.json"))["totals"]["percent_covered"]
+          color = "brightgreen" if pct >= 90 else "yellow" if pct >= 70 else "red"
+          badge = {
+              "schemaVersion": 1,
+              "label": "coverage",
+              "message": f"{pct:.0f}%",
+              "color": color,
+          }
+          Path("coverage-badge.json").write_text(json.dumps(badge))
+          PY
+
+      - name: Publish to the badges branch
+        run: |
+          mkdir badge-branch
+          mv coverage-badge.json badge-branch/coverage.json
+          cd badge-branch
+          git init -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -m "chore: update the coverage badge"
+          git push --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
