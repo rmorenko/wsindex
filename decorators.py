@@ -74,3 +74,41 @@ def save_to_db(f):
 @save_to_db
 def create_user(name):
     user = {'name': name}
+
+
+
+def version(ver):
+    def decorator(cls):
+        cls.version = ver
+        return cls
+    return decorator
+
+def dataclass(cls):
+    def __repr__(self):
+        return f'{cls.__name__}({self.__dict__})'
+
+    cls.__repr__ = __repr__
+    return cls
+
+def collection(cls):
+    def __init__(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        cls._collection.append(self)
+
+    def delete(self):
+        self._collection.remove(self)
+
+    cls._collection = []
+    original_init = cls.__init__
+    cls.__init__ = __init__
+    cls.delete = delete
+    return cls
+
+
+@collection
+@dataclass
+@version(ver='2.0.0')
+class User:
+    def __init__(self):
+        self.x = 0
+
