@@ -105,7 +105,7 @@ async def process_url(url, semaphore):
             return {"url": url, "error": e}
 
 
-def create_report(results):
+def create_report(results) -> dict[str, float]:
     exhausted = 0
     successful = 0
     permanent = 0
@@ -136,5 +136,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    random.seed(2026)
+    random.seed(444)
     asyncio.run(main())
