@@ -1,4 +1,5 @@
-'''
+# ruff: noqa: E501, RUF002 - the assignment text below is quoted verbatim
+"""
 Build an asynchronous web crawler that fetches pages, extracts links, and processes them concurrently. To keep the assignment focused on asyncio, simulate network requests rather than making real HTTP calls.
 
 Scenario
@@ -33,13 +34,15 @@ Requirements
    - Report the number of successful URLs, permanently failed URLs, and URLs that exhausted their retries.
    - Report total execution time.
 
-'''
+"""
 
 import asyncio
 import random
 import time
+import uuid
+from asyncio.queues import QueueShutDown
 
-URLS = [f"https://example.com/page/{i}" for i in range(1, 11)]
+URLS = [f"https://example.com/page/{i}" for i in range(1, 100)]
 
 WORKERS = 3
 MAX_CONCURRENT_REQUESTS = 2
@@ -53,6 +56,7 @@ class TemporaryError(Exception):
 
 class PermanentError(Exception):
     pass
+
 
 class RetriesExhaustedError(Exception):
     pass
@@ -74,20 +78,24 @@ async def fetch_page(url):
 
 
 async def worker(queue, semaphore, results):
-    while True:
-       url = await queue.get()
-       result = process_url(url, semaphore)
-       
+    worker_name = f"Worker_{uuid.uuid4()}"
+    try:
+        while True:
+            url = await queue.get()
+            print(f"Worker {worker_name} working on {url}")
+            results.append(await process_url(url, semaphore))
+    except QueueShutDown:
+        pass
+
 
 async def process_url(url, semaphore):
-    result = None
     backoff = 0.5
     retries = MAX_ATTEMPTS
     while True:
         try:
             async with semaphore:
                 return await asyncio.wait_for(fetch_page(url), REQUEST_TIMEOUT)
-        except TimeoutError | TemporaryError:
+        except (TimeoutError, TemporaryError):
             retries -= 1
             if retries == 0:
                 return {"url": url, "error": RetriesExhaustedError()}
@@ -97,26 +105,36 @@ async def process_url(url, semaphore):
             return {"url": url, "error": e}
 
 
+def create_report(results):
+    exhausted = 0
+    successful = 0
+    permanent = 0
+    for result in results:
+        if not result.get("error"):
+            successful += 1
+        elif isinstance(result["error"], RetriesExhaustedError):
+            exhausted += 1
+        else:
+            permanent += 1
+    return {"exhausted": exhausted, "successful": successful, "permanent": permanent}
+
+
 async def main():
     queue = asyncio.Queue()
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
     results = []
-    
+
     start = time.perf_counter()
     for url in URLS:
         await queue.put(url)
     queue.shutdown()
-    
-    # TODO:
-    # - Populate queue
-    # - Start workers
-    # - Wait until all URLs are processed
-    # - Shut down workers gracefully
-    # - Print statistics
-
-    print(f"Elapsed: {time.perf_counter() - start:.2f}s")
+    await asyncio.gather(*[worker(queue, semaphore, results) for _ in range(WORKERS)])
+    elapsed = time.perf_counter() - start
+    report = create_report(results)
+    report["elapsed"] = elapsed
+    print(report)
 
 
 if __name__ == "__main__":
-    random.seed(444)
+    random.seed(2026)
     asyncio.run(main())
