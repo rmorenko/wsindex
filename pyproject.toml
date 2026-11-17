@@ -4,7 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wsindex"
-version = "0.1.0"
+# The version lives in src/wsindex/__init__.py (__version__); hatchling
+# extracts it at build time — single source of truth.
+dynamic = ["version"]
 description = "WSIndex — a learning CLI that indexes a developer workspace for semantic code and doc search."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,32 +14,64 @@ license = "MIT"
 authors = [{ name = "WSIndex contributors" }]
 keywords = ["rag", "indexing", "search", "cli", "embeddings"]
 classifiers = [
-    "Development Status :: 1 - Planning",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development",
-    "Typing :: Typed",
+  "Development Status :: 1 - Planning",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+  "Typing :: Typed",
 ]
-# No runtime dependencies yet: this is the toolchain skeleton. The real engine
-# (typer, httpx, numpy, tree-sitter, sentence-transformers) is added as the
-# package described in ARCH_en.md is implemented.
-dependencies = []
+dependencies = [
+  "httpx>=0.28,<1",
+  "numpy>=2.4,<3",
+  "platformdirs>=4,<5",
+  "tomli-w>=1.2,<2",
+  "typer>=0.27,<1",
+]
 
 [project.scripts]
-wsindex = "wsindex:main"
+wsindex = "wsindex.cli:app"
+
+[project.optional-dependencies]
+ml = ["sentence-transformers>=5.7,<6"]
+ast = [
+  "tree-sitter>=0.26,<1",
+  "tree-sitter-dockerfile>=0.2,<1",
+  "tree-sitter-java>=0.23,<1",
+  "tree-sitter-json>=0.24,<1",
+  "tree-sitter-python>=0.25,<1",
+  "tree-sitter-rust>=0.24,<1",
+  "tree-sitter-toml>=0.7,<1",
+  "tree-sitter-typescript>=0.23,<1",
+  "tree-sitter-yaml>=0.7,<1",
+]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.6",
-    "mypy>=1.11",
-    "pytest>=8",
-    "pytest-cov>=5",
-    "pre-commit>=3.8",
+  "ruff>=0.16,<1",
+  "mypy>=2.3,<3",
+  "pytest>=9.1,<10",
+  "pytest-cov>=7.1,<8",
+  "pre-commit>=4.6,<5",
+  "mdformat>=1.0,<2",
+  "mdformat-gfm>=1.0,<2",
+  "codespell>=2.4,<3",
+  "taplo>=0.9,<1",
+  "yamlfix>=1.19,<2",
+  "poethepoet>=0.38,<1",
 ]
+
+[tool.uv]
+# pathspec 1.1.1 is broken: `agg.py` imports `re2_error` from `re2/base.py`,
+# where the name is only annotated, never assigned (it lives in `re2/_base.py`).
+# Keep it out of hatchling's isolated build env until a fixed release lands.
+build-constraint-dependencies = ["pathspec!=1.1.1"]
+
+[tool.hatch.version]
+path = "src/wsindex/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wsindex"]
@@ -55,12 +89,147 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12, not 3.11: numpy >=2.4 stubs use PEP 695 `type` aliases, and mypy
+# feature-gates that syntax by python_version even in stub files. Runtime
+# 3.11 compatibility is still covered by the pytest jobs in the CI matrix.
+python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 
+# CI installs without the ml extra (torch is huge); the import is already
+# guarded at runtime, so a missing sentence_transformers is fine to skip.
+[[tool.mypy.overrides]]
+module = "sentence_transformers.*"
+ignore_missing_imports = true
+
+[tool.codespell]
+skip = ".git,.venv,uv.lock,.mypy_cache,.ruff_cache,.pytest_cache,.claude,htmlcov,build,dist,probes"
+
+[tool.yamlfix]
+line_length = 100
+# Keep diffs minimal: no forced `---` document start, no flow/block rewriting,
+# blank separator lines allowed.
+explicit_start = false
+sequence_style = "keep_style"
+whitelines = 1
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "slow: needs network and a real model download",
+  "live: needs a running tensorus server (docker compose up)",
+]
+addopts = "-m 'not slow and not live'"
 
 [tool.coverage.run]
 source = ["wsindex"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+
+# Task runner (replaces the retired Makefile). Run `uv run poe <task>` or
+# `uv run poe --help` to see the list. Bare tool names work because `uv run`
+# puts the project venv on PATH before launching poe.
+[tool.poe.tasks.install]
+help = "Install dependencies (uv sync)"
+cmd = "uv sync"
+
+[tool.poe.tasks.lint]
+help = "Run linter (ruff check)"
+cmd = "ruff check ."
+
+[tool.poe.tasks.spell]
+help = "Spell check (codespell)"
+cmd = "codespell"
+
+[tool.poe.tasks.typecheck]
+help = "Type check (mypy)"
+cmd = "mypy src tests"
+
+[tool.poe.tasks.test]
+help = "Run tests (pytest, no coverage)"
+cmd = "pytest"
+
+[tool.poe.tasks.cov]
+help = "Run tests with coverage, fail under 90%"
+cmd = "pytest --cov --cov-report=term-missing"
+
+[tool.poe.tasks.run]
+help = "Run the wsindex CLI"
+cmd = "wsindex"
+
+[tool.poe.tasks.acceptance]
+help = "Full MVP acceptance on a real corpus, writes acceptance_report.md"
+cmd = "python scripts/acceptance.py"
+
+[tool.poe.tasks.hooks]
+help = "Run pre-commit on all files"
+cmd = "pre-commit run --all-files"
+
+[tool.poe.tasks.install-hooks]
+help = "Install the git pre-commit hook"
+cmd = "pre-commit install"
+
+[tool.poe.tasks.up]
+help = "Start compose services (docker compose up -d)"
+cmd = "docker compose up -d"
+
+[tool.poe.tasks.down]
+help = "Stop compose services (docker compose down)"
+cmd = "docker compose down"
+
+[tool.poe.tasks.logs]
+help = "Tail compose logs (docker compose logs -f)"
+cmd = "docker compose logs -f"
+
+# `git ls-files` (not a bare glob) so generated files like uv.lock and anything
+# under .venv never reach the formatters.
+[tool.poe.tasks.fmt]
+help = "Format code, docs and configs (ruff w/ safe fixes, mdformat, taplo, yamlfix, json.tool, xmllint)"
+interpreter = "bash"
+shell = """
+set -eu -o pipefail
+ruff check --fix .
+ruff format .
+mdformat *.md
+git ls-files '*.toml' | xargs -r taplo fmt
+git ls-files '*.yml' '*.yaml' | xargs -r yamlfix
+for f in $(git ls-files '*.json'); do
+  python -m json.tool --indent 2 "$f" "$f.tmp" && mv "$f.tmp" "$f"
+done
+for f in $(git ls-files '*.xml' '*.xsd'); do
+  xmllint --format "$f" --output "$f"
+done
+"""
+
+[tool.poe.tasks.fmt-check]
+help = "Check formatting without changing files"
+interpreter = "bash"
+shell = """
+set -eu -o pipefail
+ruff format --check .
+mdformat --check *.md
+git ls-files '*.toml' | xargs -r taplo fmt --check
+git ls-files '*.yml' '*.yaml' | xargs -r yamlfix --check
+for f in $(git ls-files '*.json'); do
+  python -m json.tool --indent 2 "$f" | diff -u "$f" -
+done
+for f in $(git ls-files '*.xml' '*.xsd'); do
+  xmllint --format "$f" | diff -u "$f" -
+done
+"""
+
+[tool.poe.tasks.check]
+help = "Auto-format, then lint + spelling + types + tests w/ coverage"
+sequence = ["fmt", "lint", "spell", "typecheck", "cov"]
+
+[tool.poe.tasks.clean]
+help = "Remove caches, build artifacts and index"
+interpreter = "bash"
+shell = """
+rm -rf .mypy_cache .ruff_cache .pytest_cache .wsindex build dist
+rm -rf htmlcov .coverage coverage.xml
+find . -type d -name __pycache__ -exec rm -rf {} +
+find . -type d -name '*.egg-info' -exec rm -rf {} +
+"""

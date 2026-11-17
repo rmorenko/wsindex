@@ -37,8 +37,14 @@ coverage.xml
 htmlcov/
 nosetests.xml
 
-# WSIndex artifacts (local index / datasets)
+# WSIndex artifacts (local index / datasets, self-indexing workspace config)
 .wsindex/
+wsindex.toml
+acceptance_report.md
+
+# Local working notes (learning plan / progress journal)
+PLAN_ru.md
+POST_MVP_ru.md
 
 # Models and heavy caches (embeddings / transformers)
 models/
@@ -62,3 +68,4 @@ Thumbs.db
 # Environment files
 .env
 .env.*
+!.env.example

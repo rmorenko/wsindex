@@ -34,11 +34,11 @@ flowchart LR
 ```
 
 1. **Collect the files.** We walk the repositories, applying filters (skipping junk like build artifacts).
-2. **Split into chunks.** Each file is divided into meaningful fragments — "chunks". Code and configs by structure, documents by text (more on this below).
-3. **Compute the embeddings.** A local model (`sentence-transformers`) turns each chunk into a vector of numbers — "coordinates of meaning". The same model also embeds the search query.
-4. **Store.** The vector is written to the database, and alongside it — the chunk's metadata (repository, path, language, symbol, lines). Each repository gets its own separate dataset.
-5. **Search.** The query is also turned into a vector, the database finds the chunks closest in meaning within the relevant datasets, and the results are merged and ranked.
-6. **Show.** The answer looks like `repo/path:lines, symbol, score, snippet` — immediately making clear where to go.
+1. **Split into chunks.** Each file is divided into meaningful fragments — "chunks". Code and configs by structure, documents by text (more on this below).
+1. **Compute the embeddings.** A local model (`sentence-transformers`) turns each chunk into a vector of numbers — "coordinates of meaning". The same model also embeds the search query.
+1. **Store.** The vector is written to the database, and alongside it — the chunk's metadata (repository, path, language, symbol, lines). Each repository gets its own separate dataset.
+1. **Search.** The query is also turned into a vector, the database finds the chunks closest in meaning within the relevant datasets, and the results are merged and ranked.
+1. **Show.** The answer looks like `repo/path:lines, symbol, score, snippet` — immediately making clear where to go.
 
 The CLI commands cover the whole cycle: `init`, `add-repo`, `index` (full and incremental), `search`, `status`.
 
@@ -50,11 +50,11 @@ For code, that unit is a function, a class, a method. That's why we parse code a
 
 Documentation has a different nature: coherent text without rigid syntax. Splitting a README by "nodes" is pointless — there are no functions there. That's why Markdown, txt, rst, and the text cells of notebooks are chunked **as text**: by headings or with a sliding window with overlap, so a thought doesn't get cut off in the middle of a paragraph.
 
-| Artifact type | Example from the corpus | How we split | Chunk unit |
-|---|---|---|---|
-| Code | `tensorus`, `mcp` (Python/Rust/TS) | AST (tree-sitter) | function / class / method |
-| Configs | `pyproject.toml`, `Dockerfile` | AST by nodes | table / key / stage |
-| Documentation | `v1_docs`, README | text | by headings / window with overlap |
+| Artifact type | Example from the corpus            | How we split      | Chunk unit                        |
+| ------------- | ---------------------------------- | ----------------- | --------------------------------- |
+| Code          | `tensorus`, `mcp` (Python/Rust/TS) | AST (tree-sitter) | function / class / method         |
+| Configs       | `pyproject.toml`, `Dockerfile`     | AST by nodes      | table / key / stage               |
+| Documentation | `v1_docs`, README                  | text              | by headings / window with overlap |
 
 ## 5. Why Tensorus v1 as the Database
 
@@ -70,15 +70,15 @@ Separately — on portability. The entire store is hidden behind the `VectorStor
 
 ## 6. What's In the MVP and What's Not Yet
 
-| In the MVP (doing now) | Out of MVP (roadmap) |
-|---|---|
-| Indexing multiple repositories into a single index | Tensor re-rank / late interaction (MaxSim) |
-| AST chunking of code and configs, text for docs | Development-space graph (issues/PR/commits) |
-| Local embeddings (`sentence-transformers`) | Incremental updates via git-diff (E2) |
-| Storage: `TensorusStore` + `LocalStore` | Distribution, sharding, cloud |
-| Single-vector search (one vector per chunk) | IDE plugin, moving hot paths to Rust |
-| CLI: `init`, `add-repo`, `index`, `search`, `status` | |
-| Incremental `index`: skipping chunks by matching `id` (priority Should) | |
+| In the MVP (doing now)                                                  | Out of MVP (roadmap)                        |
+| ----------------------------------------------------------------------- | ------------------------------------------- |
+| Indexing multiple repositories into a single index                      | Tensor re-rank / late interaction (MaxSim)  |
+| AST chunking of code and configs, text for docs                         | Development-space graph (issues/PR/commits) |
+| Local embeddings (`sentence-transformers`)                              | Incremental updates via git-diff (E2)       |
+| Storage: `TensorusStore` + `LocalStore`                                 | Distribution, sharding, cloud               |
+| Single-vector search (one vector per chunk)                             | IDE plugin, moving hot paths to Rust        |
+| CLI: `init`, `add-repo`, `index`, `search`, `status`                    |                                             |
+| Incremental `index`: skipping chunks by matching `id` (priority Should) |                                             |
 
 **On incremental updates — to avoid conflating two different meanings.** In the MVP, "incremental" reindexing is simply skipping chunks whose `id` (hash of content + path) is already indexed; priority — Should. Smarter incremental updates via `git diff` (reindexing only changed files) are already E2, and they sit in "Out of MVP".
 

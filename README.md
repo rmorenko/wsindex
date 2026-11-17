@@ -1,18 +1,104 @@
 # WSIndex
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml/badge.svg)](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Frmorenko%2Fwsindex%2Fbadges%2Fcoverage.json)](https://github.com/rmorenko/wsindex/actions/workflows/ci.yml)
 
-**WSIndex** is a learning-first Python CLI that indexes a developer workspace —
-multiple repositories, with **code and configs parsed via AST** and **documents
-indexed as text** — and serves semantic search over it. It uses
-[Tensorus v1](https://github.com/tensorus/v1) as its vector database and is
-designed to grow from an educational project into a product.
+**WSIndex** is a CLI that semantically indexes a developer workspace — multiple
+repositories at once — and answers natural-language questions with exact
+`file:line` locations. Code (Python, Rust, TypeScript, Java) and configs
+(TOML, YAML, JSON, Dockerfile) are chunked by their syntax trees, docs by
+headers; every chunk is embedded and searched by meaning, not by keywords.
 
-> **Status — skeleton only.** This repository currently ships the **project
-> scaffold and toolchain**. The package contains a single placeholder module
-> whose only job is to prove that every tool (uv, ruff, mypy, pytest, pre-commit,
-> CI) works end to end. The real indexing engine, described in the design docs,
-> is implemented next.
+## Quickstart
+
+```bash
+uv sync --extra ml --extra ast   # engine + real model + tree-sitter grammars
+uv run wsindex init myws         # writes wsindex.toml in the current directory
+uv run wsindex add-repo wsindex ~/wsindex
+uv run wsindex index             # first run downloads the embedding model (~90 MB)
+uv run wsindex search "how are markdown files split into chunks"
+```
+
+Real output on this very repository:
+
+```
+$ uv run wsindex index
+files: 48  chunks: 467  written: 466
+
+$ uv run wsindex search "how are markdown files split into chunks" -k 3
+wsindex/tests/test_chunker.py:25-29  0.632  def test_doc_markdown_produces_sections() -> None:
+wsindex/src/wsindex/ingest/text_chunker.py:107-111  0.598  def chunk_text(text: str, *, repo: str, path: str, lang: str, kind: Kind) -> list[Chunk]:
+wsindex/src/wsindex/ingest/text_chunker.py:59-104  0.567  def chunk_markdown(
+```
+
+_(After this README itself gets indexed, it will match its own example
+query too — semantic search is honest like that.)_
+
+Re-running `index` embeds nothing: chunks are deduplicated by a
+deterministic id before the (expensive) embedding step.
+
+## Backends
+
+**local** (default) — a numpy index under `.wsindex/` next to your
+`wsindex.toml`. Fully offline once the model is downloaded; embedding runs
+in-process.
+
+**tensorus** — embedding and search happen server-side on a
+[Tensorus](https://github.com/tensorus/tensorus) instance. The same model
+name travels in the config, so both backends produce identical scores.
+
+```bash
+# .env must define POSTGRES_PASSWORD and TENSORUS_API_KEYS
+docker compose up -d app db
+export TENSORUS_API_KEY=<one key from TENSORUS_API_KEYS>
+uv run wsindex init myws --backend tensorus   # server expected at localhost:8000
+```
+
+## Extras
+
+| Extra | Enables                                                                   | Without it                                                               |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ml`  | `sentence-transformers` embeddings (real semantic search)                 | `--provider fake`: deterministic pseudo-vectors, exact-text matches only |
+| `ast` | tree-sitter chunking for py/rs/ts/java code and toml/yaml/json/Dockerfile | sliding-window text chunks for everything                                |
+
+Every grammar degrades independently: a language without its grammar falls
+back to plain text chunks, nothing crashes.
+
+## Development
+
+```bash
+uv sync --extra ml --extra ast
+uv run poe check           # ruff + mypy --strict + pytest (fast suite)
+uv run pytest -m slow      # real-model smoke test (network, model download)
+uv run pytest -m live      # integration against a running tensorus server
+```
+
+Tasks are defined in `pyproject.toml` under `[tool.poe.tasks]`; `uv run poe --help`
+lists them.
+
+| Task                   | Description                       |
+| ---------------------- | --------------------------------- |
+| `uv run poe install`   | Sync dependencies (`uv sync`)     |
+| `uv run poe lint`      | Lint with ruff                    |
+| `uv run poe fmt`       | Format with ruff                  |
+| `uv run poe typecheck` | Type-check with mypy              |
+| `uv run poe test`      | Run pytest                        |
+| `uv run poe check`     | Lint + type-check + test          |
+| `uv run poe hooks`     | Run all pre-commit hooks          |
+| `uv run poe clean`     | Remove caches and build artifacts |
+
+## Known limitations
+
+- Javadoc and JSDoc comments land in plain gap chunks instead of sticking
+  to the definition below them (Rust `///` docs do attach).
+- The tensorus backend embeds one chunk per HTTP request: indexing is
+  ~30x slower than local (measured: 3458 chunks in 252s vs 7.5s), and
+  each search takes seconds (the server embeds the query per request).
+- The upstream tensorus `/index/build` endpoint is broken, so server-side
+  search runs brute-force.
+- `.tsx` files are not indexed; anonymous TypeScript default exports fall
+  into gap chunks.
+- Oversized functions stay whole — no window splitting inside a definition.
 
 ## Design docs
 
@@ -21,55 +107,6 @@ designed to grow from an educational project into a product.
 - Architecture — [ARCH_en.md](ARCH_en.md)
 
 _(Russian originals: `CONCEPT_ru.md`, `BRD_ru.md`, `ARCH_ru.md`.)_
-
-## Requirements
-
-- [uv](https://docs.astral.sh/uv/) — package & environment manager
-- Python 3.11+ (uv fetches it automatically)
-- `make` (optional, for the shortcuts below)
-
-## Quickstart
-
-```bash
-uv sync            # create the venv and install dev tools
-make check         # ruff + mypy + pytest
-uv run wsindex     # run the placeholder CLI
-```
-
-Without `make`:
-
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src
-uv run pytest
-```
-
-## Make targets
-
-| Target | Description |
-| --- | --- |
-| `make install` | Sync dependencies (`uv sync`) |
-| `make lint` | Lint with ruff |
-| `make fmt` | Format with ruff |
-| `make typecheck` | Type-check with mypy |
-| `make test` | Run pytest |
-| `make check` | Lint + type-check + test |
-| `make run` | Run the `wsindex` CLI |
-| `make hooks` | Run all pre-commit hooks |
-| `make clean` | Remove caches and build artifacts |
-
-## Project layout
-
-```
-.
-├── pyproject.toml            # uv + hatchling, ruff, mypy, pytest config
-├── Makefile                  # dev shortcuts
-├── .pre-commit-config.yaml   # ruff, mypy, hygiene hooks
-├── .github/workflows/ci.yml  # CI matrix (Python 3.11–3.13)
-├── src/wsindex/__init__.py   # placeholder module (single file for now)
-└── tests/test_wsindex.py     # toolchain smoke test
-```
 
 ## Toolchain
 
