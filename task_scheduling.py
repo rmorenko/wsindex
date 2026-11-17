@@ -24,13 +24,6 @@ async def check_server_with_timeout(name, delay):
         raise
 
 
-async def check_server(name, delay):
-    print(f"Checking {name}...")
-    await asyncio.sleep(delay)
-    print(f"{name} finished")
-    return f"{name}: OK"
-
-
 async def check_server_with_error(name, delay):
     print(f"Checking {name}...")
     await asyncio.sleep(delay)
@@ -56,13 +49,16 @@ async def main():
     print("Assignment 2")
     # Start five server checks with different delays.
     tasks = create_tasks()
-    # Wait until at least one task finishes.
-    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    # Print the result of every task in the `done` set.
-    print_results(done)
-    # Continue waiting for the remaining tasks.
-    done, _ = await asyncio.wait(pending)
-    print_results(done)
+    # # Wait until at least one task finishes.
+    # done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    # # Print the result of every task in the `done` set.
+    # print_results(done)
+    # # Continue waiting for the remaining tasks.
+    # done, _ = await asyncio.wait(pending)
+    # print_results(done)
+    for set_ in asyncio.FIRST_COMPLETED, asyncio.ALL_COMPLETED:
+        done, pending = await asyncio.wait(tasks, return_when=set_)
+        print (done)
     print("Assignment 3")
     # Start five tasks with different delays.
     tasks = create_tasks()
